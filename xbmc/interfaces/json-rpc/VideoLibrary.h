@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "FileItemHandler.h"
+#include "JSONRPC.h"
+#include "utils/DatabaseUtils.h"
+
 #include <string>
 #include <vector>
-
-#include "utils/DatabaseUtils.h"
-#include "JSONRPC.h"
-#include "FileItemHandler.h"
 
 class CVideoDatabase;
 class CVariant;
@@ -45,6 +45,8 @@ namespace JSONRPC
 
     static JSONRPC_STATUS GetGenres(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result);
     static JSONRPC_STATUS GetTags(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result);
+    static JSONRPC_STATUS GetAvailableArtTypes(const std::string& method, ITransportLayer* transport, IClient* client, const CVariant& parameterObject, CVariant& result);
+    static JSONRPC_STATUS GetAvailableArt(const std::string& method, ITransportLayer* transport, IClient* client, const CVariant& parameterObject, CVariant& result);
 
     static JSONRPC_STATUS SetMovieDetails(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result);
     static JSONRPC_STATUS SetMovieSetDetails(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result);

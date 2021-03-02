@@ -111,26 +111,6 @@ function(core_add_test_library name)
   endforeach()
 endfunction()
 
-# Add an addon callback library
-# Arguments:
-#   name name of the library to add
-# Implicit arguments:
-#   SOURCES the sources of the library
-#   HEADERS the headers of the library (only for IDE support)
-#   OTHERS  other library related files (only for IDE support)
-# On return:
-#   Library target is defined and added to LIBRARY_FILES
-function(core_add_addon_library name)
-  get_filename_component(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} NAME)
-  list(APPEND SOURCES lib${name}.cpp)
-  core_add_shared_library(${name} OUTPUT_DIRECTORY addons/${DIRECTORY})
-  set_target_properties(${name} PROPERTIES FOLDER addons)
-  target_include_directories(${name} PRIVATE
-                             ${CMAKE_CURRENT_SOURCE_DIR}
-                             ${CMAKE_SOURCE_DIR}/xbmc/addons/kodi-addon-dev-kit/include/kodi
-                             ${CMAKE_SOURCE_DIR}/xbmc)
-endfunction()
-
 # Add an dl-loaded shared library
 # Arguments:
 #   name name of the library to add
@@ -241,11 +221,19 @@ function(copy_file_to_buildtree file)
   endif()
 
   if(NOT file STREQUAL ${CMAKE_BINARY_DIR}/${outfile})
-    if(VERBOSE)
-      message(STATUS "copy_file_to_buildtree - copying file: ${file} -> ${CMAKE_BINARY_DIR}/${outfile}")
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows" OR NOT IS_SYMLINK "${file}")
+      if(VERBOSE)
+        message(STATUS "copy_file_to_buildtree - copying file: ${file} -> ${CMAKE_BINARY_DIR}/${outfile}")
+      endif()
+      file(APPEND ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/ExportFiles.cmake
+           "file(COPY \"${file}\" DESTINATION \"${CMAKE_BINARY_DIR}/${outdir}\")\n" )
+    else()
+      if(VERBOSE)
+        message(STATUS "copy_file_to_buildtree - copying symlinked file: ${file} -> ${CMAKE_BINARY_DIR}/${outfile}")
+      endif()
+      file(APPEND ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/ExportFiles.cmake
+           "execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E copy_if_different \"${file}\" \"${CMAKE_BINARY_DIR}/${outfile}\")\n")
     endif()
-    file(APPEND ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/ExportFiles.cmake
-         "file(COPY \"${file}\" DESTINATION \"${CMAKE_BINARY_DIR}/${outdir}\")\n")
   endif()
 
   if(NOT arg_NO_INSTALL)
@@ -386,25 +374,6 @@ function(core_require_dep)
   endforeach()
 endfunction()
 
-# add required dyloaded dependencies of main application
-# Arguments:
-#   dep_list One or many dependency specifications (see split_dependency_specification)
-#            for syntax). The dependency name is used uppercased as variable prefix.
-# On return:
-#   dependency added to ${SYSTEM_INCLUDES}, ${dep}_SONAME is set up
-function(core_require_dyload_dep)
-  foreach(depspec ${ARGN})
-    split_dependency_specification(${depspec} dep version)
-    find_package_with_ver(${dep} ${version} REQUIRED)
-    string(TOUPPER ${dep} depup)
-    list(APPEND SYSTEM_INCLUDES ${${depup}_INCLUDE_DIRS})
-    list(APPEND DEP_DEFINES ${${depup}_DEFINITIONS})
-    find_soname(${depup} REQUIRED)
-    export_dep()
-    set(${depup}_SONAME ${${depup}_SONAME} PARENT_SCOPE)
-  endforeach()
-endfunction()
-
 # helper macro for optional deps
 macro(setup_enable_switch)
   string(TOUPPER ${dep} depup)
@@ -448,39 +417,6 @@ function(core_optional_dep)
     endif()
   endforeach()
   set(final_message ${final_message} PARENT_SCOPE)
-endfunction()
-
-# add optional dyloaded dependencies of main application
-# Arguments:
-#   dep_list One or many dependency specifications (see split_dependency_specification)
-#            for syntax). The dependency name is used uppercased as variable prefix.
-# On return:
-#   dependency optionally added to ${SYSTEM_INCLUDES}, ${DEP_DEFINES}, ${dep}_SONAME is set up
-function(core_optional_dyload_dep)
-  foreach(depspec ${ARGN})
-    set(_required False)
-    split_dependency_specification(${depspec} dep version)
-    setup_enable_switch()
-    if(${enable_switch} STREQUAL AUTO)
-      find_package_with_ver(${dep} ${version})
-    elseif(${${enable_switch}})
-      find_package_with_ver(${dep} ${version} REQUIRED)
-      set(_required True)
-    endif()
-
-    if(${depup}_FOUND)
-      list(APPEND SYSTEM_INCLUDES ${${depup}_INCLUDE_DIRS})
-      find_soname(${depup} REQUIRED)
-      list(APPEND DEP_DEFINES ${${depup}_DEFINITIONS})
-      set(final_message ${final_message} "${depup} enabled: Yes" PARENT_SCOPE)
-      export_dep()
-      set(${depup}_SONAME ${${depup}_SONAME} PARENT_SCOPE)
-    elseif(_required)
-      message(FATAL_ERROR "${depup} enabled but not found")
-    else()
-      set(final_message ${final_message} "${depup} enabled: No" PARENT_SCOPE)
-    endif()
-  endforeach()
 endfunction()
 
 function(core_file_read_filtered result filepattern)
@@ -623,6 +559,8 @@ function(core_find_git_rev stamp)
   # allow manual setting GIT_VERSION
   if(GIT_VERSION)
     set(${stamp} ${GIT_VERSION} PARENT_SCOPE)
+    string(TIMESTAMP APP_BUILD_DATE "%Y%m%d" UTC)
+    set(APP_BUILD_DATE ${APP_BUILD_DATE} PARENT_SCOPE)
   else()
     find_package(Git)
     if(GIT_FOUND AND EXISTS ${CMAKE_SOURCE_DIR}/.git)
@@ -653,12 +591,18 @@ function(core_find_git_rev stamp)
                       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
       string(REPLACE "\"" "" DATE ${DATE})
       string(REPLACE "-" "" DATE ${DATE})
+
+      # build date
+      string(TIMESTAMP APP_BUILD_DATE "%Y%m%d" UTC)
+      set(APP_BUILD_DATE ${APP_BUILD_DATE} PARENT_SCOPE)
     else()
       if(EXISTS ${CMAKE_SOURCE_DIR}/BUILDDATE)
         file(STRINGS ${CMAKE_SOURCE_DIR}/BUILDDATE DATE LIMIT_INPUT 8)
       else()
         string(TIMESTAMP DATE "%Y%m%d" UTC)
       endif()
+      set(APP_BUILD_DATE ${DATE} PARENT_SCOPE)
+
       if(EXISTS ${CMAKE_SOURCE_DIR}/VERSION)
         file(STRINGS ${CMAKE_SOURCE_DIR}/VERSION HASH LIMIT_INPUT 16)
       else()
@@ -690,6 +634,9 @@ endfunction()
 #   APP_VERSION_TAG_LC - lowercased app version tag
 #   APP_VERSION - the app version (${APP_VERSION_MAJOR}.${APP_VERSION_MINOR}-${APP_VERSION_TAG})
 #   APP_ADDON_API - the addon API version in the form of 16.9.702
+#   ADDON_REPOS - official addon repositories and their origin path delimited by pipe
+#                 - e.g. repository.xbmc.org|https://mirrors.kodi.tv -
+#                 (multiple repo/path-sets are delimited by comma)
 #   FILE_VERSION - file version in the form of 16,9,702,0 - Windows only
 #   JSONRPC_VERSION - the json api version in the form of 8.3.0
 #
@@ -710,6 +657,7 @@ macro(core_find_versions)
   string(REGEX REPLACE "([^ ;]*) ([^;]*)" "\\1;\\2" version_list "${version_list};${json_version}")
   set(version_props
     ADDON_API
+    ADDON_REPOS
     APP_NAME
     APP_PACKAGE
     COMPANY_NAME
@@ -740,12 +688,13 @@ macro(core_find_versions)
     string(TOLOWER ${APP_VERSION_TAG} APP_VERSION_TAG_LC)
   endif()
   string(REPLACE "." "," FILE_VERSION ${APP_ADDON_API}.0)
+  set(ADDON_REPOS ${APP_ADDON_REPOS})
   set(JSONRPC_VERSION ${APP_JSONRPC_VERSION})
 
   # Set defines used in addon.xml.in and read from versions.h to set add-on
   # version parts automatically
   # This part is nearly identical to "AddonHelpers.cmake", except location of versions.h
-  file(STRINGS ${CORE_SOURCE_DIR}/xbmc/addons/kodi-addon-dev-kit/include/kodi/versions.h BIN_ADDON_PARTS)
+  file(STRINGS ${CORE_SOURCE_DIR}/xbmc/addons/kodi-dev-kit/include/kodi/versions.h BIN_ADDON_PARTS)
   foreach(loop_var ${BIN_ADDON_PARTS})
     string(FIND "${loop_var}" "#define ADDON_" matchres)
     if("${matchres}" EQUAL 0)
@@ -777,6 +726,12 @@ endmacro()
 # find all folders containing addon.xml.in and used to define
 # ADDON_XML_OUTPUTS, ADDON_XML_DEPENDS and ADDON_INSTALL_DATA
 macro(find_addon_xml_in_files)
+  set(filter ${ARGV0})
+
+  if(filter AND VERBOSE)
+    message(STATUS "find_addon_xml_in_files: filtering ${filter}")
+  endif()
+
   file(GLOB ADDON_XML_IN_FILE ${CMAKE_SOURCE_DIR}/addons/*/addon.xml.in)
   foreach(loop_var ${ADDON_XML_IN_FILE})
     list(GET loop_var 0 xml_name)
@@ -785,7 +740,9 @@ macro(find_addon_xml_in_files)
     string(REPLACE "${CORE_SOURCE_DIR}/" "" xml_name ${xml_name})
 
     list(APPEND ADDON_XML_DEPENDS "${CORE_SOURCE_DIR}/${xml_name}/addon.xml.in")
-    list(APPEND ADDON_XML_OUTPUTS "${CMAKE_BINARY_DIR}/${xml_name}/addon.xml")
+    if(filter AND NOT xml_name MATCHES ${filter})
+      list(APPEND ADDON_XML_OUTPUTS "${CMAKE_BINARY_DIR}/${xml_name}/addon.xml")
+    endif()
 
     # Read content of add-on folder to have on install
     file(GLOB ADDON_FILES "${CORE_SOURCE_DIR}/${xml_name}/*")
@@ -804,5 +761,5 @@ macro(find_addon_xml_in_files)
   endforeach()
 
   # Append also versions.h to depends
-  list(APPEND ADDON_XML_DEPENDS "${CORE_SOURCE_DIR}/xbmc/addons/kodi-addon-dev-kit/include/kodi/versions.h")
+  list(APPEND ADDON_XML_DEPENDS "${CORE_SOURCE_DIR}/xbmc/addons/kodi-dev-kit/include/kodi/versions.h")
 endmacro()

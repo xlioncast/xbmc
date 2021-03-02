@@ -8,15 +8,15 @@
 
 #include "GroupUtils.h"
 
-#include <map>
-#include <set>
-
 #include "FileItem.h"
 #include "filesystem/MultiPathDirectory.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "video/VideoDbUrl.h"
 #include "video/VideoInfoTag.h"
+
+#include <map>
+#include <set>
 
 using SetMap = std::map<int, std::set<CFileItemPtr> >;
 
@@ -128,7 +128,7 @@ bool GroupUtils::Group(GroupBy groupBy, const std::string &baseDir, const CFileI
       }
       setInfo->m_basePath = XFILE::CMultiPathDirectory::ConstructMultiPath(pathSet);
 
-      if (ratings > 1)
+      if (ratings > 0)
         pItem->GetVideoInfoTag()->SetRating(totalRatings / ratings);
 
       setInfo->SetPlayCount(iWatched >= static_cast<int>(set->second.size()) ? (setInfo->GetPlayCount() / set->second.size()) : 0);

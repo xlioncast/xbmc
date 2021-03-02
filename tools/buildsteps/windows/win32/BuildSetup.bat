@@ -10,7 +10,9 @@ IF ERRORLEVEL 1 (
 )
 
 SET cmakeGenerator=Visual Studio %vsver%
+SET cmakeArch=Win32
 SET TARGET_ARCHITECTURE=x86
+SET TARGET_PLATFORM=%TARGET_ARCHITECTURE%
 
 CALL BuildSetup.bat %*
 POPD

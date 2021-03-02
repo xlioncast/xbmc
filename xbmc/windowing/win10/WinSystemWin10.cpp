@@ -12,10 +12,10 @@
 #include "cores/AudioEngine/Sinks/AESinkWASAPI.h"
 #include "windowing/GraphicContext.h"
 #include "platform/win10/AsyncHelpers.h"
-#include "platform/win10/powermanagement/Win10PowerSyscall.h"
 #include "platform/win32/CharsetConverter.h"
 #include "rendering/dx/DirectXHelper.h"
 #include "rendering/dx/RenderContext.h"
+#include "rendering/dx/ScreenshotSurfaceWindows.h"
 #include "ServiceBroker.h"
 #include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
@@ -58,11 +58,12 @@ CWinSystemWin10::CWinSystemWin10()
 
   AE::CAESinkFactory::ClearSinks();
   CAESinkXAudio::Register();
+  CScreenshotSurfaceWindows::Register();
+
   if (CSysInfo::GetWindowsDeviceFamily() == CSysInfo::WindowsDeviceFamily::Desktop)
   {
     CAESinkWASAPI::Register();
   }
-  CPowerSyscall::Register();
 }
 
 CWinSystemWin10::~CWinSystemWin10()
@@ -118,11 +119,6 @@ bool CWinSystemWin10::CreateNewWindow(const std::string& name, bool fullScreen, 
   // dispatch all events currently pending in the queue to show window's content
   // and hide UWP splash, without this the Kodi's splash will not be shown
   m_coreWindow.Dispatcher().ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
-
-  // in some cases CoreWindow::SizeChanged isn't fired
-  // it causes mismatch between window actual size and UI
-  winrt::Rect winRect = m_coreWindow.Bounds();
-  dynamic_cast<CWinEventsWin10&>(*m_winEvents).OnResize(winRect.Width, winRect.Height);
 
   return true;
 }
@@ -209,10 +205,8 @@ bool CWinSystemWin10::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool 
   bool forceChange = false;    // resolution/display is changed but window state isn't changed
   bool stereoChange = IsStereoEnabled() != (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() == RENDER_STEREO_MODE_HARDWAREBASED);
 
-  if ( m_nWidth != res.iWidth
-    || m_nHeight != res.iHeight
-    || m_fRefreshRate != res.fRefreshRate
-    || stereoChange)
+  if ( m_nWidth != res.iWidth || m_nHeight != res.iHeight || m_fRefreshRate != res.fRefreshRate ||
+    stereoChange || m_bFirstResChange)
   {
     forceChange = true;
   }
@@ -239,6 +233,7 @@ bool CWinSystemWin10::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool 
   m_IsAlteringWindow = true;
   ReleaseBackBuffer();
 
+  m_bFirstResChange = false;
   m_bFullScreen = fullScreen;
   m_nWidth = res.iWidth;
   m_nHeight = res.iHeight;
@@ -348,6 +343,9 @@ bool CWinSystemWin10::ChangeResolution(const RESOLUTION_INFO& res, bool forceCha
     // changing display mode doesn't fire CoreWindow::SizeChanged event
     if (changed && m_bWindowCreated)
     {
+      // dispatch all events currently pending in the queue to change window's content
+      m_coreWindow.Dispatcher().ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
+
       float dpi = DisplayInformation::GetForCurrentView().LogicalDpi();
       float dipsW = DX::ConvertPixelsToDips(m_nWidth, dpi);
       float dipsH = DX::ConvertPixelsToDips(m_nHeight, dpi);
@@ -383,8 +381,8 @@ void CWinSystemWin10::UpdateResolutions()
     refreshRate = static_cast<float>(details->RefreshRate);
 
   RESOLUTION_INFO& primary_info = CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP);
-  UpdateDesktopResolution(primary_info, w, h, refreshRate, dwFlags);
-  CLog::Log(LOGNOTICE, "Primary mode: %s", primary_info.strMode.c_str());
+  UpdateDesktopResolution(primary_info, "Default", w, h, refreshRate, dwFlags);
+  CLog::Log(LOGINFO, "Primary mode: %s", primary_info.strMode.c_str());
 
   // erase previous stored modes
   CDisplaySettings::GetInstance().ClearCustomResolutions();
@@ -412,7 +410,8 @@ void CWinSystemWin10::UpdateResolutions()
         GetGfxContext().ResetOverscan(res);
 
         if (AddResolution(res))
-          CLog::Log(LOGNOTICE, "Additional mode: %s %s", res.strMode.c_str(), mode.Is2086MetadataSupported() ? "(HDR)" : "");
+          CLog::Log(LOGINFO, "Additional mode: %s %s", res.strMode.c_str(),
+                    mode.Is2086MetadataSupported() ? "(HDR)" : "");
       }
     }
   }

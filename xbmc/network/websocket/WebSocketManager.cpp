@@ -6,15 +6,16 @@
  *  See LICENSES/README.md for more information.
  */
 
-#include <string>
-
 #include "WebSocketManager.h"
+
 #include "WebSocket.h"
-#include "WebSocketV8.h"
 #include "WebSocketV13.h"
+#include "WebSocketV8.h"
 #include "utils/HttpParser.h"
 #include "utils/HttpResponse.h"
 #include "utils/log.h"
+
+#include <string>
 
 #define WS_HTTP_METHOD          "GET"
 #define WS_HTTP_TAG             "HTTP/"
@@ -48,7 +49,7 @@ CWebSocket* CWebSocketManager::Handle(const char* data, unsigned int length, std
   {
     CLog::Log(LOGINFO, "WebSocket: missing Sec-WebSocket-Version");
     CHttpResponse httpResponse(HTTP::Get, HTTP::BadRequest, HTTP::Version1_1);
-    response = response = httpResponse.Create();;
+    response = httpResponse.Create();
 
     return NULL;
   }
@@ -64,7 +65,7 @@ CWebSocket* CWebSocketManager::Handle(const char* data, unsigned int length, std
     CLog::Log(LOGINFO, "WebSocket: Unsupported Sec-WebSocket-Version %s", value);
     CHttpResponse httpResponse(HTTP::Get, HTTP::UpgradeRequired, HTTP::Version1_1);
     httpResponse.AddHeader(WS_HEADER_VERSION, WS_SUPPORTED_VERSIONS);
-    response = response = httpResponse.Create();
+    response = httpResponse.Create();
 
     return NULL;
   }

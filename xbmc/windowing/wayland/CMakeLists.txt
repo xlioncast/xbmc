@@ -12,6 +12,7 @@ set(SOURCES Connection.cpp
             OSScreenSaverIdleInhibitUnstableV1.cpp
             Registry.cpp
             Seat.cpp
+            SeatInputProcessing.cpp
             SeatSelection.cpp
             ShellSurface.cpp
             ShellSurfaceWlShell.cpp
@@ -23,7 +24,6 @@ set(SOURCES Connection.cpp
             WindowDecorator.cpp
             WinEventsWayland.cpp
             WinSystemWayland.cpp
-            WinSystemWaylandEGLContext.cpp
             XkbcommonKeymap.cpp)
 
 set(HEADERS Connection.h
@@ -35,6 +35,7 @@ set(HEADERS Connection.h
             OSScreenSaverIdleInhibitUnstableV1.h
             Registry.h
             Seat.h
+            SeatInputProcessing.h
             SeatSelection.h
             ShellSurface.h
             ShellSurfaceWlShell.h
@@ -46,8 +47,12 @@ set(HEADERS Connection.h
             WindowDecorator.h
             WinEventsWayland.h
             WinSystemWayland.h
-            WinSystemWaylandEGLContext.h
             XkbcommonKeymap.h)
+
+if(EGL_FOUND)
+  list(APPEND SOURCES WinSystemWaylandEGLContext.cpp)
+  list(APPEND HEADERS WinSystemWaylandEGLContext.h)
+endif()
 
 if(OPENGL_FOUND)
   list(APPEND SOURCES WinSystemWaylandEGLContextGL.cpp)
