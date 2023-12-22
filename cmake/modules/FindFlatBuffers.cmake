@@ -1,71 +1,58 @@
 # FindFlatBuffers
 # --------
-# Find the FlatBuffers schema compiler and headers
+# Find the FlatBuffers schema headers
 #
-# This will define the following variables:
+# This will define the following target:
 #
-# FLATBUFFERS_FOUND - system has FlatBuffers compiler and headers
-# FLATBUFFERS_FLATC_EXECUTABLE - the flatc compiler executable
-# FLATBUFFERS_INCLUDE_DIRS - the FlatFuffers include directory
-# FLATBUFFERS_MESSAGES_INCLUDE_DIR - the directory for generated headers
+#   flatbuffers::flatbuffers - The flatbuffers headers
 
-if(ENABLE_INTERNAL_FLATBUFFERS)
-  include(ExternalProject)
-  file(STRINGS ${CMAKE_SOURCE_DIR}/tools/depends/native/flatbuffers/Makefile VER REGEX "^[ ]*VERSION[ ]*=.+$")
-  string(REGEX REPLACE "^[ ]*VERSION[ ]*=[ ]*" "" FLATBUFFERS_VER "${VER}")
+find_package(FlatC REQUIRED)
 
-  # Allow user to override the download URL with a local tarball
-  # Needed for offline build envs
-  if(FLATBUFFERS_URL)
-    get_filename_component(FLATBUFFERS_URL "${FLATBUFFERS_URL}" ABSOLUTE)
+if(NOT TARGET flatbuffers::flatbuffers)
+  if(ENABLE_INTERNAL_FLATBUFFERS)
+    include(cmake/scripts/common/ModuleHelpers.cmake)
+
+    set(MODULE_LC flatbuffers)
+    # Duplicate URL may exist from FindFlatC.cmake
+    # unset otherwise it thinks we are providing a local file location and incorrect concatenation happens
+    unset(FLATBUFFERS_URL)
+    SETUP_BUILD_VARS()
+
+    # Override build type detection and always build as release
+    set(FLATBUFFERS_BUILD_TYPE Release)
+
+    set(CMAKE_ARGS -DFLATBUFFERS_CODE_COVERAGE=OFF
+                   -DFLATBUFFERS_BUILD_TESTS=OFF
+                   -DFLATBUFFERS_INSTALL=ON
+                   -DFLATBUFFERS_BUILD_FLATLIB=OFF
+                   -DFLATBUFFERS_BUILD_FLATC=OFF
+                   -DFLATBUFFERS_BUILD_FLATHASH=OFF
+                   -DFLATBUFFERS_BUILD_GRPCTEST=OFF
+                   -DFLATBUFFERS_BUILD_SHAREDLIB=OFF
+                   "${EXTRA_ARGS}")
+    set(BUILD_BYPRODUCTS ${DEPENDS_PATH}/include/flatbuffers/flatbuffers.h)
+
+    BUILD_DEP_TARGET()
   else()
-    set(FLATBUFFERS_URL http://mirrors.kodi.tv/build-deps/sources/flatbuffers-${FLATBUFFERS_VER}.tar.gz)
-  endif()
-  if(VERBOSE)
-    message(STATUS "FLATBUFFERS_URL: ${FLATBUFFERS_URL}")
+    find_path(FLATBUFFERS_INCLUDE_DIR NAMES flatbuffers/flatbuffers.h
+                                      HINTS ${DEPENDS_PATH}/include
+                                      ${${CORE_PLATFORM_LC}_SEARCH_CONFIG}
+                                      NO_CACHE)
   endif()
 
-  set(FLATBUFFERS_FLATC_EXECUTABLE ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/bin/flatc CACHE INTERNAL "FlatBuffer compiler")
-  set(FLATBUFFERS_INCLUDE_DIR ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/include CACHE INTERNAL "FlatBuffer include dir")
+  include(FindPackageHandleStandardArgs)
+  find_package_handle_standard_args(FlatBuffers
+                                    REQUIRED_VARS FLATBUFFERS_INCLUDE_DIR
+                                    VERSION_VAR FLATBUFFERS_VER)
 
-  externalproject_add(flatbuffers
-                      URL ${FLATBUFFERS_URL}
-                      DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/download
-                      PREFIX ${CORE_BUILD_DIR}/flatbuffers
-                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}
-                                 -DCMAKE_BUILD_TYPE=Release
-                                 -DFLATBUFFERS_CODE_COVERAGE=OFF
-                                 -DFLATBUFFERS_BUILD_TESTS=OFF
-                                 -DFLATBUFFERS_INSTALL=ON
-                                 -DFLATBUFFERS_BUILD_FLATLIB=OFF
-                                 -DFLATBUFFERS_BUILD_FLATC=ON
-                                 -DFLATBUFFERS_BUILD_FLATHASH=OFF
-                                 -DFLATBUFFERS_BUILD_GRPCTEST=OFF
-                                 -DFLATBUFFERS_BUILD_SHAREDLIB=OFF
-                                 "${EXTRA_ARGS}"
-                      BUILD_BYPRODUCTS ${FLATBUFFERS_FLATC_EXECUTABLE})
-  set_target_properties(flatbuffers PROPERTIES FOLDER "External Projects"
-                                    INTERFACE_INCLUDE_DIRECTORIES ${FLATBUFFERS_INCLUDE_DIR})
-else()
-  find_program(FLATBUFFERS_FLATC_EXECUTABLE NAMES flatc)
-  find_path(FLATBUFFERS_INCLUDE_DIR NAMES flatbuffers/flatbuffers.h)
+  add_library(flatbuffers::flatbuffers INTERFACE IMPORTED)
+  set_target_properties(flatbuffers::flatbuffers PROPERTIES
+                                                 INTERFACE_INCLUDE_DIRECTORIES "${FLATBUFFERS_INCLUDE_DIR}")
+
+  add_dependencies(flatbuffers::flatbuffers flatbuffers::flatc)
+
+  if(TARGET flatbuffers)
+    add_dependencies(flatbuffers::flatbuffers flatbuffers)
+  endif()
+  set_property(GLOBAL APPEND PROPERTY INTERNAL_DEPS_PROP flatbuffers::flatbuffers)
 endif()
-
-include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(FlatBuffers
-                                  REQUIRED_VARS FLATBUFFERS_FLATC_EXECUTABLE FLATBUFFERS_INCLUDE_DIR
-                                  VERSION_VAR FLATBUFFERS_VER)
-
-if(FLATBUFFERS_FOUND)
-  set(FLATBUFFERS_MESSAGES_INCLUDE_DIR ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/cores/RetroPlayer/messages CACHE INTERNAL "Generated FlatBuffer headers")
-  set(FLATBUFFERS_INCLUDE_DIRS ${FLATBUFFERS_INCLUDE_DIR} ${FLATBUFFERS_MESSAGES_INCLUDE_DIR})
-
-  if(NOT TARGET flatbuffers)
-    add_library(flatbuffers UNKNOWN IMPORTED)
-    set_target_properties(flatbuffers PROPERTIES
-                               FOLDER "External Projects"
-                               INTERFACE_INCLUDE_DIRECTORIES ${FLATBUFFERS_INCLUDE_DIR})
-  endif()
-endif()
-
-mark_as_advanced(FLATBUFFERS_FLATC_EXECUTABLE FLATBUFFERS_INCLUDE_DIR)

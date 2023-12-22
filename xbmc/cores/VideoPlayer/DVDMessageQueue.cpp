@@ -10,15 +10,16 @@
 
 #include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 
 #include <math.h>
+#include <mutex>
+
+using namespace std::chrono_literals;
 
 CDVDMessageQueue::CDVDMessageQueue(const std::string &owner) : m_hEvent(true), m_owner(owner)
 {
   m_iDataSize     = 0;
-  m_bAbortRequest = false;
   m_bInitialized = false;
 
   m_TimeBack = DVD_NOPTS_VALUE;
@@ -45,7 +46,7 @@ void CDVDMessageQueue::Init()
 
 void CDVDMessageQueue::Flush(CDVDMsg::Message type)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   m_messages.remove_if([type](const DVDMessageListItem &item){
     return type == CDVDMsg::NONE || item.message->IsType(type);
@@ -65,7 +66,7 @@ void CDVDMessageQueue::Flush(CDVDMsg::Message type)
 
 void CDVDMessageQueue::Abort()
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   m_bAbortRequest = true;
 
@@ -75,7 +76,7 @@ void CDVDMessageQueue::Abort()
 
 void CDVDMessageQueue::End()
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   Flush(CDVDMsg::NONE);
 
@@ -84,29 +85,30 @@ void CDVDMessageQueue::End()
   m_bAbortRequest = false;
 }
 
-MsgQueueReturnCode CDVDMessageQueue::Put(CDVDMsg* pMsg, int priority)
+MsgQueueReturnCode CDVDMessageQueue::Put(const std::shared_ptr<CDVDMsg>& pMsg, int priority)
 {
   return Put(pMsg, priority, true);
 }
 
-MsgQueueReturnCode CDVDMessageQueue::PutBack(CDVDMsg* pMsg, int priority)
+MsgQueueReturnCode CDVDMessageQueue::PutBack(const std::shared_ptr<CDVDMsg>& pMsg, int priority)
 {
   return Put(pMsg, priority, false);
 }
 
-MsgQueueReturnCode CDVDMessageQueue::Put(CDVDMsg* pMsg, int priority, bool front)
+MsgQueueReturnCode CDVDMessageQueue::Put(const std::shared_ptr<CDVDMsg>& pMsg,
+                                         int priority,
+                                         bool front)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   if (!m_bInitialized)
   {
-    CLog::Log(LOGWARNING, "CDVDMessageQueue(%s)::Put MSGQ_NOT_INITIALIZED", m_owner.c_str());
-    pMsg->Release();
+    CLog::Log(LOGWARNING, "CDVDMessageQueue({})::Put MSGQ_NOT_INITIALIZED", m_owner);
     return MSGQ_NOT_INITIALIZED;
   }
   if (!pMsg)
   {
-    CLog::Log(LOGFATAL, "CDVDMessageQueue(%s)::Put MSGQ_INVALID_MSG", m_owner.c_str());
+    CLog::Log(LOGFATAL, "CDVDMessageQueue({})::Put MSGQ_INVALID_MSG", m_owner);
     return MSGQ_INVALID_MSG;
   }
 
@@ -139,7 +141,7 @@ MsgQueueReturnCode CDVDMessageQueue::Put(CDVDMsg* pMsg, int priority, bool front
 
   if (pMsg->IsType(CDVDMsg::DEMUXER_PACKET) && priority == 0)
   {
-    DemuxPacket* packet = static_cast<CDVDMsgDemuxerPacket*>(pMsg)->GetPacket();
+    DemuxPacket* packet = static_cast<CDVDMsgDemuxerPacket*>(pMsg.get())->GetPacket();
     if (packet)
     {
       m_iDataSize += packet->iSize;
@@ -150,25 +152,23 @@ MsgQueueReturnCode CDVDMessageQueue::Put(CDVDMsg* pMsg, int priority, bool front
     }
   }
 
-  pMsg->Release();
-
   // inform waiter for new packet
   m_hEvent.Set();
 
   return MSGQ_OK;
 }
 
-MsgQueueReturnCode CDVDMessageQueue::Get(CDVDMsg** pMsg, unsigned int iTimeoutInMilliSeconds, int &priority)
+MsgQueueReturnCode CDVDMessageQueue::Get(std::shared_ptr<CDVDMsg>& pMsg,
+                                         std::chrono::milliseconds timeout,
+                                         int& priority)
 {
-  CSingleLock lock(m_section);
-
-  *pMsg = NULL;
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   int ret = 0;
 
   if (!m_bInitialized)
   {
-    CLog::Log(LOGFATAL, "CDVDMessageQueue(%s)::Get MSGQ_NOT_INITIALIZED", m_owner.c_str());
+    CLog::Log(LOGFATAL, "CDVDMessageQueue({})::Get MSGQ_NOT_INITIALIZED", m_owner);
     return MSGQ_NOT_INITIALIZED;
   }
 
@@ -183,20 +183,21 @@ MsgQueueReturnCode CDVDMessageQueue::Get(CDVDMsg** pMsg, unsigned int iTimeoutIn
 
       if (item.message->IsType(CDVDMsg::DEMUXER_PACKET) && item.priority == 0)
       {
-        DemuxPacket* packet = static_cast<CDVDMsgDemuxerPacket*>(item.message)->GetPacket();
+        DemuxPacket* packet =
+            std::static_pointer_cast<CDVDMsgDemuxerPacket>(item.message)->GetPacket();
         if (packet)
         {
           m_iDataSize -= packet->iSize;
         }
       }
 
-      *pMsg = item.message->Acquire();
+      pMsg = std::move(item.message);
       msgs.pop_back();
       UpdateTimeBack();
       ret = MSGQ_OK;
       break;
     }
-    else if (!iTimeoutInMilliSeconds)
+    else if (timeout == 0ms)
     {
       ret = MSGQ_TIMEOUT;
       break;
@@ -204,13 +205,13 @@ MsgQueueReturnCode CDVDMessageQueue::Get(CDVDMsg** pMsg, unsigned int iTimeoutIn
     else
     {
       m_hEvent.Reset();
-      lock.Leave();
+      lock.unlock();
 
       // wait for a new message
-      if (!m_hEvent.WaitMSec(iTimeoutInMilliSeconds))
+      if (!m_hEvent.Wait(timeout))
         return MSGQ_TIMEOUT;
 
-      lock.Enter();
+      lock.lock();
     }
   }
 
@@ -227,7 +228,8 @@ void CDVDMessageQueue::UpdateTimeFront()
     auto &item = m_messages.front();
     if (item.message->IsType(CDVDMsg::DEMUXER_PACKET))
     {
-      DemuxPacket* packet = static_cast<CDVDMsgDemuxerPacket*>(item.message)->GetPacket();
+      DemuxPacket* packet =
+          std::static_pointer_cast<CDVDMsgDemuxerPacket>(item.message)->GetPacket();
       if (packet)
       {
         if (packet->dts != DVD_NOPTS_VALUE)
@@ -249,7 +251,8 @@ void CDVDMessageQueue::UpdateTimeBack()
     auto &item = m_messages.back();
     if (item.message->IsType(CDVDMsg::DEMUXER_PACKET))
     {
-      DemuxPacket* packet = static_cast<CDVDMsgDemuxerPacket*>(item.message)->GetPacket();
+      DemuxPacket* packet =
+          std::static_pointer_cast<CDVDMsgDemuxerPacket>(item.message)->GetPacket();
       if (packet)
       {
         if (packet->dts != DVD_NOPTS_VALUE)
@@ -266,7 +269,7 @@ void CDVDMessageQueue::UpdateTimeBack()
 
 unsigned CDVDMessageQueue::GetPacketCount(CDVDMsg::Message type)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   if (!m_bInitialized)
     return 0;
@@ -289,25 +292,24 @@ unsigned CDVDMessageQueue::GetPacketCount(CDVDMsg::Message type)
 void CDVDMessageQueue::WaitUntilEmpty()
 {
   {
-    CSingleLock lock(m_section);
+    std::unique_lock<CCriticalSection> lock(m_section);
     m_drain = true;
   }
 
-  CLog::Log(LOGINFO, "CDVDMessageQueue(%s)::WaitUntilEmpty", m_owner.c_str());
-  CDVDMsgGeneralSynchronize* msg = new CDVDMsgGeneralSynchronize(40000, SYNCSOURCE_ANY);
-  Put(msg->Acquire());
+  CLog::Log(LOGINFO, "CDVDMessageQueue({})::WaitUntilEmpty", m_owner);
+  auto msg = std::make_shared<CDVDMsgGeneralSynchronize>(40s, SYNCSOURCE_ANY);
+  Put(msg);
   msg->Wait(m_bAbortRequest, 0);
-  msg->Release();
 
   {
-    CSingleLock lock(m_section);
+    std::unique_lock<CCriticalSection> lock(m_section);
     m_drain = false;
   }
 }
 
 int CDVDMessageQueue::GetLevel() const
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   if (m_iDataSize > m_iMaxDataSize)
     return 100;
@@ -333,7 +335,7 @@ int CDVDMessageQueue::GetLevel() const
 
 int CDVDMessageQueue::GetTimeSize() const
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   if (IsDataBased())
     return 0;

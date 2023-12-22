@@ -8,9 +8,9 @@
 
 #include "WinEventsX11.h"
 
-#include "AppInboundProtocol.h"
-#include "Application.h"
 #include "ServiceBroker.h"
+#include "application/AppInboundProtocol.h"
+#include "application/Application.h"
 #include "cores/AudioEngine/Interfaces/AE.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
@@ -22,12 +22,13 @@
 #include "windowing/WinEvents.h"
 #include "windowing/X11/WinSystemX11.h"
 
+#include <stdexcept>
+
 #include <X11/XF86keysym.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/Xrandr.h>
 #include <X11/keysymdef.h>
 
-using namespace KODI::MESSAGING;
 using namespace KODI::WINDOWING::X11;
 
 static uint32_t SymMappingsX11[][2] =
@@ -269,12 +270,12 @@ bool CWinEventsX11::HasStructureChanged()
   return ret;
 }
 
-void CWinEventsX11::SetXRRFailSafeTimer(int millis)
+void CWinEventsX11::SetXRRFailSafeTimer(std::chrono::milliseconds duration)
 {
   if (!m_display)
     return;
 
-  m_xrrFailSafeTimer.Set(millis);
+  m_xrrFailSafeTimer.Set(duration);
   m_xrrEventPending = true;
 }
 
@@ -381,8 +382,7 @@ bool CWinEventsX11::MessagePump()
           break;
 
         m_structureChanged = true;
-        XBMC_Event newEvent;
-        memset(&newEvent, 0, sizeof(newEvent));
+        XBMC_Event newEvent = {};
         newEvent.type = XBMC_VIDEORESIZE;
         newEvent.resize.w = xevent.xconfigure.width;
         newEvent.resize.h = xevent.xconfigure.height;
@@ -395,14 +395,14 @@ bool CWinEventsX11::MessagePump()
       case ClientMessage:
       {
         if ((unsigned int)xevent.xclient.data.l[0] == m_wmDeleteMessage)
-          if (!g_application.m_bStop) CApplicationMessenger::GetInstance().PostMsg(TMSG_QUIT);
+          if (!g_application.m_bStop)
+            CServiceBroker::GetAppMessenger()->PostMsg(TMSG_QUIT);
         break;
       }
 
       case KeyPress:
       {
-        XBMC_Event newEvent;
-        memset(&newEvent, 0, sizeof(newEvent));
+        XBMC_Event newEvent = {};
         newEvent.type = XBMC_KEYDOWN;
         KeySym xkeysym;
 
@@ -431,6 +431,8 @@ bool CWinEventsX11::MessagePump()
         {
           m_keybuf_len = len;
           m_keybuf = (char*)realloc(m_keybuf, m_keybuf_len);
+          if (m_keybuf == nullptr)
+            throw std::runtime_error("Failed to realloc memory, insufficient memory available");
           len = Xutf8LookupString(m_xic, &xevent.xkey,
                                   m_keybuf, m_keybuf_len,
                                   &xkeysym, &status);
@@ -495,9 +497,8 @@ bool CWinEventsX11::MessagePump()
             continue;
         }
 
-        XBMC_Event newEvent;
+        XBMC_Event newEvent = {};
         KeySym xkeysym;
-        memset(&newEvent, 0, sizeof(newEvent));
         newEvent.type = XBMC_KEYUP;
         xkeysym = XLookupKeysym(&xevent.xkey, 0);
         newEvent.key.keysym.scancode = xevent.xkey.keycode;
@@ -522,8 +523,7 @@ bool CWinEventsX11::MessagePump()
       {
         if (xevent.xmotion.window != m_window)
           break;
-        XBMC_Event newEvent;
-        memset(&newEvent, 0, sizeof(newEvent));
+        XBMC_Event newEvent = {};
         newEvent.type = XBMC_MOUSEMOTION;
         newEvent.motion.x = (int16_t)xevent.xmotion.x;
         newEvent.motion.y = (int16_t)xevent.xmotion.y;
@@ -534,8 +534,7 @@ bool CWinEventsX11::MessagePump()
 
       case ButtonPress:
       {
-        XBMC_Event newEvent;
-        memset(&newEvent, 0, sizeof(newEvent));
+        XBMC_Event newEvent = {};
         newEvent.type = XBMC_MOUSEBUTTONDOWN;
         newEvent.button.button = (unsigned char)xevent.xbutton.button;
         newEvent.button.x = (int16_t)xevent.xbutton.x;
@@ -547,8 +546,7 @@ bool CWinEventsX11::MessagePump()
 
       case ButtonRelease:
       {
-        XBMC_Event newEvent;
-        memset(&newEvent, 0, sizeof(newEvent));
+        XBMC_Event newEvent = {};
         newEvent.type = XBMC_MOUSEBUTTONUP;
         newEvent.button.button = (unsigned char)xevent.xbutton.button;
         newEvent.button.x = (int16_t)xevent.xbutton.x;

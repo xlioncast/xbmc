@@ -27,7 +27,7 @@ public:
   virtual ~CAESinkDirectSound();
 
   static void Register();
-  static IAESink* Create(std::string &device, AEAudioFormat &desiredFormat);
+  static std::unique_ptr<IAESink> Create(std::string& device, AEAudioFormat& desiredFormat);
 
   virtual bool Initialize(AEAudioFormat &format, std::string &device);
   virtual void Deinitialize();
@@ -64,7 +64,6 @@ private:
 
   unsigned int        m_BufferOffset;
   unsigned int        m_CacheLen;
-  unsigned int        m_LastCacheCheck;
   unsigned int        m_BufferTimeouts;
 
   bool                m_running;

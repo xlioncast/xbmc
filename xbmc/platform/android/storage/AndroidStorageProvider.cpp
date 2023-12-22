@@ -19,6 +19,7 @@
 
 #include "platform/android/activity/XBMCApp.h"
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -27,10 +28,32 @@
 #include <androidjni/Context.h>
 #include <androidjni/Environment.h>
 #include <androidjni/StorageManager.h>
+#include <androidjni/StorageVolume.h>
 
-static const char * typeWL[] = { "vfat", "exfat", "sdcardfs", "fuse", "ntfs", "fat32", "ext3", "ext4", "esdfs" };
-static const char * mountWL[] = { "/mnt", "/Removable", "/storage" };
-static const char * mountBL[] = {
+namespace
+{
+
+// clang-format off
+constexpr std::array<const char*, 10> typeWL = {
+  "vfat",
+  "exfat",
+  "sdcardfs",
+  "fuse",
+  "ntfs",
+  "fat32",
+  "ext3",
+  "ext4",
+  "esdfs",
+  "cifs"
+};
+
+constexpr std::array<const char*, 3> mountWL = {
+  "/mnt",
+  "/Removable",
+  "/storage"
+};
+
+constexpr std::array<const char*, 9> mountBL = {
   "/mnt/secure",
   "/mnt/shell",
   "/mnt/asec",
@@ -41,15 +64,20 @@ static const char * mountBL[] = {
   "/storage/emulated",
   "/mnt/runtime"
 };
-static const char * deviceWL[] = {
+
+constexpr std::array<const char*, 4> deviceWL = {
   "/dev/block/vold",
   "/dev/fuse",
-  "/mnt/media_rw"
+  "/mnt/media_rw",
+  "//" // SMB
 };
+// clang-format on
 
-IStorageProvider* IStorageProvider::CreateInstance()
+} // namespace
+
+std::unique_ptr<IStorageProvider> IStorageProvider::CreateInstance()
 {
-  return new CAndroidStorageProvider();
+  return std::make_unique<CAndroidStorageProvider>();
 }
 
 CAndroidStorageProvider::CAndroidStorageProvider()
@@ -115,90 +143,109 @@ void CAndroidStorageProvider::GetLocalDrives(VECSOURCES &localDrives)
   localDrives.push_back(share);
 }
 
-void CAndroidStorageProvider::GetRemovableDrives(VECSOURCES &removableDrives)
+void CAndroidStorageProvider::GetRemovableDrives(VECSOURCES& removableDrives)
 {
-  // Uses non-public API: be extra carefull
-  bool inError = false;
-  VECSOURCES droidDrives;
-
-  CJNIStorageManager manager(CJNIContext::getSystemService("storage"));
-  if (xbmc_jnienv()->ExceptionCheck())
+  if (CJNIBase::GetSDKVersion() >= 24)
   {
-    xbmc_jnienv()->ExceptionClear();
-    inError = true;
-  }
+    bool inError = false;
 
-  if (!inError)
-  {
-    CJNIStorageVolumes vols = manager.getStorageVolumes();
+    CJNIStorageManager manager(CJNIContext::getSystemService(CJNIContext::STORAGE_SERVICE));
     if (xbmc_jnienv()->ExceptionCheck())
     {
+      xbmc_jnienv()->ExceptionDescribe();
       xbmc_jnienv()->ExceptionClear();
       inError = true;
     }
 
     if (!inError)
     {
-      for (auto vol : vols)
+      CJNIStorageVolumes vols = manager.getStorageVolumes();
+      if (xbmc_jnienv()->ExceptionCheck())
       {
-//        CLog::Log(LOGDEBUG, "-- Volume: %s(%s) -- %s", vol.getPath().c_str(), vol.getUserLabel().c_str(), vol.getState().c_str());
-        bool removable = vol.isRemovable();
-        if (xbmc_jnienv()->ExceptionCheck())
+        xbmc_jnienv()->ExceptionDescribe();
+        xbmc_jnienv()->ExceptionClear();
+        inError = true;
+      }
+
+      if (!inError)
+      {
+        VECSOURCES droidDrives;
+
+        for (int i = 0; i < vols.size(); ++i)
         {
-          xbmc_jnienv()->ExceptionClear();
-          inError = true;
-          break;
-        }
-        std::string state = vol.getState();
-        if (xbmc_jnienv()->ExceptionCheck())
-        {
-          xbmc_jnienv()->ExceptionClear();
-          inError = true;
-          break;
+          CJNIStorageVolume vol = vols.get(i);
+          // CLog::Log(LOGDEBUG, "-- Volume: {}({}) -- {}", vol.getPath(), vol.getUserLabel(), vol.getState());
+
+          bool removable = vol.isRemovable();
+          if (xbmc_jnienv()->ExceptionCheck())
+          {
+            xbmc_jnienv()->ExceptionDescribe();
+            xbmc_jnienv()->ExceptionClear();
+            inError = true;
+            break;
+          }
+
+          std::string state = vol.getState();
+          if (xbmc_jnienv()->ExceptionCheck())
+          {
+            xbmc_jnienv()->ExceptionDescribe();
+            xbmc_jnienv()->ExceptionClear();
+            inError = true;
+            break;
+          }
+
+          if (removable && state == CJNIEnvironment::MEDIA_MOUNTED)
+          {
+            CMediaSource share;
+
+            share.strPath = vol.getPath();
+            if (xbmc_jnienv()->ExceptionCheck())
+            {
+              xbmc_jnienv()->ExceptionDescribe();
+              xbmc_jnienv()->ExceptionClear();
+              inError = true;
+              break;
+            }
+
+            share.strName = vol.getUserLabel();
+            if (xbmc_jnienv()->ExceptionCheck())
+            {
+              xbmc_jnienv()->ExceptionDescribe();
+              xbmc_jnienv()->ExceptionClear();
+              inError = true;
+              break;
+            }
+
+            StringUtils::Trim(share.strName);
+            if (share.strName.empty() || share.strName == "?" ||
+                StringUtils::EqualsNoCase(share.strName, "null"))
+              share.strName = URIUtils::GetFileName(share.strPath);
+
+            share.m_ignore = true;
+            droidDrives.emplace_back(share);
+          }
         }
 
-        if (removable && state == CJNIEnvironment::MEDIA_MOUNTED)
+        if (!inError)
         {
-          CMediaSource share;
-          share.strPath = vol.getPath();
-          if (xbmc_jnienv()->ExceptionCheck())
-          {
-            xbmc_jnienv()->ExceptionClear();
-            inError = true;
-            break;
-          }
-          share.strName = vol.getUserLabel();
-          if (xbmc_jnienv()->ExceptionCheck())
-          {
-            xbmc_jnienv()->ExceptionClear();
-            inError = true;
-            break;
-          }
-          StringUtils::Trim(share.strName);
-          if (share.strName.empty() || share.strName == "?" || StringUtils::EqualsNoCase(share.strName, "null"))
-            share.strName = URIUtils::GetFileName(share.strPath);
-          share.m_ignore = true;
-          droidDrives.push_back(share);
+          removableDrives.insert(removableDrives.end(), droidDrives.begin(), droidDrives.end());
+          return;
         }
       }
     }
   }
 
-  if (!inError)
-    removableDrives.insert(removableDrives.end(), droidDrives.begin(), droidDrives.end());
-  else
+  // Try fallback for SDK < 24 or in case of error
+  for (const auto& mountStr : GetRemovableDrivesLinux())
   {
-    for (const auto& mountStr : GetRemovableDrivesLinux())
+    // Reject unreadable
+    if (XFILE::CDirectory::Exists(mountStr))
     {
-      // Reject unreadable
-      if (XFILE::CDirectory::Exists(mountStr))
-      {
-        CMediaSource share;
-        share.strPath = unescape(mountStr);
-        share.strName = URIUtils::GetFileName(mountStr);
-        share.m_ignore = true;
-        removableDrives.push_back(share);
-      }
+      CMediaSource share;
+      share.strPath = unescape(mountStr);
+      share.strName = URIUtils::GetFileName(mountStr);
+      share.m_ignore = true;
+      removableDrives.emplace_back(share);
     }
   }
 }
@@ -272,9 +319,9 @@ std::set<std::string> CAndroidStorageProvider::GetRemovableDrivesLinux()
         bool bl_ok = true;
 
         // What mount points are rejected
-        for (unsigned int i=0; i < ARRAY_SIZE(mountBL); ++i)
+        for (const auto& mount : mountBL)
         {
-          if (StringUtils::StartsWithNoCase(mountStr, mountBL[i]))
+          if (StringUtils::StartsWithNoCase(mountStr, mount))
           {
             bl_ok = false;
             break;
@@ -285,9 +332,9 @@ std::set<std::string> CAndroidStorageProvider::GetRemovableDrivesLinux()
         {
           // What filesystems are accepted
           bool fsok = false;
-          for (unsigned int i=0; i < ARRAY_SIZE(typeWL); ++i)
+          for (const auto& type : typeWL)
           {
-            if (StringUtils::StartsWithNoCase(fsStr, typeWL[i]))
+            if (StringUtils::StartsWithNoCase(fsStr, type))
             {
               fsok = true;
               break;
@@ -295,9 +342,9 @@ std::set<std::string> CAndroidStorageProvider::GetRemovableDrivesLinux()
           }
           // What devices are accepted
           bool devok = false;
-          for (unsigned int i=0; i < ARRAY_SIZE(deviceWL); ++i)
+          for (const auto& device : deviceWL)
           {
-            if (StringUtils::StartsWithNoCase(deviceStr, deviceWL[i]))
+            if (StringUtils::StartsWithNoCase(deviceStr, device))
             {
               devok = true;
               break;
@@ -306,9 +353,9 @@ std::set<std::string> CAndroidStorageProvider::GetRemovableDrivesLinux()
 
           // What mount points are accepted
           bool mountok = false;
-          for (unsigned int i=0; i < ARRAY_SIZE(mountWL); ++i)
+          for (const auto& mount : mountWL)
           {
-            if (StringUtils::StartsWithNoCase(mountStr, mountWL[i]))
+            if (StringUtils::StartsWithNoCase(mountStr, mount))
             {
               mountok = true;
               break;

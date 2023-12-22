@@ -8,14 +8,21 @@
 
 #include "PictureInfoTag.h"
 
+#include "ServiceBroker.h"
+#include "addons/ExtsMimeSupportList.h"
+#include "addons/ImageDecoder.h"
+#include "addons/addoninfo/AddonType.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
 #include "utils/Archive.h"
 #include "utils/CharsetConverter.h"
 #include "utils/StringUtils.h"
+#include "utils/URIUtils.h"
 #include "utils/Variant.h"
 
 #include <algorithm>
 #include <vector>
+
+using namespace KODI::ADDONS;
 
 CPictureInfoTag::ExifInfo::ExifInfo(const ExifInfo_t& other)
   : CameraMake(other.CameraMake),
@@ -123,14 +130,40 @@ bool CPictureInfoTag::Load(const std::string &path)
 {
   m_isLoaded = false;
 
-  ExifInfo_t exifInfo;
-  IPTCInfo_t iptcInfo;
-
-  if (process_jpeg(path.c_str(), &exifInfo, &iptcInfo))
+  // Get file extensions to find addon related to it.
+  std::string strExtension = URIUtils::GetExtension(path);
+  StringUtils::ToLower(strExtension);
+  if (!strExtension.empty() && CServiceBroker::IsAddonInterfaceUp())
   {
-    m_exifInfo = ExifInfo(exifInfo);
-    m_iptcInfo = IPTCInfo(iptcInfo);
-    m_isLoaded = true;
+    // Load via available image decoder addons
+    auto addonInfos = CServiceBroker::GetExtsMimeSupportList().GetExtensionSupportedAddonInfos(
+        strExtension, CExtsMimeSupportList::FilterSelect::all);
+    for (const auto& addonInfo : addonInfos)
+    {
+      if (addonInfo.first != ADDON::AddonType::IMAGEDECODER)
+        continue;
+
+      std::unique_ptr<CImageDecoder> result = std::make_unique<CImageDecoder>(addonInfo.second, "");
+      if (result->LoadInfoTag(path, this))
+      {
+        m_isLoaded = true;
+        break;
+      }
+    }
+  }
+
+  // Load by Kodi's included own way
+  if (!m_isLoaded)
+  {
+    ExifInfo_t exifInfo;
+    IPTCInfo_t iptcInfo;
+
+    if (process_jpeg(path.c_str(), &exifInfo, &iptcInfo))
+    {
+      m_exifInfo = ExifInfo(exifInfo);
+      m_iptcInfo = IPTCInfo(iptcInfo);
+      m_isLoaded = true;
+    }
   }
 
   ConvertDateTime();
@@ -378,7 +411,7 @@ const std::string CPictureInfoTag::GetInfo(int info) const
   switch (info)
   {
   case SLIDESHOW_RESOLUTION:
-    value = StringUtils::Format("%d x %d", m_exifInfo.Width, m_exifInfo.Height);
+    value = StringUtils::Format("{} x {}", m_exifInfo.Width, m_exifInfo.Height);
     break;
   case SLIDESHOW_COLOUR:
     value = m_exifInfo.IsColor ? "Colour" : "Black and White";
@@ -444,7 +477,7 @@ const std::string CPictureInfoTag::GetInfo(int info) const
 //    value = m_exifInfo.Software;
   case SLIDESHOW_EXIF_APERTURE:
     if (m_exifInfo.ApertureFNumber)
-      value = StringUtils::Format("%3.1f", m_exifInfo.ApertureFNumber);
+      value = StringUtils::Format("{:3.1f}", m_exifInfo.ApertureFNumber);
     break;
   case SLIDESHOW_EXIF_ORIENTATION:
     switch (m_exifInfo.Orientation)
@@ -462,16 +495,16 @@ const std::string CPictureInfoTag::GetInfo(int info) const
   case SLIDESHOW_EXIF_FOCAL_LENGTH:
     if (m_exifInfo.FocalLength)
     {
-      value = StringUtils::Format("%4.2fmm", m_exifInfo.FocalLength);
+      value = StringUtils::Format("{:4.2f}mm", m_exifInfo.FocalLength);
       if (m_exifInfo.FocalLength35mmEquiv != 0)
-        value += StringUtils::Format("  (35mm Equivalent = %umm)", m_exifInfo.FocalLength35mmEquiv);
+        value += StringUtils::Format("  (35mm Equivalent = {}mm)", m_exifInfo.FocalLength35mmEquiv);
     }
     break;
   case SLIDESHOW_EXIF_FOCUS_DIST:
     if (m_exifInfo.Distance < 0)
       value = "Infinite";
     else if (m_exifInfo.Distance > 0)
-      value = StringUtils::Format("%4.2fm", m_exifInfo.Distance);
+      value = StringUtils::Format("{:4.2f}m", m_exifInfo.Distance);
     break;
   case SLIDESHOW_EXIF_EXPOSURE:
     switch (m_exifInfo.ExposureProgram)
@@ -490,16 +523,16 @@ const std::string CPictureInfoTag::GetInfo(int info) const
     if (m_exifInfo.ExposureTime)
     {
       if (m_exifInfo.ExposureTime < 0.010f)
-        value = StringUtils::Format("%6.4fs", m_exifInfo.ExposureTime);
+        value = StringUtils::Format("{:6.4f}s", m_exifInfo.ExposureTime);
       else
-        value = StringUtils::Format("%5.3fs", m_exifInfo.ExposureTime);
-      if (m_exifInfo.ExposureTime <= 0.5)
-        value += StringUtils::Format(" (1/%d)", (int)(0.5 + 1/m_exifInfo.ExposureTime));
+        value = StringUtils::Format("{:5.3f}s", m_exifInfo.ExposureTime);
+      if (m_exifInfo.ExposureTime <= 0.5f)
+        value += StringUtils::Format(" (1/{})", static_cast<int>(0.5f + 1 / m_exifInfo.ExposureTime));
     }
     break;
   case SLIDESHOW_EXIF_EXPOSURE_BIAS:
     if (m_exifInfo.ExposureBias != 0)
-      value = StringUtils::Format("%4.2f EV", m_exifInfo.ExposureBias);
+      value = StringUtils::Format("{:4.2f} EV", m_exifInfo.ExposureBias);
     break;
   case SLIDESHOW_EXIF_EXPOSURE_MODE:
     switch (m_exifInfo.ExposureMode)
@@ -566,15 +599,15 @@ const std::string CPictureInfoTag::GetInfo(int info) const
     break;
   case SLIDESHOW_EXIF_ISO_EQUIV:
     if (m_exifInfo.ISOequivalent)
-      value = StringUtils::Format("%2d", m_exifInfo.ISOequivalent);
+      value = StringUtils::Format("{:2}", m_exifInfo.ISOequivalent);
     break;
   case SLIDESHOW_EXIF_DIGITAL_ZOOM:
     if (m_exifInfo.DigitalZoomRatio)
-      value = StringUtils::Format("%1.3fx", m_exifInfo.DigitalZoomRatio);
+      value = StringUtils::Format("{:1.3f}x", m_exifInfo.DigitalZoomRatio);
     break;
   case SLIDESHOW_EXIF_CCD_WIDTH:
     if (m_exifInfo.CCDWidth)
-      value = StringUtils::Format("%4.2fmm", m_exifInfo.CCDWidth);
+      value = StringUtils::Format("{:4.2f}mm", m_exifInfo.CCDWidth);
     break;
   case SLIDESHOW_EXIF_GPS_LATITUDE:
     value = m_exifInfo.GpsLat;

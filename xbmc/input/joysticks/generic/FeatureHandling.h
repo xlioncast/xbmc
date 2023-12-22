@@ -10,6 +10,7 @@
 
 #include "input/joysticks/JoystickTypes.h"
 
+#include <chrono>
 #include <memory>
 
 namespace KODI
@@ -105,7 +106,7 @@ protected:
   const bool m_bEnabled;
 
 private:
-  unsigned int m_motionStartTimeMs = 0;
+  std::chrono::time_point<std::chrono::steady_clock> m_motionStartTimeMs;
 };
 
 class CScalarFeature : public CJoystickFeature
@@ -128,13 +129,13 @@ private:
 
   // State variables
   INPUT_TYPE m_inputType = INPUT_TYPE::UNKNOWN;
-  bool m_bDigitalState;
+  bool m_bDigitalState = false;
   bool m_bInitialPressHandled = false;
 
   // Analog state variables
-  float m_analogState; // The current magnitude
-  float m_bActivated; // Set to true when first activated (magnitude > 0.0)
-  bool m_bDiscrete; // Set to false when a non-discrete axis is detected
+  float m_analogState = 0.0f; // The current magnitude
+  float m_bActivated = false; // Set to true when first activated (magnitude > 0.0)
+  bool m_bDiscrete = true; // Set to false when a non-discrete axis is detected
 };
 
 /*!
@@ -215,7 +216,7 @@ public:
 protected:
   CFeatureAxis m_axis;
 
-  float m_state;
+  float m_state = 0.0f;
 };
 
 class CWheel : public CAxisFeature
@@ -253,8 +254,8 @@ protected:
   CFeatureAxis m_vertAxis;
   CFeatureAxis m_horizAxis;
 
-  float m_vertState;
-  float m_horizState;
+  float m_vertState = 0.0f;
+  float m_horizState = 0.0f;
 };
 
 class CAccelerometer : public CJoystickFeature
@@ -273,9 +274,9 @@ protected:
   CFeatureAxis m_yAxis;
   CFeatureAxis m_zAxis;
 
-  float m_xAxisState;
-  float m_yAxisState;
-  float m_zAxisState;
+  float m_xAxisState = 0.0f;
+  float m_yAxisState = 0.0f;
+  float m_zAxisState = 0.0f;
 };
 } // namespace JOYSTICK
 } // namespace KODI

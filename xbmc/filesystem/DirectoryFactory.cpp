@@ -74,16 +74,31 @@
 #ifdef HAVE_LIBBLURAY
 #include "BlurayDirectory.h"
 #endif
+#ifdef HAS_OPTICAL_DRIVE
+#include "DVDDirectory.h"
+#endif
 #if defined(TARGET_ANDROID)
 #include "platform/android/filesystem/AndroidAppDirectory.h"
 #endif
 #include "ResourceDirectory.h"
 #include "ServiceBroker.h"
 #include "addons/VFSEntry.h"
+#include "utils/StringUtils.h"
 
 using namespace ADDON;
 
 using namespace XFILE;
+
+/*!
+ \brief Create a IDirectory object of the share type specified in a given item path.
+ \param item Specifies the item to which the factory will create the directory instance
+ \return IDirectory object to access the directories on the share.
+ \sa IDirectory
+ */
+IDirectory* CDirectoryFactory::Create(const CFileItem& item)
+{
+  return Create(CURL{item.GetDynPath()});
+}
 
 /*!
  \brief Create a IDirectory object of the share type specified in \e strPath .
@@ -101,7 +116,7 @@ IDirectory* CDirectoryFactory::Create(const CURL& url)
   if (pDir)
     return pDir;
 
-  if (!url.GetProtocol().empty() && CServiceBroker::IsBinaryAddonCacheUp())
+  if (!url.GetProtocol().empty() && CServiceBroker::IsAddonInterfaceUp())
   {
     for (const auto& vfsAddon : CServiceBroker::GetVFSAddonCache().GetAddonInstances())
     {
@@ -129,7 +144,7 @@ IDirectory* CDirectoryFactory::Create(const CURL& url)
   if (url.IsProtocol("special")) return new CSpecialProtocolDirectory();
   if (url.IsProtocol("sources")) return new CSourcesDirectory();
   if (url.IsProtocol("addons")) return new CAddonsDirectory();
-#if defined(HAS_DVD_DRIVE)
+#if defined(HAS_OPTICAL_DRIVE)
   if (url.IsProtocol("cdda")) return new CCDDADirectory();
 #endif
 #if defined(HAS_ISO9660PP)
@@ -185,11 +200,16 @@ IDirectory* CDirectoryFactory::Create(const CURL& url)
 #ifdef HAS_FILESYSTEM_NFS
   if (url.IsProtocol("nfs")) return new CNFSDirectory();
 #endif
+#ifdef HAS_OPTICAL_DRIVE
+  if (url.IsProtocol("dvd"))
+    return new CDVDDirectory();
+#endif
 
   if (url.IsProtocol("pvr"))
     return new CPVRDirectory();
 
-  CLog::Log(LOGWARNING, "%s - unsupported protocol(%s) in %s", __FUNCTION__, url.GetProtocol().c_str(), url.GetRedacted().c_str() );
+  CLog::Log(LOGWARNING, "{} - unsupported protocol({}) in {}", __FUNCTION__, url.GetProtocol(),
+            url.GetRedacted());
   return NULL;
 }
 

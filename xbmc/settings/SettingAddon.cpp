@@ -9,10 +9,14 @@
 #include "SettingAddon.h"
 
 #include "addons/Addon.h"
+#include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "settings/lib/SettingsManager.h"
 #include "utils/XBMCTinyXML.h"
 #include "utils/XMLUtils.h"
 #include "utils/log.h"
+
+#include <mutex>
 
 CSettingAddon::CSettingAddon(const std::string &id, CSettingsManager *settingsManager /* = nullptr */)
   : CSettingString(id, settingsManager)
@@ -35,7 +39,7 @@ SettingPtr CSettingAddon::Clone(const std::string &id) const
 
 bool CSettingAddon::Deserialize(const TiXmlNode *node, bool update /* = false */)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (!CSettingString::Deserialize(node, update))
     return false;
@@ -43,7 +47,7 @@ bool CSettingAddon::Deserialize(const TiXmlNode *node, bool update /* = false */
   if (m_control != nullptr &&
      (m_control->GetType() != "button" || m_control->GetFormat() != "addon"))
   {
-    CLog::Log(LOGERROR, "CSettingAddon: invalid <control> of \"%s\"", m_id.c_str());
+    CLog::Log(LOGERROR, "CSettingAddon: invalid <control> of \"{}\"", m_id);
     return false;
   }
 
@@ -56,14 +60,15 @@ bool CSettingAddon::Deserialize(const TiXmlNode *node, bool update /* = false */
     if (XMLUtils::GetString(constraints, "addontype", strAddonType) && !strAddonType.empty())
     {
       m_addonType = ADDON::CAddonInfo::TranslateType(strAddonType);
-      if (m_addonType != ADDON::ADDON_UNKNOWN)
+      if (m_addonType != ADDON::AddonType::UNKNOWN)
         ok = true;
     }
   }
 
   if (!ok && !update)
   {
-    CLog::Log(LOGERROR, "CSettingAddon: error reading the addontype value \"%s\" of \"%s\"", strAddonType.c_str(), m_id.c_str());
+    CLog::Log(LOGERROR, "CSettingAddon: error reading the addontype value \"{}\" of \"{}\"",
+              strAddonType, m_id);
     return false;
   }
 
@@ -74,6 +79,6 @@ void CSettingAddon::copyaddontype(const CSettingAddon &setting)
 {
   CSettingString::Copy(setting);
 
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
   m_addonType = setting.m_addonType;
 }

@@ -22,20 +22,9 @@
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 
-VideoPlayerCodec::VideoPlayerCodec()
+VideoPlayerCodec::VideoPlayerCodec() : m_processInfo(CProcessInfo::CreateInstance())
 {
   m_CodecName = "VideoPlayer";
-  m_pDemuxer = NULL;
-  m_pInputStream = NULL;
-  m_pAudioCodec = NULL;
-  m_nAudioStream = -1;
-  m_nDecodedLen = 0;
-  m_bInited = false;
-  m_pResampler = NULL;
-  m_needConvert = false;
-  m_channels = 0;
-
-  m_processInfo.reset(CProcessInfo::CreateInstance());
 }
 
 VideoPlayerCodec::~VideoPlayerCodec()
@@ -110,13 +99,13 @@ bool VideoPlayerCodec::Init(const CFileItem &file, unsigned int filecache)
       if (m_pInputStream.use_count() > 1)
         throw std::runtime_error("m_pInputStream reference count is greater than 1");
       m_pInputStream.reset();
-      CLog::Log(LOGERROR, "%s: Error creating demuxer", __FUNCTION__);
+      CLog::Log(LOGERROR, "{}: Error creating demuxer", __FUNCTION__);
       return false;
     }
   }
   catch(...)
   {
-    CLog::Log(LOGERROR, "%s: Exception thrown when opening demuxer", __FUNCTION__);
+    CLog::Log(LOGERROR, "{}: Exception thrown when opening demuxer", __FUNCTION__);
     if (m_pDemuxer)
     {
       delete m_pDemuxer;
@@ -141,7 +130,7 @@ bool VideoPlayerCodec::Init(const CFileItem &file, unsigned int filecache)
 
   if (m_nAudioStream == -1)
   {
-    CLog::Log(LOGERROR, "%s: Could not find audio stream", __FUNCTION__);
+    CLog::Log(LOGERROR, "{}: Could not find audio stream", __FUNCTION__);
     delete m_pDemuxer;
     m_pDemuxer = NULL;
     if (m_pInputStream.use_count() > 1)
@@ -157,7 +146,7 @@ bool VideoPlayerCodec::Init(const CFileItem &file, unsigned int filecache)
   m_pAudioCodec = CDVDFactoryCodec::CreateAudioCodec(hint, *m_processInfo, true, true, ptStreamTye);
   if (!m_pAudioCodec)
   {
-    CLog::Log(LOGERROR, "%s: Could not create audio codec", __FUNCTION__);
+    CLog::Log(LOGERROR, "{}: Could not create audio codec", __FUNCTION__);
     delete m_pDemuxer;
     m_pDemuxer = NULL;
     if (m_pInputStream.use_count() > 1)
@@ -183,10 +172,12 @@ bool VideoPlayerCodec::Init(const CFileItem &file, unsigned int filecache)
   // we have to decode initial data in order to get channels/samplerate
   // for sanity - we read no more than 10 packets
   int nErrors = 0;
-  for (int nPacket=0; nPacket < 10 && (m_channels == 0 || m_format.m_sampleRate == 0); nPacket++)
+  for (int nPacket = 0;
+       nPacket < 10 && (m_channels == 0 || m_format.m_sampleRate == 0 || m_format.m_frameSize == 0);
+       nPacket++)
   {
-    unsigned char dummy[256];
-    int nSize = 256;
+    uint8_t dummy[256];
+    size_t nSize = 256;
     if (ReadPCM(dummy, nSize, &nSize) == READ_ERROR)
       ++nErrors;
 
@@ -198,7 +189,7 @@ bool VideoPlayerCodec::Init(const CFileItem &file, unsigned int filecache)
   }
   if (nErrors >= 10)
   {
-    CLog::Log(LOGDEBUG, "%s: Could not decode data", __FUNCTION__);
+    CLog::Log(LOGDEBUG, "{}: Could not decode data", __FUNCTION__);
     return false;
   }
 
@@ -241,6 +232,10 @@ bool VideoPlayerCodec::Init(const CFileItem &file, unsigned int filecache)
   if (NeedConvert(m_srcFormat.m_dataFormat))
   {
     m_needConvert = true;
+    // if we don't know the framesize yet, we will fail when converting
+    if (m_srcFormat.m_frameSize == 0)
+      return false;
+
     m_pResampler = ActiveAE::CAEResampleFactory::Create();
 
     SampleConfig dstConfig, srcConfig;
@@ -290,14 +285,9 @@ void VideoPlayerCodec::DeInit()
     throw std::runtime_error("m_pInputStream reference count is greater than 1");
   m_pInputStream.reset();
 
-  if (m_pAudioCodec != NULL)
-  {
-    delete m_pAudioCodec;
-    m_pAudioCodec = NULL;
-  }
+  m_pAudioCodec.reset();
 
-  delete m_pResampler;
-  m_pResampler = NULL;
+  m_pResampler.reset();
 
   // cleanup format information
   m_TotalTime = 0;
@@ -326,11 +316,11 @@ bool VideoPlayerCodec::Seek(int64_t iSeekTime)
   return ret;
 }
 
-int VideoPlayerCodec::ReadPCM(unsigned char *pBuffer, int size, int *actualsize)
+int VideoPlayerCodec::ReadPCM(uint8_t* pBuffer, size_t size, size_t* actualsize)
 {
   if (m_nDecodedLen > 0)
   {
-    int nLen = (size<m_nDecodedLen)?size:m_nDecodedLen;
+    size_t nLen = (size < m_nDecodedLen) ? size : m_nDecodedLen;
     *actualsize = nLen;
     if (m_needConvert)
     {
@@ -357,9 +347,11 @@ int VideoPlayerCodec::ReadPCM(unsigned char *pBuffer, int size, int *actualsize)
 
   if (!bytes)
   {
-    DemuxPacket* pPacket;
+    DemuxPacket* pPacket = nullptr;
     do
     {
+      if (pPacket)
+        CDVDDemuxUtils::FreeDemuxPacket(pPacket);
       pPacket = m_pDemuxer->Read();
     } while (pPacket && pPacket->iStreamId != m_nAudioStream);
 
@@ -507,8 +499,10 @@ CAEStreamInfo::DataType VideoPlayerCodec::GetPassthroughStreamType(AVCodecID cod
     case AV_CODEC_ID_DTS:
       if (profile == FF_PROFILE_DTS_HD_HRA)
         format.m_streamInfo.m_type = CAEStreamInfo::STREAM_TYPE_DTSHD;
-      else
+      else if (profile == FF_PROFILE_DTS_HD_MA)
         format.m_streamInfo.m_type = CAEStreamInfo::STREAM_TYPE_DTSHD_MA;
+      else
+        format.m_streamInfo.m_type = CAEStreamInfo::STREAM_TYPE_DTSHD_CORE;
       format.m_streamInfo.m_sampleRate = samplerate;
       break;
 
@@ -523,7 +517,9 @@ CAEStreamInfo::DataType VideoPlayerCodec::GetPassthroughStreamType(AVCodecID cod
 
   bool supports = CServiceBroker::GetActiveAE()->SupportsRaw(format);
 
-  if (!supports && codecId == AV_CODEC_ID_DTS)
+  if (!supports && codecId == AV_CODEC_ID_DTS &&
+      format.m_streamInfo.m_type != CAEStreamInfo::STREAM_TYPE_DTSHD_CORE &&
+      CServiceBroker::GetActiveAE()->UsesDtsCoreFallback())
   {
     format.m_streamInfo.m_type = CAEStreamInfo::STREAM_TYPE_DTSHD_CORE;
     supports = CServiceBroker::GetActiveAE()->SupportsRaw(format);

@@ -14,16 +14,19 @@
 #include <string>
 #include <vector>
 
-class TiXmlElement;
+namespace tinyxml2
+{
+class XMLElement;
+}
 
 class CKeyboardLayout
 {
 public:
-  CKeyboardLayout();
+  CKeyboardLayout() = default;
   virtual ~CKeyboardLayout();
   IInputCodingTablePtr GetCodingTable() { return m_codingtable; }
 
-  bool Load(const TiXmlElement* element);
+  bool Load(const tinyxml2::XMLElement* element);
 
   std::string GetIdentifier() const;
   std::string GetName() const;

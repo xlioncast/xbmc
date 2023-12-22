@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "XBDateTime.h"
 #include "addons/kodi-dev-kit/include/kodi/c-api/addon-instance/pvr/pvr_epg.h"
 #include "pvr/settings/PVRSettings.h"
 #include "threads/CriticalSection.h"
@@ -24,6 +23,8 @@
 #include <utility>
 #include <vector>
 
+class CDateTime;
+
 namespace PVR
 {
   class CEpgUpdateRequest;
@@ -32,6 +33,7 @@ namespace PVR
   class CPVREpgChannelData;
   class CPVREpgDatabase;
   class CPVREpgInfoTag;
+  class CPVREpgSearchFilter;
 
   enum class PVREvent;
 
@@ -42,10 +44,12 @@ namespace PVR
     friend class CPVREpgDatabase;
 
   public:
+    CPVREpgContainer() = delete;
+
     /*!
      * @brief Create a new EPG table container.
      */
-    CPVREpgContainer();
+    explicit CPVREpgContainer(CEventSource<PVREvent>& eventSource);
 
     /*!
      * @brief Destroy this instance.
@@ -57,11 +61,6 @@ namespace PVR
      * @return A pointer to the database instance.
      */
     std::shared_ptr<CPVREpgDatabase> GetEpgDatabase() const;
-
-    /*!
-     * @brief Query the events available for CEventStream
-     */
-    CEventStream<PVREvent>& Events() { return m_events; }
 
     /*!
      * @brief Start the EPG update thread.
@@ -113,16 +112,10 @@ namespace PVR
     std::shared_ptr<CPVREpg> CreateChannelEpg(int iEpgId, const std::string& strScraperName, const std::shared_ptr<CPVREpgChannelData>& channelData);
 
     /*!
-     * @brief Get the start time of the first entry.
-     * @return The start time.
+     * @brief Get the start and end time across all EPGs.
+     * @return The times; first: start time, second: end time.
      */
-    const CDateTime GetFirstEPGDate();
-
-    /*!
-     * @brief Get the end time of the last entry.
-     * @return The end time.
-     */
-    const CDateTime GetLastEPGDate();
+    std::pair<CDateTime, CDateTime> GetFirstAndLastEPGDate() const;
 
     /*!
      * @brief Get all EPGs.
@@ -151,7 +144,8 @@ namespace PVR
      * @param iBroadcastId The event id to lookup.
      * @return The requested event, or an empty tag when not found
      */
-    std::shared_ptr<CPVREpgInfoTag> GetTagById(const std::shared_ptr<CPVREpg>& epg, unsigned int iBroadcastId) const;
+    std::shared_ptr<CPVREpgInfoTag> GetTagById(const std::shared_ptr<const CPVREpg>& epg,
+                                               unsigned int iBroadcastId) const;
 
     /*!
      * @brief Get the EPG event with the given database id
@@ -219,6 +213,48 @@ namespace PVR
      */
     void OnSystemWake();
 
+    /*!
+     * @brief Erase stale texture db entries and image files.
+     * @return number of cleaned up images.
+     */
+    int CleanupCachedImages();
+
+    /*!
+     * @brief Get all saved searches from the database.
+     * @param bRadio Whether to fetch saved searches for radio or TV.
+     * @return The searches.
+     */
+    std::vector<std::shared_ptr<CPVREpgSearchFilter>> GetSavedSearches(bool bRadio);
+
+    /*!
+     * @brief Get the saved search matching the given id.
+     * @param bRadio Whether to fetch a TV or radio saved search.
+     * @param iId The id.
+     * @return The saved search or nullptr if not found.
+     */
+    std::shared_ptr<CPVREpgSearchFilter> GetSavedSearchById(bool bRadio, int iId);
+
+    /*!
+     * @brief Persist a saved search in the database.
+     * @param search The saved search.
+     * @return True on success, false otherwise.
+     */
+    bool PersistSavedSearch(CPVREpgSearchFilter& search);
+
+    /*!
+     * @brief Update time last executed for the given search.
+     * @param epgSearch The search.
+     * @return True on success, false otherwise.
+     */
+    bool UpdateSavedSearchLastExecuted(const CPVREpgSearchFilter& epgSearch);
+
+    /*!
+     * @brief Delete a saved search from the database.
+     * @param search The saved search.
+     * @return True on success, false otherwise.
+     */
+    bool DeleteSavedSearch(const CPVREpgSearchFilter& search);
+
   private:
     /*!
      * @brief Notify EPG table observers when the currently active tag changed.
@@ -272,7 +308,7 @@ namespace PVR
     /*!
      * @brief Load all tables from the database
      */
-    void LoadFromDB();
+    void LoadFromDatabase();
 
     /*!
      * @brief Insert data from database
@@ -283,9 +319,11 @@ namespace PVR
     /*!
      * @brief Queue the deletion of an EPG table from this container.
      * @param epg The table to delete.
+     * @param database The database containing the epg data.
      * @return True on success, false otherwise.
      */
-    bool QueueDeleteEpg(const std::shared_ptr<CPVREpg>& epg);
+    bool QueueDeleteEpg(const std::shared_ptr<const CPVREpg>& epg,
+                        const std::shared_ptr<CPVREpgDatabase>& database);
 
     std::shared_ptr<CPVREpgDatabase> m_database; /*!< the EPG database */
 
@@ -316,7 +354,7 @@ namespace PVR
 
     bool m_bUpdateNotificationPending = false; /*!< true while an epg updated notification to observers is pending. */
     CPVRSettings m_settings;
-    CEventSource<PVREvent> m_events;
+    CEventSource<PVREvent>& m_events;
 
     std::atomic<bool> m_bSuspended = {false};
   };

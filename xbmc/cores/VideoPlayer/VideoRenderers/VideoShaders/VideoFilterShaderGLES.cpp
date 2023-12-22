@@ -18,7 +18,7 @@
 #include <math.h>
 #include <string>
 
-using namespace Shaders;
+using namespace Shaders::GLES;
 
 //////////////////////////////////////////////////////////////////////
 // BaseVideoFilterShader - base class for video filter shaders
@@ -28,21 +28,11 @@ BaseVideoFilterShader::BaseVideoFilterShader()
 {
   m_width = 1;
   m_height = 1;
-  m_hStepXY = 0;
   m_stepX = 0;
   m_stepY = 0;
-  m_sourceTexUnit = 0;
-  m_hSourceTex = 0;
-
-  m_hVertex = -1;
-  m_hcoord = -1;
-  m_hProj = -1;
-  m_hModel = -1;
-  m_hAlpha = -1;
 
   m_proj = nullptr;
   m_model = nullptr;
-  m_alpha = -1;
 
   VertexShader()->LoadSource("gles_videofilter.vert");
 
@@ -69,8 +59,6 @@ bool BaseVideoFilterShader::OnEnabled()
 ConvolutionFilterShader::ConvolutionFilterShader(ESCALINGMETHOD method)
 {
   m_method = method;
-  m_kernelTex1 = 0;
-  m_hKernTex = -1;
 
   std::string shadername;
   std::string defines;
@@ -84,7 +72,11 @@ ConvolutionFilterShader::ConvolutionFilterShader(ESCALINGMETHOD method)
     m_floattex = false;
   }
 
-  if (m_method == VS_SCALINGMETHOD_CUBIC_MITCHELL ||
+  if (m_method == VS_SCALINGMETHOD_CUBIC_B_SPLINE ||
+      m_method == VS_SCALINGMETHOD_CUBIC_MITCHELL ||
+      m_method == VS_SCALINGMETHOD_CUBIC_CATMULL ||
+      m_method == VS_SCALINGMETHOD_CUBIC_0_075 ||
+      m_method == VS_SCALINGMETHOD_CUBIC_0_1 ||
       m_method == VS_SCALINGMETHOD_LANCZOS2 ||
       m_method == VS_SCALINGMETHOD_SPLINE36_FAST ||
       m_method == VS_SCALINGMETHOD_LANCZOS3_FAST)
@@ -107,7 +99,9 @@ ConvolutionFilterShader::ConvolutionFilterShader(ESCALINGMETHOD method)
     m_internalformat = GL_RGBA;
   }
 
-  CLog::Log(LOGDEBUG, "GL: ConvolutionFilterShader: using %s defines:\n%s", shadername.c_str(), defines.c_str());
+  CLog::Log(LOGDEBUG, "GLES: using scaling method: {}", m_method);
+  CLog::Log(LOGDEBUG, "GLES: using shader: {}", shadername);
+
   PixelShader()->LoadSource(shadername, defines);
 }
 

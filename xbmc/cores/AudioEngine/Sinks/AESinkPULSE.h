@@ -12,6 +12,7 @@
 #include "cores/AudioEngine/Utils/AEDeviceInfo.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
 #include "threads/CriticalSection.h"
+#include "threads/SystemClock.h"
 #include "threads/Thread.h"
 
 #include <atomic>
@@ -31,7 +32,7 @@ public:
   ~CAESinkPULSE() override;
 
   static bool Register();
-  static IAESink* Create(std::string &device, AEAudioFormat &desiredFormat);
+  static std::unique_ptr<IAESink> Create(std::string& device, AEAudioFormat& desiredFormat);
   static void EnumerateDevicesEx(AEDeviceInfoList &list, bool force = false);
   static void Cleanup();
 
@@ -44,7 +45,7 @@ public:
   unsigned int AddPackets(uint8_t **data, unsigned int frames, unsigned int offset) override;
   void Drain() override;
 
-  bool HasVolume() override { return true; };
+  bool HasVolume() override { return true; }
   void SetVolume(float volume) override;
 
   bool IsInitialized();
@@ -52,7 +53,7 @@ public:
   pa_stream* GetInternalStream();
   pa_threaded_mainloop* GetInternalMainLoop();
   CCriticalSection m_sec;
-  std::atomic<int> m_requestedBytes;
+  std::atomic<int> m_requestedBytes = 0;
 
 private:
   void Pause(bool pause);
@@ -75,8 +76,6 @@ private:
 
   pa_context *m_Context;
   pa_threaded_mainloop *m_MainLoop;
-
-  XbmcThreads::EndTime m_extTimer;
 
   static std::unique_ptr<CDriverMonitor> m_pMonitor;
 };

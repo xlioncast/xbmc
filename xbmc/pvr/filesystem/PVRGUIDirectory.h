@@ -38,7 +38,7 @@ public:
   virtual ~CPVRGUIDirectory() = default;
 
   /*!
-   * @brief Check existense of this directory.
+   * @brief Check existence of this directory.
    * @return True if the directory exists, false otherwise.
    */
   bool Exists() const;
@@ -97,11 +97,11 @@ public:
   bool GetChannelsDirectory(CFileItemList& results) const;
 
 private:
-  bool FilterDirectory(CFileItemList& results) const;
   bool GetTimersDirectory(CFileItemList& results) const;
   bool GetRecordingsDirectory(CFileItemList& results) const;
+  bool GetSavedSearchesDirectory(bool bRadio, CFileItemList& results) const;
 
   const CURL m_url;
 };
 
-}
+} // namespace PVR

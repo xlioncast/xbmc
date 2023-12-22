@@ -108,7 +108,11 @@ class CWebSocket
 {
 public:
   CWebSocket() { m_state = WebSocketStateNotConnected; m_message = NULL; }
-  virtual ~CWebSocket() { if (m_message) delete m_message; };
+  virtual ~CWebSocket()
+  {
+    if (m_message)
+      delete m_message;
+  }
 
   int GetVersion() { return m_version; }
   WebSocketState GetState() { return m_state; }
@@ -117,7 +121,7 @@ public:
   virtual const CWebSocketMessage* Handle(const char* &buffer, size_t &length, bool &send);
   virtual const CWebSocketMessage* Send(WebSocketFrameOpcode opcode, const char* data = NULL, uint32_t length = 0);
   virtual const CWebSocketFrame* Ping(const char* data = NULL) const = 0;
-  virtual const CWebSocketFrame* Pong(const char* data = NULL) const = 0;
+  virtual const CWebSocketFrame* Pong(const char* data, uint32_t length) const = 0;
   virtual const CWebSocketFrame* Close(WebSocketCloseReason reason = WebSocketCloseNormal, const std::string &message = "") = 0;
   virtual void Fail() = 0;
 

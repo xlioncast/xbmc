@@ -35,7 +35,9 @@ void CDirectoryHistory::RemoveSelectedItem(const std::string& strDirectory)
     m_vecHistory.erase(iter);
 }
 
-void CDirectoryHistory::SetSelectedItem(const std::string& strSelectedItem, const std::string& strDirectory)
+void CDirectoryHistory::SetSelectedItem(const std::string& strSelectedItem,
+                                        const std::string& strDirectory,
+                                        const int indexItem)
 {
   if (strSelectedItem.empty())
     return;
@@ -47,12 +49,13 @@ void CDirectoryHistory::SetSelectedItem(const std::string& strSelectedItem, cons
   if (iter != m_vecHistory.end())
   {
     iter->second.m_strItem = strItem;
+    iter->second.m_indexItem = indexItem;
     return;
   }
 
   CHistoryItem item;
   item.m_strItem = strItem;
-  item.m_strDirectory = strDir;
+  item.m_indexItem = indexItem;
   m_vecHistory[strDir] = item;
 }
 
@@ -63,6 +66,15 @@ const std::string& CDirectoryHistory::GetSelectedItem(const std::string& strDire
     return iter->second.m_strItem;
 
   return StringUtils::Empty;
+}
+
+int CDirectoryHistory::GetSelectedItemIndex(const std::string& strDirectory) const
+{
+  HistoryMap::const_iterator iter = m_vecHistory.find(preparePath(strDirectory));
+  if (iter != m_vecHistory.end())
+    return iter->second.m_indexItem;
+
+  return -1;
 }
 
 void CDirectoryHistory::AddPath(const std::string& strPath, const std::string &strFilterPath /* = "" */)
@@ -140,7 +152,8 @@ void CDirectoryHistory::DumpPathHistory()
   // debug log
   CLog::Log(LOGDEBUG,"Current m_vecPathHistory:");
   for (int i = 0; i < (int)m_vecPathHistory.size(); ++i)
-    CLog::Log(LOGDEBUG, "  %02i.[%s; %s]", i, m_vecPathHistory[i].m_strPath.c_str(), m_vecPathHistory[i].m_strFilterPath.c_str());
+    CLog::Log(LOGDEBUG, "  {:02}.[{}; {}]", i, m_vecPathHistory[i].m_strPath,
+              m_vecPathHistory[i].m_strFilterPath);
 }
 
 std::string CDirectoryHistory::preparePath(const std::string &strDirectory, bool tolower /* = true */)

@@ -9,15 +9,16 @@
 #pragma once
 
 #include "DVDSubtitleParser.h"
+#include "SubtitlesAdapter.h"
 
 #include <memory>
 
-class CDVDSubtitleParserSubrip : public CDVDSubtitleParserText
+class CDVDSubtitleParserSubrip : public CDVDSubtitleParserText, private CSubtitlesAdapter
 {
 public:
-  CDVDSubtitleParserSubrip(std::unique_ptr<CDVDSubtitleStream> && pStream, const std::string& strFile);
-  ~CDVDSubtitleParserSubrip() override;
+  CDVDSubtitleParserSubrip(std::unique_ptr<CDVDSubtitleStream>&& pStream,
+                           const std::string& strFile);
+  ~CDVDSubtitleParserSubrip() = default;
 
-  bool Open(CDVDStreamInfo &hints) override;
-private:
+  bool Open(CDVDStreamInfo& hints) override;
 };

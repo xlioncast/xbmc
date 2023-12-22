@@ -10,6 +10,7 @@
 #include "CompileInfo.h"
 #import "DllPaths_generated.h"
 #include "ServiceBroker.h"
+#include "utils/StringUtils.h"
 #include "utils/log.h"
 #include "windowing/osx/WinSystemOSX.h"
 
@@ -29,37 +30,24 @@ static CVDisplayLinkRef displayLink = NULL;
 
 CGDirectDisplayID Cocoa_GetDisplayIDFromScreen(NSScreen *screen);
 
-NSOpenGLContext* Cocoa_GL_GetCurrentContext(void)
-{
-  CWinSystemOSX *winSystem = dynamic_cast<CWinSystemOSX*>(CServiceBroker::GetWinSystem());
-  return winSystem->GetNSOpenGLContext();
-}
-
 uint32_t Cocoa_GL_GetCurrentDisplayID(void)
 {
   // Find which display we are on from the current context (default to main display)
   CGDirectDisplayID display_id = kCGDirectMainDisplay;
 
-  NSOpenGLContext* context = Cocoa_GL_GetCurrentContext();
-  if (context)
-  {
-    NSView* view;
+  NSNumber* __block screenID;
+  auto getScreenNumber = ^{
+    screenID =
+        NSApplication.sharedApplication.keyWindow.screen.deviceDescription[@"NSScreenNumber"];
+  };
+  if (NSThread.isMainThread)
+    getScreenNumber();
+  else
+    dispatch_sync(dispatch_get_main_queue(), getScreenNumber);
+  if (screenID)
+    display_id = static_cast<CGDirectDisplayID>(screenID.unsignedIntValue);
 
-    view = [context view];
-    if (view)
-    {
-      NSWindow* window;
-      window = [view window];
-      if (window)
-      {
-        NSDictionary* screenInfo = [[window screen] deviceDescription];
-        NSNumber* screenID = [screenInfo objectForKey:@"NSScreenNumber"];
-        display_id = (CGDirectDisplayID)[screenID longValue];
-      }
-    }
-  }
-
-  return((uint32_t)display_id);
+  return static_cast<uint32_t>(display_id);
 }
 
 bool Cocoa_CVDisplayLinkCreate(void *displayLinkcallback, void *displayLinkContext)
@@ -69,7 +57,8 @@ bool Cocoa_CVDisplayLinkCreate(void *displayLinkcallback, void *displayLinkConte
 
   // OpenGL Flush synchronised with vertical retrace
   GLint swapInterval = 1;
-  [[NSOpenGLContext currentContext] setValues:&swapInterval forParameter:NSOpenGLCPSwapInterval];
+  [[NSOpenGLContext currentContext] setValues:&swapInterval
+                                 forParameter:NSOpenGLContextParameterSwapInterval];
 
   display_id = (CGDirectDisplayID)Cocoa_GL_GetCurrentDisplayID();
   if (!displayLink)
@@ -228,21 +217,12 @@ bool Cocoa_GetVolumeNameFromMountPoint(const std::string &mountPoint, std::strin
   }
 }
 
-void Cocoa_HideMouse()
-{
-  [NSCursor hide];
-}
-
-void Cocoa_ShowMouse()
-{
-  [NSCursor unhide];
-}
-
 //---------------------------------------------------------------------------------
 const char *Cocoa_Paste()
 {
   NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-  NSString *type = [pasteboard availableTypeFromArray:[NSArray arrayWithObject:NSStringPboardType]];
+  NSString* type =
+      [pasteboard availableTypeFromArray:[NSArray arrayWithObject:NSPasteboardTypeString]];
   if (type != nil) {
     NSString *contents = [pasteboard stringForType:type];
     if (contents != nil) {

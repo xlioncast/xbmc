@@ -27,7 +27,7 @@ extern "C"
     /// @brief Noop
     VC_NONE = 0,
 
-    /// @brief An error occured, no other messages will be returned
+    /// @brief An error occurred, no other messages will be returned
     VC_ERROR,
 
     /// @brief The decoder needs more data
@@ -58,6 +58,16 @@ extern "C"
     /// order is reversed.
     VIDEOCODEC_FORMAT_I420,
 
+    VIDEOCODEC_FORMAT_YUV420P9,
+    VIDEOCODEC_FORMAT_YUV420P10,
+    VIDEOCODEC_FORMAT_YUV420P12,
+    VIDEOCODEC_FORMAT_YUV422P9,
+    VIDEOCODEC_FORMAT_YUV422P10,
+    VIDEOCODEC_FORMAT_YUV422P12,
+    VIDEOCODEC_FORMAT_YUV444P9,
+    VIDEOCODEC_FORMAT_YUV444P10,
+    VIDEOCODEC_FORMAT_YUV444P12,
+
     /// @brief The maximum value to use in a list.
     VIDEOCODEC_FORMAT_MAXFORMATS
   };
@@ -87,7 +97,14 @@ extern "C"
     /// VP9 is the successor to VP8 and competes mainly with MPEG's
     /// [High Efficiency Video Coding](https://en.wikipedia.org/wiki/High_Efficiency_Video_Coding)
     /// (HEVC/H.265).
-    VIDEOCODEC_VP9
+    VIDEOCODEC_VP9,
+
+    /// @brief [AV1](https://en.wikipedia.org/wiki/AV1) video coding format\n
+    /// \n
+    /// AV1 is the successor to VP9 and competes mainly with MPEG's
+    /// [High Efficiency Video Coding](https://en.wikipedia.org/wiki/High_Efficiency_Video_Coding)
+    /// (HEVC/H.265).
+    VIDEOCODEC_AV1,
   };
   //----------------------------------------------------------------------------
 
@@ -188,7 +205,7 @@ extern "C"
     /// To handle the input stream buffer, this is given by Kodi using
     /// @ref kodi::addon::CInstanceVideoCodec::GetFrameBuffer and must be
     /// released again using @ref kodi::addon::CInstanceVideoCodec::ReleaseFrameBuffer.
-    KODI_HANDLE videoBufferHandle; 
+    KODI_HANDLE videoBufferHandle;
   };
   ///@}
   //----------------------------------------------------------------------------

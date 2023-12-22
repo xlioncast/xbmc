@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.12)
 if(WIN32)
-  # Version 3.15 is required to use "PREPEND" for dependencies
-  cmake_minimum_required(VERSION 3.15)
+  # Version 3.20 is required for multi-config generator expressions to work
+  cmake_minimum_required(VERSION 3.20)
 endif()
 project(kodi LANGUAGES CXX C ASM)
 
@@ -10,15 +10,37 @@ if(POLICY CMP0069)
   cmake_policy(SET CMP0069 NEW)
 endif()
 
+if(POLICY CMP0135)
+  set(CMAKE_POLICY_DEFAULT_CMP0135 NEW)
+  cmake_policy(SET CMP0135 NEW)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules/buildtools)
 if(DEPENDS_DIR)
   list(APPEND CMAKE_PREFIX_PATH ${DEPENDS_DIR})
+endif()
+
+# Variable to indicate if the project is targeting a Multi Config Generator (VS/Xcode primarily)
+get_property(_multiconfig_generator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(_multiconfig_generator)
+  # Target to encompass an optional way to build all internal dependencies
+  # Must set EXCLUDE_FROM_ALL property so the ALL target doesnt include this, and therefore
+  # build all internal dependencies
+  add_custom_target(build_internal_depends)
+  set_target_properties(build_internal_depends PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
 
 # Set CORE_BUILD_DIR
 set(CORE_BUILD_DIR build)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# set KODI_MIRROR to the default if not already set
+if(NOT DEFINED KODI_MIRROR)
+  set(KODI_MIRROR "http://mirrors.kodi.tv")
+endif()
+
+message(STATUS "Mirror download location: ${KODI_MIRROR}")
 message(STATUS "Source directory: ${CMAKE_SOURCE_DIR}")
 message(STATUS "Build directory: ${CMAKE_BINARY_DIR}")
 if(CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -39,10 +61,11 @@ include(cmake/scripts/common/ArchSetup.cmake)
 include(cmake/scripts/common/Macros.cmake)
 include(cmake/scripts/common/ProjectMacros.cmake)
 core_find_versions()
-include(cmake/scripts/${CORE_SYSTEM_NAME}/PathSetup.cmake)
+include(cmake/scripts/common/PathSetup.cmake)
 include(cmake/scripts/common/CompilerSettings.cmake)
 include(ExternalProject)
-
+include(CMakeDependentOption)
+include(cmake/scripts/common/DependencyOptions.cmake)
 
 # general
 option(VERBOSE            "Enable verbose output?" OFF)
@@ -55,20 +78,47 @@ option(ENABLE_AIRTUNES    "Enable AirTunes support?" ON)
 option(ENABLE_OPTICAL     "Enable optical support?" ON)
 option(ENABLE_PYTHON      "Enable python support?" ON)
 option(ENABLE_TESTING     "Enable testing support?" ON)
+
+# Internal Depends - supported on all platforms
+
+# These are required enabled for all CI platforms, and recommended for all builds
+option(ENABLE_INTERNAL_CROSSGUID "Enable internal crossguid?" ON)
+
 # use ffmpeg from depends or system
 option(ENABLE_INTERNAL_FFMPEG "Enable internal ffmpeg?" OFF)
+
+# These are built for all platforms not using system libs or disabled by user
+dependent_option(ENABLE_INTERNAL_CEC "Enable internal libcec?")
+dependent_option(ENABLE_INTERNAL_FLATBUFFERS "Enable internal flatbuffers?")
+dependent_option(ENABLE_INTERNAL_FMT "Enable internal fmt?")
+dependent_option(ENABLE_INTERNAL_NFS "Enable internal libnfs?")
+dependent_option(ENABLE_INTERNAL_PCRE "Enable internal pcre?")
+dependent_option(ENABLE_INTERNAL_RapidJSON "Enable internal rapidjson?")
+
+# If ENABLE_INTERNAL_FMT is ON, we force ENABLE_INTERNAL_SPDLOG ON as it has a hard
+# dependency on fmt
+if(ENABLE_INTERNAL_FMT)
+  option(ENABLE_INTERNAL_SPDLOG "Enable internal spdlog Forced" ON)
+else()
+  dependent_option(ENABLE_INTERNAL_SPDLOG "Enable internal spdlog?")
+endif()
+
+dependent_option(ENABLE_INTERNAL_TAGLIB "Enable internal taglib?")
+
+if(KODI_DEPENDSBUILD OR WIN32 OR WINDOWS_STORE)
+  dependent_option(ENABLE_INTERNAL_TINYXML2 "Enable internal TinyXML2?")
+endif()
+
+# Internal Depends - supported on UNIX platforms
 if(UNIX)
   option(FFMPEG_PATH        "Path to external ffmpeg?" "")
-  option(ENABLE_INTERNAL_CROSSGUID "Enable internal crossguid?" ON)
-  option(ENABLE_INTERNAL_RapidJSON "Enable internal rapidjson?" OFF)
-  option(ENABLE_INTERNAL_FMT "Enable internal fmt?" OFF)
   option(ENABLE_INTERNAL_FSTRCMP "Enable internal fstrcmp?" OFF)
-  option(ENABLE_INTERNAL_FLATBUFFERS "Enable internal flatbuffers?" OFF)
   option(ENABLE_INTERNAL_DAV1D "Enable internal dav1d?" OFF)
   option(ENABLE_INTERNAL_GTEST "Enable internal gtest?" OFF)
   option(ENABLE_INTERNAL_UDFREAD "Enable internal udfread?" OFF)
-  option(ENABLE_INTERNAL_SPDLOG "Enable internal spdlog?" OFF)
 endif()
+# prefer kissfft from xbmc/contrib but let use system one on unices
+cmake_dependent_option(ENABLE_INTERNAL_KISSFFT "Enable internal kissfft?" ON "UNIX" ON)
 # System options
 if(NOT WIN32)
   option(WITH_ARCH              "build with given arch" OFF)
@@ -76,7 +126,11 @@ if(NOT WIN32)
 endif()
 if(CORE_SYSTEM_NAME STREQUAL linux)
   option(ENABLE_EVENTCLIENTS    "Enable event clients support?" OFF)
+  option(ADDONS_CONFIGURE_AT_STARTUP "Configure binary addons at startup?" ON)
 endif()
+
+# set scope of INTERNAL_DEPS
+set_property(GLOBAL PROPERTY INTERNAL_DEPS_PROP)
 
 # Build static libraries per directory
 if(NOT CMAKE_GENERATOR MATCHES "Visual Studio" AND NOT CMAKE_GENERATOR STREQUAL Xcode)
@@ -86,6 +140,9 @@ else()
 endif()
 
 core_find_git_rev(APP_SCMID FULL)
+
+set(AUDIO_BACKENDS_LIST "" CACHE STRING "Available audio backends")
+set(GL_INTERFACES_LIST "" CACHE STRING "Available GL interfaces")
 
 # Dynamically loaded libraries built with the project
 add_custom_target(${APP_NAME_LC}-libraries)
@@ -105,9 +162,13 @@ if (NOT PLATFORMDEFS_DIR STREQUAL "")
 endif()
 
 find_package(PkgConfig)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED QUIET)
 list(APPEND DEPLIBS ${CMAKE_THREAD_LIBS_INIT})
 
+# Clean any existing generated build dir cmake files
+file(REMOVE ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/ExportFiles.cmake)
+file(REMOVE ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/GeneratedPackSkins.cmake)
 
 foreach(depspec ${PLATFORM_REQUIRED_DEPS})
   # We need to specify ENABLE_${PLATFORM_REQUIRED_DEPS} in order for the
@@ -120,8 +181,25 @@ foreach(depspec ${PLATFORM_REQUIRED_DEPS})
   set(ENABLE_${depup} "ON" CACHE BOOL "Force enabling required ${depup} support" FORCE)
 endforeach()
 
+# Required tools. Keep in alphabetical order please
+set(required_buildtools FlatC
+                        JsonSchemaBuilder
+                        TexturePacker
+)
+
+# Optional build tools
+set(optional_buildtools CCache
+                        ClangFormat
+                        ClangTidy
+                        Cppcheck
+                        IncludeWhatYouUse)
+
+# Find build tools - Optional and required
+core_optional_dep(${optional_buildtools})
+core_require_dep(${required_buildtools})
+
 # Required dependencies. Keep in alphabetical order please
-set(required_deps ASS
+set(required_deps ASS>=0.15.0
                   Cdio
                   CrossGUID
                   Curl
@@ -130,17 +208,20 @@ set(required_deps ASS
                   Fmt
                   FreeType
                   FriBidi
-                  fstrcmp
+                  Fstrcmp
+                  HarfBuzz
                   Iconv
+                  KissFFT
                   LibDvd
                   Lzo2
-                  OpenSSL>=1.0.2
+                  OpenSSL>=1.1.0
                   PCRE
-                  RapidJSON
+                  RapidJSON>=1.0.2
                   Spdlog
                   Sqlite3
                   TagLib
                   TinyXML
+                  TinyXML2
                   ZLIB
                   ${PLATFORM_REQUIRED_DEPS})
 
@@ -150,20 +231,16 @@ set(optional_deps Alsa
                   Bluetooth
                   Bluray
                   CAP
-                  CCache
-                  CEC
-                  ClangFormat
-                  ClangTidy
-                  Cppcheck
+                  CEC>=4.0.0
                   Dav1d
                   DBus
-                  IncludeWhatYouUse
                   Iso9660pp
                   LCMS2
                   LircClient
                   MDNS
                   MicroHttpd
                   NFS
+                  Pipewire>=0.3.50
                   Plist
                   PulseAudio
                   Python
@@ -174,15 +251,14 @@ set(optional_deps Alsa
                   XSLT
                   ${PLATFORM_OPTIONAL_DEPS})
 
+# Remove excluded platform specific optional_deps
+foreach(excludedep ${PLATFORM_OPTIONAL_DEPS_EXCLUDE})
+  list(FILTER optional_deps EXCLUDE REGEX ${excludedep})
+endforeach()
+
 # Check optional deps first, since their availability can influence required ones, e.g. ffmpeg
 core_optional_dep(${optional_deps})
 core_require_dep(${required_deps})
-
-# Required tools
-find_package(TexturePacker REQUIRED)
-find_package(JsonSchemaBuilder REQUIRED)
-
-SET(PYTHON_VERSION 3.8)
 
 if(ENABLE_MARIADBCLIENT AND NOT ENABLE_MARIADBCLIENT STREQUAL AUTO AND ENABLE_MYSQLCLIENT AND NOT ENABLE_MYSQLCLIENT STREQUAL AUTO)
   MESSAGE(FATAL_ERROR "You can not use MySql and MariaDB at the same time. Disable one by adding -DENABLE_MYSQLCLIENT=OFF or -DENABLE_MARIADBCLIENT=OFF.")
@@ -191,11 +267,11 @@ elseif(ENABLE_MYSQLCLIENT AND NOT ENABLE_MYSQLCLIENT STREQUAL AUTO)
 endif()
 
 core_optional_dep(MariaDBClient)
-if(NOT MARIADBCLIENT_FOUND)
+if(NOT TARGET MariaDBClient::MariaDBClient)
   core_optional_dep(MySqlClient)
 endif()
 
-if(NOT UDEV_FOUND)
+if(NOT TARGET UDEV::UDEV)
   core_optional_dep(LibUSB)
 endif()
 
@@ -204,18 +280,14 @@ if(ENABLE_UPNP)
 endif()
 
 if(ENABLE_OPTICAL)
-  list(APPEND DEP_DEFINES -DHAS_DVD_DRIVE -DHAS_CDDA_RIPPER)
+  list(APPEND DEP_DEFINES -DHAS_OPTICAL_DRIVE -DHAS_CDDA_RIPPER)
 endif()
 
 if(ENABLE_AIRTUNES)
   find_package(Shairplay)
-  if(SHAIRPLAY_FOUND)
+  if(TARGET Shairplay::Shairplay)
     core_require_dep(Shairplay)
   endif()
-endif()
-
-if(CORE_SYSTEM_NAME STREQUAL osx)
-  core_require_dep(Sdl)
 endif()
 
 # find all folders containing addon.xml.in
@@ -224,12 +296,17 @@ endif()
 set(outputFilterRegex "addons/xbmc.json")
 find_addon_xml_in_files(${outputFilterRegex})
 
+if(TARGET ALSA::ALSA AND TARGET PulseAudio::PulseAudio)
+  list(APPEND AUDIO_BACKENDS_LIST "alsa+pulseaudio")
+endif()
+
 # Compile Info
 add_custom_command(OUTPUT ${CORE_BUILD_DIR}/xbmc/CompileInfo.cpp
-                          ${ADDON_XML_OUTPUTS}
                    COMMAND ${CMAKE_COMMAND} -DCORE_SOURCE_DIR=${CMAKE_SOURCE_DIR}
                                             -DCORE_SYSTEM_NAME=${CORE_SYSTEM_NAME}
                                             -DCORE_PLATFORM_NAME_LC="${CORE_PLATFORM_NAME_LC}"
+                                            -DAUDIO_BACKENDS="${AUDIO_BACKENDS_LIST}"
+                                            -DGL_INTERFACES="${GL_INTERFACES_LIST}"
                                             -DCORE_BUILD_DIR=${CORE_BUILD_DIR}
                                             -DCMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}
                                             -DARCH_DEFINES="${ARCH_DEFINES}"
@@ -237,17 +314,21 @@ add_custom_command(OUTPUT ${CORE_BUILD_DIR}/xbmc/CompileInfo.cpp
                                             -DAPP_COPYRIGHT_YEARS=${APP_COPYRIGHT_YEARS}
                                             -DAPP_BUILD_DATE=${APP_BUILD_DATE}
                                             -DAPP_SHARED_LIBRARY_SUFFIX="${APP_SHARED_LIBRARY_SUFFIX}"
+                                            -DPYTHON_VERSION=${PYTHON_VERSION}
                                             -Dprefix=${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}
-                                            -P ${CMAKE_SOURCE_DIR}/cmake/scripts/common/GenerateVersionedFiles.cmake
+                                            -DKODI_WEBSERVER_EXTRA_WHITELIST="${KODI_WEBSERVER_EXTRA_WHITELIST}"
+                                            -P ${CMAKE_SOURCE_DIR}/cmake/scripts/common/GenerateCompileInfo.cmake
                    DEPENDS ${CMAKE_SOURCE_DIR}/version.txt
-                           export-files
-                           ${ADDON_XML_DEPENDS}
                            ${CMAKE_SOURCE_DIR}/xbmc/CompileInfo.cpp.in)
 list(APPEND install_data ${ADDON_INSTALL_DATA})
 add_library(compileinfo OBJECT ${CORE_BUILD_DIR}/xbmc/CompileInfo.cpp)
 set_target_properties(compileinfo PROPERTIES FOLDER "Build Utilities")
-target_compile_options(compileinfo PRIVATE "${SYSTEM_DEFINES} ${ARCH_DEFINES}")
-add_dependencies(compileinfo fmt)
+target_compile_options(compileinfo PRIVATE ${SYSTEM_DEFINES} ${ARCH_DEFINES})
+add_dependencies(compileinfo fmt::fmt)
+
+if(NOT MSVC)
+  target_compile_options(compileinfo PUBLIC ${CORE_COMPILE_OPTIONS})
+endif()
 
 # RC File
 if(WIN32)
@@ -262,13 +343,12 @@ endif()
 # Generate messages
 core_add_subdirs_from_filelist(${CMAKE_SOURCE_DIR}/cmake/messages/flatbuffers/*.txt)
 
-include_directories(${INCLUDES} ${SYSTEM_INCLUDES})
+include_directories(${INCLUDES} SYSTEM ${SYSTEM_INCLUDES})
 add_compile_options(${ARCH_DEFINES} "${SYSTEM_DEFINES}" ${DEP_DEFINES} ${PATH_DEFINES})
 
 set(core_DEPENDS "" CACHE STRING "" FORCE)
 set(test_archives "" CACHE STRING "" FORCE)
 set(test_sources "" CACHE STRING "" FORCE)
-set(sca_sources "" CACHE STRING "" FORCE)
 mark_as_advanced(core_DEPENDS)
 mark_as_advanced(test_archives)
 mark_as_advanced(test_sources)
@@ -280,18 +360,9 @@ copy_files_from_filelist_to_buildtree(${CMAKE_SOURCE_DIR}/cmake/installdata/comm
 list(APPEND SKINS "${CMAKE_SOURCE_DIR}/addons/skin.estuary\;${CMAKE_SOURCE_DIR}")
 list(APPEND SKINS "${CMAKE_SOURCE_DIR}/addons/skin.estouchy\;${CMAKE_SOURCE_DIR}")
 
-# These are skins that are copied into place from the source tree
-foreach(skin ${SKINS})
-  list(GET skin 0 dir)
-  list(GET skin 1 relative)
-  copy_skin_to_buildtree(${dir} ${relative})
-endforeach()
-
-add_custom_target(pack-skins ALL
-                  DEPENDS TexturePacker::TexturePacker export-files ${XBT_FILES})
-set_target_properties(pack-skins PROPERTIES FOLDER "Build Utilities")
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/system/players/VideoPlayer)
+if(NOT ${CORE_SYSTEM_NAME} MATCHES "windows")
+  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/system/players/VideoPlayer)
+endif()
 
 set(LIBCEC_SONAME "${CEC_SONAME}")
 if(NOT CORE_SYSTEM_NAME STREQUAL windows AND NOT CORE_SYSTEM_NAME STREQUAL android AND NOT CORE_SYSTEM_NAME STREQUAL windowsstore)
@@ -302,10 +373,25 @@ elseif(CORE_SYSTEM_NAME STREQUAL android)
                  ${CORE_BUILD_DIR}/DllPaths_generated_android.h @ONLY)
 endif()
 
-set(GLOBAL_TARGET_DEPS ffmpeg dvdnav crossguid fmt Spdlog::Spdlog fstrcmp flatbuffers ${PLATFORM_GLOBAL_TARGET_DEPS})
+get_property(INTERNAL_DEPS GLOBAL PROPERTY INTERNAL_DEPS_PROP)
+set(GLOBAL_TARGET_DEPS ${INTERNAL_DEPS} ${PLATFORM_GLOBAL_TARGET_DEPS})
 
 # main library (used for main binary and tests)
-add_library(lib${APP_NAME_LC} STATIC $<TARGET_OBJECTS:compileinfo>)
+if(CORE_SYSTEM_NAME STREQUAL "darwin_embedded")
+  # $<TARGET_OBJECTS:> as at 3.26.4 provides incorrect paths for ios/tvos platforms
+  # Even if XCODE_EMIT_EFFECTIVE_PLATFORM_NAME global property is used, the xcode project
+  # still sets int dir paths to $(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME) and the generator
+  # expression only provides a path using $(CONFIGURATION)
+  add_library(compileinfo_obj OBJECT IMPORTED)
+  set_property(TARGET compileinfo_obj PROPERTY IMPORTED_OBJECTS
+    "${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/compileinfo.build/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/$(OBJECT_FILE_DIR_normal:base)/$(CURRENT_ARCH)/CompileInfo.o"
+  )
+  add_library(lib${APP_NAME_LC} STATIC)
+  add_dependencies(lib${APP_NAME_LC} compileinfo)
+  target_link_libraries(lib${APP_NAME_LC} PUBLIC compileinfo_obj)
+else()
+  add_library(lib${APP_NAME_LC} STATIC $<TARGET_OBJECTS:compileinfo>)
+endif()
 add_dependencies(lib${APP_NAME_LC} ${GLOBAL_TARGET_DEPS})
 set_target_properties(lib${APP_NAME_LC} PROPERTIES PREFIX "")
 
@@ -323,7 +409,7 @@ core_add_subdirs_from_filelist(${CMAKE_SOURCE_DIR}/cmake/treedata/common/*.txt
 core_add_optional_subdirs_from_filelist(${CMAKE_SOURCE_DIR}/cmake/treedata/optional/common/*.txt
                                         ${CMAKE_SOURCE_DIR}/cmake/treedata/optional/${CORE_SYSTEM_NAME}/*.txt)
 
-target_link_libraries(lib${APP_NAME_LC} PUBLIC ${core_DEPENDS} ${SYSTEM_LDFLAGS} ${DEPLIBS} ${CMAKE_DL_LIBS})
+target_link_libraries(lib${APP_NAME_LC} PUBLIC ${core_DEPENDS} ${SYSTEM_LDFLAGS} ${DEPLIBS} ${CMAKE_DL_LIBS} ${GLOBAL_TARGET_DEPS})
 set_target_properties(lib${APP_NAME_LC} PROPERTIES PROJECT_LABEL "xbmc")
 source_group_by_folder(lib${APP_NAME_LC} RELATIVE ${CMAKE_SOURCE_DIR}/xbmc)
 if(WIN32)
@@ -341,16 +427,76 @@ if(NOT CORE_SYSTEM_NAME STREQUAL android)
 else()
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")
   add_library(${APP_NAME_LC} SHARED ${CORE_MAIN_SOURCE} "${RESOURCES}" ${OTHER_FILES})
-  if(CPU MATCHES x86_64)
-    # Statically resolve global references to shared library (ie. ffmpeg) definitions.
-    # Related to https://stackoverflow.com/questions/46307266/including-objects-to-a-shared-library-from-a-c-archive-a
-    set_target_properties(${APP_NAME_LC} PROPERTIES LINK_FLAGS "-Wl,-Bsymbolic")
-  endif()
+
+  # Statically resolve global references to shared library (ie. ffmpeg) definitions.
+  # Related to https://stackoverflow.com/questions/46307266/including-objects-to-a-shared-library-from-a-c-archive-a
+  set_target_properties(${APP_NAME_LC} PROPERTIES LINK_FLAGS "-Wl,-Bsymbolic")
 endif()
-add_dependencies(${APP_NAME_LC} ${APP_NAME_LC}-libraries export-files pack-skins)
-whole_archive(_MAIN_LIBRARIES ${core_DEPENDS})
+add_dependencies(${APP_NAME_LC} ${APP_NAME_LC}-libraries)
+
+whole_archive(_MAIN_LIBRARIES ${FSTRCMP_LIBRARY} ${core_DEPENDS})
 target_link_libraries(${APP_NAME_LC} ${_MAIN_LIBRARIES} lib${APP_NAME_LC} ${DEPLIBS})
 unset(_MAIN_LIBRARIES)
+
+if(${CORE_SYSTEM_NAME} MATCHES "windows")
+  set(_bundle_dir $<TARGET_FILE_DIR:${APP_NAME_LC}>)
+else()
+  set(_bundle_dir ${CMAKE_BINARY_DIR})
+endif()
+
+# These are skins that are copied into place from the source tree
+set(XBT_SOURCE_FILELIST "")
+foreach(skin ${SKINS})
+  list(GET skin 0 dir)
+  list(GET skin 1 relative)
+  copy_skin_to_buildtree(${dir} ${relative})
+endforeach()
+
+# Generate system addons
+add_custom_target(gen_system_addons
+                    COMMAND ${CMAKE_COMMAND} -DCORE_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+                                             -DCORE_SYSTEM_NAME=${CORE_SYSTEM_NAME}
+                                             -DCORE_PLATFORM_NAME_LC="${CORE_PLATFORM_NAME_LC}"
+                                             -DCORE_BUILD_DIR=${CORE_BUILD_DIR}
+                                             -DCMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}
+                                             -DBUNDLEDIR=${_bundle_dir}
+                                             -P ${CMAKE_SOURCE_DIR}/cmake/scripts/common/GenerateSystemAddons.cmake
+                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+if(_multiconfig_generator)
+  # Generator expressions in add_custom_command(OUTPUT) are only available in cmake 3.20+
+  # we dont really need config aware locations for a single config generator, so we only
+  # set this for multi config generators who all use newer cmake
+  set(CONFIG_VAR $<CONFIG>)
+endif()
+
+# Pack skins and copy to correct build dir (MultiConfig Generator aware)
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/${CONFIG_VAR}/gen_skin.timestamp
+  COMMAND ${CMAKE_COMMAND} -DBUNDLEDIR=${_bundle_dir}
+                           -DTEXTUREPACKER_EXECUTABLE=$<TARGET_FILE:TexturePacker::TexturePacker::Executable>
+                           -P ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/GeneratedPackSkins.cmake
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/${CONFIG_VAR}
+  COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/${CONFIG_VAR}/gen_skin.timestamp
+  DEPENDS ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/GeneratedPackSkins.cmake
+          ${XBT_SOURCE_FILELIST}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Generating skin xbt"
+)
+add_custom_target(gen_skin_pack DEPENDS ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/${CONFIG_VAR}/gen_skin.timestamp)
+
+# Packaging target. This generates system addon, xbt creation, copy files to build tree
+add_custom_target(generate-packaging ALL
+                  DEPENDS TexturePacker::TexturePacker::Executable export-files gen_skin_pack gen_system_addons)
+# Make sure we build any libs before we look to export-files.
+# We may need to export some shared libs/data (eg Python)
+add_dependencies(export-files ${GLOBAL_TARGET_DEPS})
+
+# Add to lib${APP_NAME_LC} solely for Win UWP. msix building doesnt seem to pick up the
+# generated buildtree if we do it later. Other platforms dont care when this happens.
+add_dependencies(lib${APP_NAME_LC} generate-packaging)
+
+set_target_properties(generate-packaging PROPERTIES FOLDER "Build Utilities")
 
 if(WIN32)
   set_target_properties(${APP_NAME_LC} PROPERTIES WIN32_EXECUTABLE ON)
@@ -363,15 +509,20 @@ if(WIN32)
   endif()
 elseif(CORE_SYSTEM_NAME STREQUAL android)
   # Nothing
-elseif(CORE_SYSTEM_NAME STREQUAL darwin_embedded)
+elseif(CORE_SYSTEM_NAME STREQUAL darwin_embedded OR CORE_SYSTEM_NAME STREQUAL osx)
+  # Build all apple app target as bundled and dont sign.
+  # We do all signing post build of the app target manually
   set_target_properties(${APP_NAME_LC} PROPERTIES OUTPUT_NAME ${APP_NAME}
-                                                  MACOSX_BUNDLE_INFO_PLIST ${PLATFORM_BUNDLE_INFO_PLIST})
+                                                  MACOSX_BUNDLE YES
+                                                  MACOSX_BUNDLE_INFO_PLIST ${PLATFORM_BUNDLE_INFO_PLIST}
+                                                  XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
+                                                  XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "")
 else()
   set_target_properties(${APP_NAME_LC} PROPERTIES SUFFIX ${APP_BINARY_SUFFIX})
 endif()
 
 # testing
-if(CORE_HOST_IS_TARGET AND ENABLE_TESTING)
+if(HOST_CAN_EXECUTE_TARGET AND ENABLE_TESTING)
   find_package(Gtest)
 
   copy_files_from_filelist_to_buildtree(${CMAKE_SOURCE_DIR}/cmake/installdata/test-reference-data.txt NO_INSTALL)
@@ -384,15 +535,12 @@ if(CORE_HOST_IS_TARGET AND ENABLE_TESTING)
   unset(_TEST_LIBRARIES)
 
   if (ENABLE_INTERNAL_GTEST)
-    add_dependencies(${APP_NAME_LC}-test ${APP_NAME_LC}-libraries export-files gtest)
+    add_dependencies(${APP_NAME_LC}-test ${APP_NAME_LC}-libraries generate-packaging gtest)
   endif()
 
   # Enable unit-test related targets
   enable_testing()
   gtest_add_tests(${APP_NAME_LC}-test "" ${test_sources})
-  if(NOT WIN32)
-    sca_add_tests()
-  endif()
   add_custom_target(check ${CMAKE_CTEST_COMMAND} WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
   add_dependencies(check ${APP_NAME_LC}-test)
 
@@ -410,6 +558,8 @@ if(CORE_HOST_IS_TARGET AND ENABLE_TESTING)
   add_custom_target(check-commits ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/scripts/common/CheckCommits.cmake
                                                    -DCMAKE_BINARY_DIR=${CMAKE_BINARY_DIR})
   set_target_properties(check-commits PROPERTIES FOLDER "Build Utilities")
+
+  include(${CMAKE_SOURCE_DIR}/cmake/scripts/common/StaticAnalysis.cmake)
 
   # code coverage
   if(CMAKE_BUILD_TYPE STREQUAL Coverage)
@@ -503,7 +653,14 @@ if(VERBOSE)
   message(STATUS "CMAKE_C_FLAGS         : ${CMAKE_C_FLAGS}")
   message(STATUS "CMAKE_CXX_FLAGS       : ${CMAKE_CXX_FLAGS}")
   message(STATUS "CMAKE_EXE_LINKER_FLAGS: ${CMAKE_EXE_LINKER_FLAGS}")
-  message(STATUS "LTO_OPTIMIZATION:     : ${CMAKE_INTERPROCEDURAL_OPTIMIZATION}")
+  message(STATUS "LTO_OPTIMIZATION      : ${CMAKE_INTERPROCEDURAL_OPTIMIZATION}")
+  if(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
+    message(STATUS "CMAKE_CXX_COMPILE_OPTIONS_IPO: ${CMAKE_CXX_COMPILE_OPTIONS_IPO}")
+    message(STATUS "CMAKE_C_COMPILE_OPTIONS_IPO  : ${CMAKE_C_COMPILE_OPTIONS_IPO}")
+    message(STATUS "CMAKE_AR                     : ${CMAKE_AR}")
+    message(STATUS "CMAKE_NM                     : ${CMAKE_NM}")
+    message(STATUS "CMAKE_LINKER                 : ${CMAKE_LINKER}")
+  endif()
   message(STATUS "#---------------------------------------------#")
   message(STATUS "bindir     : ${bindir}")
   message(STATUS "includedir : ${includedir}")

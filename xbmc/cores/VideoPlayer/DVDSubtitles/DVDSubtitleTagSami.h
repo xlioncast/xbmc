@@ -12,12 +12,13 @@
 #include <string>
 #include <vector>
 
-#define FLAG_BOLD   0
+#define FLAG_BOLD 0
 #define FLAG_ITALIC 1
-#define FLAG_COLOR  2
-#define FLAG_LANGUAGE   3
+#define FLAG_UNDERLINE 2
+#define FLAG_STRIKETHROUGH 3
+#define FLAG_COLOR 4
+#define FLAG_LANGUAGE 5
 
-class CDVDOverlayText;
 class CDVDSubtitleStream;
 class CRegExp;
 
@@ -30,13 +31,21 @@ public:
     m_tagOptions = NULL;
     m_flag[FLAG_BOLD] = false;
     m_flag[FLAG_ITALIC] = false;
+    m_flag[FLAG_UNDERLINE] = false;
+    m_flag[FLAG_STRIKETHROUGH] = false;
     m_flag[FLAG_COLOR] = false;
     m_flag[FLAG_LANGUAGE] = false; //set to true when classID != lang
   }
   virtual ~CDVDSubtitleTagSami();
   bool Init();
-  void ConvertLine(CDVDOverlayText* pOverlay, const char* line, int len, const char* lang = NULL);
-  void CloseTag(CDVDOverlayText* pOverlay);
+  /*!
+   \brief Convert a subtitle text line.
+   \param line The text line
+   \param len The line length
+   \param langClassID The SAMI Class ID language (keep the language lines with this ID and ignore all others)
+  */
+  void ConvertLine(std::string& strUTF8, const char* langClassID = NULL);
+  void CloseTag(std::string& text);
   void LoadHead(CDVDSubtitleStream* samiStream);
 
   typedef struct
@@ -50,8 +59,7 @@ public:
   std::vector<SLangclass> m_Langclass;
 
 private:
-  CRegExp *m_tags;
-  CRegExp *m_tagOptions;
-  bool m_flag[4];
+  CRegExp* m_tags;
+  CRegExp* m_tagOptions;
+  bool m_flag[6];
 };
-

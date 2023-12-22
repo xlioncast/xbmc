@@ -12,10 +12,11 @@
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "rendering/dx/DeviceResources.h"
-#include "threads/SingleLock.h"
 #include "utils/Screenshot.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
+
+#include <mutex>
 
 #include <wrl/client.h>
 
@@ -41,7 +42,7 @@ bool CScreenshotSurfaceWindows::Capture()
   if (!gui)
     return false;
 
-  CSingleLock lock(winsystem->GetGfxContext());
+  std::unique_lock<CCriticalSection> lock(winsystem->GetGfxContext());
   gui->GetWindowManager().Render();
 
   auto deviceResources = DX::DeviceResources::Get();
@@ -53,7 +54,7 @@ bool CScreenshotSurfaceWindows::Capture()
   if (!backbuffer.Get())
     return false;
 
-  D3D11_TEXTURE2D_DESC desc = { 0 };
+  D3D11_TEXTURE2D_DESC desc = {};
   backbuffer.GetDesc(&desc);
   desc.Usage = D3D11_USAGE_STAGING;
   desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
@@ -102,7 +103,7 @@ bool CScreenshotSurfaceWindows::Capture()
       pImdContext->Unmap(pCopyTexture.Get(), 0);
     }
     else
-      CLog::LogFunction(LOGERROR, __FUNCTION__, "MAP_READ failed.");
+      CLog::LogF(LOGERROR, "MAP_READ failed.");
   }
 
   return m_buffer != nullptr;

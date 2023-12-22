@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Turkish (Turkey) (http://www.transifex.com/projects/p/kodi-main/language/tr_TR/)\n"
+"PO-Revision-Date: 2023-02-12 20:48+0000\n"
+"Last-Translator: queeup <queeup@zoho.com>\n"
+"Language-Team: Turkish <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/tr_tr/>\n"
+"Language: tr_tr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: tr_TR\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"X-Generator: Weblate 4.15.2\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "Dokunmatik ekranlı aygıtlar için dış görünüm"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "Bu dış görünüm tabletler ve akıllı telefonlar gibi dokunmatik ekranlı aygıtlarda kullanılmak üzere tasarlandı"
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -64,22 +73,27 @@ msgctxt "#31016"
 msgid "Albums"
 msgstr "Albümler"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "PVR bilgisi"
+msgid "PVR"
+msgstr "PVR"
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "Yürütücü işlem bilgisi"
+msgid "Player"
+msgstr "Oynatıcı"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "Video kod çözücü"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "Piksel biçimi"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
 msgstr "Sistem bellek kullanımı"
@@ -98,7 +112,7 @@ msgstr "Oturum Aç"
 
 msgctxt "#31039"
 msgid "Updated:"
-msgstr "Güncellendi"
+msgstr "Güncellendi:"
 
 msgctxt "#31040"
 msgid "Select + X"
@@ -225,7 +239,7 @@ msgid "Configure & manage media sharing services · Configure & manage the weath
 msgstr "Medya paylaşımı hizmetlerini yapılandır ve yönet · Hava durumu hizmetini yapılandır ve yönet"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+msgid "Configure display · Configure audio · Configure internet access · Configure power saving · Configure logging"
 msgstr "Görüntüyü yapılandırın · Sesi yapılandırın · İnternet erişimini yapılandırın · Güç tasarrufunu yapılandırın · Günlüğü yapılandırın"
 
 msgctxt "#31407"
@@ -328,13 +342,74 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "Silinenleri göster"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Video codec"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Video çözünürlüğü"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Video en boy oranı"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr "Video bit oranı"
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Ses codec"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Ses kanalları"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr "Ses bit oranı"
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Ekran çözünürlüğü"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr "Sistem işleme hızı"
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Sistem CPU kullanımı"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Medya"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Sistem"
+
 msgctxt "#31900"
 msgid "First Run"
 msgstr "İlk Çalıştırma"
 
 msgctxt "#31901"
 msgid "There are two things to know about navigating Estouchy"
-msgstr "Estouchy'de gezinme hakkında bilmeniz gereken iki şey vardır."
+msgstr "Estouchy'de gezinme hakkında bilmeniz gereken iki şey vardır"
 
 msgctxt "#31902"
 msgid "The Kodi logo functions as a 'HOME' button. Whenever you touch it, you will be taken back to the home screen."
@@ -342,8 +417,20 @@ msgstr "Kodi logosu 'Giriş Sayfası' düğmesi olarak işlev görür. Logoya do
 
 msgctxt "#31903"
 msgid "When you are playing audio or video, the item title will appear at the top of the screen. Touching it will take you to the fullscreen visualization or video window."
-msgstr "Ses veya video oynatılırken, oynatılan öğenin başlığı ekranın üst kısmında görünür. Buna dokunmak sizi tam ekran görsel öğeye veya video penceresine götürecektir."
+msgstr "Ses veya video oynatılırken, oynatılan ögenin başlığı ekranın üst kısmında görünür. Buna dokunmak sizi tam ekran görsel öğeye veya video penceresine götürecektir."
 
 msgctxt "#31904"
 msgid "Now Playing Title..."
-msgstr "Şimdi Oynatılan Öğenin Başlığı..."
+msgstr "Şimdi Oynatılan Ögenin Başlığı..."
+
+#~ msgctxt "#31406"
+#~ msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+#~ msgstr "Görüntüyü yapılandırın · Sesi yapılandırın · İnternet erişimini yapılandırın · Güç tasarrufunu yapılandırın · Günlüğü yapılandırın"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "PVR bilgisi"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "Yürütücü işlem bilgisi"

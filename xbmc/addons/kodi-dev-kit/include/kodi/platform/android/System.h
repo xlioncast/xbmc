@@ -6,6 +6,8 @@
  *  See LICENSES/README.md for more information.
  */
 
+/*---AUTO_GEN_PARSE<$$CORE_SYSTEM_NAME:android>---*/
+
 #pragma once
 
 #include "../../AddonBase.h"
@@ -40,12 +42,14 @@ namespace platform
 /// #endif
 /// ~~~~~~~~~~~~~
 ///
-class ATTRIBUTE_HIDDEN CInterfaceAndroidSystem
+class ATTR_DLL_LOCAL CInterfaceAndroidSystem
 {
 public:
   CInterfaceAndroidSystem()
-    : m_interface(static_cast<AddonToKodiFuncTable_android_system*>(
-          GetInterface(INTERFACE_ANDROID_SYSTEM_NAME, INTERFACE_ANDROID_SYSTEM_VERSION))){};
+    : m_interface(static_cast<AddonToKodiFuncTable_android_system*>(kodi::addon::GetInterface(
+          INTERFACE_ANDROID_SYSTEM_NAME, INTERFACE_ANDROID_SYSTEM_VERSION)))
+  {
+  }
 
   //============================================================================
   /// @ingroup cpp_kodi_platform_CInterfaceAndroidSystem

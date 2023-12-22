@@ -1,8 +1,11 @@
 set(SOURCES ControllerGrid.cpp
-            ControllerTree.cpp
+            ControllerHub.cpp
+            ControllerNode.cpp
 )
 
 set(HEADERS ControllerGrid.h
+            ControllerHub.h
+            ControllerNode.h
             ControllerTree.h
 )
 

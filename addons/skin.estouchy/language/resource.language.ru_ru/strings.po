@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Russian (Russia) (http://www.transifex.com/projects/p/kodi-main/language/ru_RU/)\n"
+"PO-Revision-Date: 2022-12-26 02:05+0000\n"
+"Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\n"
+"Language-Team: Russian <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/ru_ru/>\n"
+"Language: ru_ru\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: ru_RU\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || (n%100>=11 && n%100<=14)? 2 : 3);\n"
+"X-Generator: Weblate 4.15\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "Обложка для устройств с сенсорным экраном"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "Обложка предназначена для использования на устройствах с сенсорным экраном, таких как планшеты и смартфоны"
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -64,22 +73,27 @@ msgctxt "#31016"
 msgid "Albums"
 msgstr "Альбомы"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "Сведения PVR"
+msgid "PVR"
+msgstr "PVR"
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "Сведения о проигрывателе"
+msgid "Player"
+msgstr "Проигрыватель"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "Видеодекодер"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "Формат пикселей"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
 msgstr "Использование памяти"
@@ -99,6 +113,18 @@ msgstr "Логин"
 msgctxt "#31039"
 msgid "Updated:"
 msgstr "Обновлено:"
+
+msgctxt "#31040"
+msgid "Select + X"
+msgstr "Select + X"
+
+msgctxt "#31041"
+msgid "Select + B"
+msgstr "Select + B"
+
+msgctxt "#31042"
+msgid "Select + Start"
+msgstr "Select + Start"
 
 msgctxt "#31043"
 msgid "PAUSED"
@@ -198,7 +224,7 @@ msgstr "Телетекст"
 
 msgctxt "#31390"
 msgid "Skin default"
-msgstr "Стандартн."
+msgstr "Обложка по умолчанию"
 
 msgctxt "#31391"
 msgid "Arial based"
@@ -213,8 +239,8 @@ msgid "Configure & manage media sharing services · Configure & manage the weath
 msgstr "Настройка и управление службами общего доступа к мультимедиа · Настройка и управление службой погоды"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
-msgstr "Настройка экрана · Настройка звука · Настройка сети · Настройка электропитания · Настройка журнала событий"
+msgid "Configure display · Configure audio · Configure internet access · Configure power saving · Configure logging"
+msgstr "Настроить дисплей · Настроить аудио · Настроить интернет-доступ · Настроить энергосбережение · Настроить журналирование"
 
 msgctxt "#31407"
 msgid "Manage your installed add-ons · Browse for and install add-ons from kodi.tv · Modify add-on settings"
@@ -222,11 +248,11 @@ msgstr "Управление дополнениями · Поиск и уста�
 
 msgctxt "#31408"
 msgid "Configure actions that can be used during playback · Configure how media content is played"
-msgstr "Настроить действия, которые можно использовать во время воспроизведения · Настроить способ воспроизведения медиаконтента"
+msgstr "Настроить действия, которые можно использовать во время воспроизведения · Настроить способ воспроизведения медиаданных"
 
 msgctxt "#31409"
 msgid "Configure library sources · Show the media lists display content · Configure how library lists are navigated"
-msgstr "Настройка источников библиотеки · Отображение содержимого · Настройка навигации по библиотеке."
+msgstr "Настройка источников библиотеки · Отображение содержимого · Настройка навигации по библиотеке"
 
 msgctxt "#31410"
 msgid "Configure skin · Configure region · Configure control · Configure screensaver · Configure master lock"
@@ -316,6 +342,67 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "Показать удаленное"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Видеокодек"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Разрешение видео"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Соотношение сторон видео"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr "Битрейт видео"
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Аудиокодек"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Аудиоканалы"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr "Битрейт аудио"
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Разрешение экрана"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr "Скорость отрисовки системы"
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Использование ЦП системы"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Медиа"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Система"
+
 msgctxt "#31900"
 msgid "First Run"
 msgstr "Первый запуск"
@@ -335,3 +422,15 @@ msgstr "Когда вы воспроизводите аудио или виде�
 msgctxt "#31904"
 msgid "Now Playing Title..."
 msgstr "Сейчас играет название..."
+
+#~ msgctxt "#31406"
+#~ msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+#~ msgstr "Настройка экрана · Настройка звука · Настройка сети · Настройка электропитания · Настройка журнала событий"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "Сведения PVR"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "Сведения о проигрывателе"

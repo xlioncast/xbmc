@@ -60,14 +60,15 @@ public:
   void Register(IDispResource *resource) override;
   void Unregister(IDispResource *resource) override;
 
-  std::unique_ptr<CVideoSync> GetVideoSync(void* clock) override;
+  std::unique_ptr<CVideoSync> GetVideoSync(CVideoReferenceClock* clock) override;
+
+  std::vector<std::string> GetConnectedOutputs() override;
 
   bool InitDisplayLink(CVideoSyncIos *syncImpl);
   void DeinitDisplayLink(void);
   void OnAppFocusChange(bool focus);
   bool IsBackgrounded() const { return m_bIsBackgrounded; }
   CVEAGLContext GetEAGLContextObj();
-  void GetConnectedOutputs(std::vector<std::string> *outputs);
   void MoveToTouchscreen();
 
   // winevents override

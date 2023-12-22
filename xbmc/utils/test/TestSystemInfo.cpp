@@ -17,6 +17,8 @@
 
 #include <gtest/gtest.h>
 
+#include "PlatformDefs.h"
+
 class TestSystemInfo : public testing::Test
 {
 protected:
@@ -107,8 +109,10 @@ TEST_F(TestSystemInfo, GetOsName)
   EXPECT_STREQ("tvOS", g_sysinfo.GetOsName(false).c_str())
       << "'GetOsName(false)' must return 'tvOS'";
 #elif defined(TARGET_DARWIN_OSX)
-  EXPECT_STREQ("OS X", g_sysinfo.GetOsName(true).c_str()) << "'GetOsName(true)' must return 'OS X'";
-  EXPECT_STREQ("OS X", g_sysinfo.GetOsName(false).c_str()) << "'GetOsName(false)' must return 'OS X'";
+  EXPECT_STREQ("macOS", g_sysinfo.GetOsName(true).c_str())
+      << "'GetOsName(true)' must return 'macOS'";
+  EXPECT_STREQ("macOS", g_sysinfo.GetOsName(false).c_str())
+      << "'GetOsName(false)' must return 'macOS'";
 #elif defined(TARGET_ANDROID)
   EXPECT_STREQ("Android", g_sysinfo.GetOsName(true).c_str()) << "'GetOsName(true)' must return 'Android'";
   EXPECT_STREQ("Android", g_sysinfo.GetOsName(false).c_str()) << "'GetOsName(false)' must return 'Android'";
@@ -161,7 +165,8 @@ TEST_F(TestSystemInfo, IsWindowsVersion)
 {
   EXPECT_FALSE(g_sysinfo.IsWindowsVersion(CSysInfo::WindowsVersionUnknown)) << "'IsWindowsVersion()' must return 'false' for 'WindowsVersionUnknown'";
 #ifndef TARGET_WINDOWS
-  EXPECT_FALSE(g_sysinfo.IsWindowsVersion(CSysInfo::WindowsVersionWin7)) << "'IsWindowsVersion()' must return 'false'";
+  EXPECT_FALSE(g_sysinfo.IsWindowsVersion(CSysInfo::WindowsVersionWin8_1))
+      << "'IsWindowsVersion()' must return 'false'";
 #endif // ! TARGET_WINDOWS
 }
 
@@ -170,7 +175,8 @@ TEST_F(TestSystemInfo, IsWindowsVersionAtLeast)
   EXPECT_FALSE(g_sysinfo.IsWindowsVersionAtLeast(CSysInfo::WindowsVersionUnknown)) << "'IsWindowsVersionAtLeast()' must return 'false' for 'WindowsVersionUnknown'";
   EXPECT_FALSE(g_sysinfo.IsWindowsVersionAtLeast(CSysInfo::WindowsVersionFuture)) << "'IsWindowsVersionAtLeast()' must return 'false' for 'WindowsVersionFuture'";
 #ifndef TARGET_WINDOWS
-  EXPECT_FALSE(g_sysinfo.IsWindowsVersion(CSysInfo::WindowsVersionWin7)) << "'IsWindowsVersionAtLeast()' must return 'false'";
+  EXPECT_FALSE(g_sysinfo.IsWindowsVersion(CSysInfo::WindowsVersionWin8_1))
+      << "'IsWindowsVersionAtLeast()' must return 'false'";
 #endif // ! TARGET_WINDOWS
 }
 

@@ -17,20 +17,23 @@ class CDVDOverlay;
 class CDVDOverlayImage;
 class CDVDOverlaySpu;
 class CDVDOverlaySSA;
-typedef struct ass_image ASS_Image;
 
 namespace OVERLAY {
 
   class COverlayTextureGL : public COverlay
   {
   public:
-     explicit COverlayTextureGL(CDVDOverlayImage* o);
-     explicit COverlayTextureGL(CDVDOverlaySpu* o);
+    /*! \brief Create the overlay for rendering
+     *  \param o The overlay image
+     *  \param rSource The video source rect size
+     */
+    explicit COverlayTextureGL(const CDVDOverlayImage& o, CRect& rSource);
+    explicit COverlayTextureGL(const CDVDOverlaySpu& o);
     ~COverlayTextureGL() override;
 
     void Render(SRenderState& state) override;
 
-    GLuint m_texture;
+    GLuint m_texture = 0;
     float  m_u;
     float  m_v;
     bool   m_pma; /*< is alpha in texture premultiplied in the values */
@@ -39,11 +42,11 @@ namespace OVERLAY {
   class COverlayGlyphGL : public COverlay
   {
   public:
-   COverlayGlyphGL(ASS_Image* images, int width, int height);
+    COverlayGlyphGL(ASS_Image* images, float width, float height);
 
-   ~COverlayGlyphGL() override;
+    ~COverlayGlyphGL() override;
 
-   void Render(SRenderState& state) override;
+    void Render(SRenderState& state) override;
 
     struct VERTEX
     {
@@ -52,12 +55,11 @@ namespace OVERLAY {
        GLfloat x, y, z;
     };
 
-   VERTEX* m_vertex;
-   int     m_count;
+    std::vector<VERTEX> m_vertex;
 
-   GLuint m_texture;
-   float  m_u;
-   float  m_v;
+    GLuint m_texture = 0;
+    float m_u;
+    float m_v;
   };
 
 }

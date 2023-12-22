@@ -18,11 +18,11 @@ namespace VAAPI
 class IVaapiWinSystem;
 }
 
-class CRendererVAAPI : public CLinuxRendererGL
+class CRendererVAAPIGL : public CLinuxRendererGL
 {
 public:
-  CRendererVAAPI();
-  ~CRendererVAAPI() override;
+  CRendererVAAPIGL();
+  ~CRendererVAAPIGL() override;
 
   static CBaseRenderer* Create(CVideoBuffer *buffer);
   static void Register(VAAPI::IVaapiWinSystem *winSystem, VADisplay vaDpy, EGLDisplay eglDisplay, bool &general, bool &deepColor);
@@ -33,10 +33,11 @@ public:
   bool ConfigChanged(const VideoPicture &picture) override;
   void ReleaseBuffer(int idx) override;
   bool NeedBuffer(int idx) override;
+  bool Flush(bool saveBuffers) override;
 
   // Feature support
-  bool Supports(ERENDERFEATURE feature) override;
-  bool Supports(ESCALINGMETHOD method) override;
+  bool Supports(ERENDERFEATURE feature) const override;
+  bool Supports(ESCALINGMETHOD method) const override;
 
 protected:
   bool LoadShadersHook() override;

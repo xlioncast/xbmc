@@ -8,12 +8,17 @@
 
 #include "FDEventMonitor.h"
 
+#include "threads/SingleLock.h"
 #include "utils/log.h"
 
 #include <errno.h>
+#include <mutex>
 
 #include <poll.h>
 #include <sys/eventfd.h>
+#include <unistd.h>
+
+#include "PlatformDefs.h"
 
 CFDEventMonitor::CFDEventMonitor() :
   CThread("FDEventMonitor")
@@ -22,7 +27,7 @@ CFDEventMonitor::CFDEventMonitor() :
 
 CFDEventMonitor::~CFDEventMonitor()
 {
-  CSingleLock lock(m_mutex);
+  std::unique_lock<CCriticalSection> lock(m_mutex);
   InterruptPoll();
 
   if (m_wakeupfd >= 0)
@@ -45,7 +50,7 @@ CFDEventMonitor::~CFDEventMonitor()
 
 void CFDEventMonitor::AddFD(const MonitoredFD& monitoredFD, int& id)
 {
-  CSingleLock lock(m_mutex);
+  std::unique_lock<CCriticalSection> lock(m_mutex);
   InterruptPoll();
 
   AddFDLocked(monitoredFD, id);
@@ -56,7 +61,7 @@ void CFDEventMonitor::AddFD(const MonitoredFD& monitoredFD, int& id)
 void CFDEventMonitor::AddFDs(const std::vector<MonitoredFD>& monitoredFDs,
                              std::vector<int>& ids)
 {
-  CSingleLock lock(m_mutex);
+  std::unique_lock<CCriticalSection> lock(m_mutex);
   InterruptPoll();
 
   for (unsigned int i = 0; i < monitoredFDs.size(); ++i)
@@ -71,12 +76,13 @@ void CFDEventMonitor::AddFDs(const std::vector<MonitoredFD>& monitoredFDs,
 
 void CFDEventMonitor::RemoveFD(int id)
 {
-  CSingleLock lock(m_mutex);
+  std::unique_lock<CCriticalSection> lock(m_mutex);
   InterruptPoll();
 
   if (m_monitoredFDs.erase(id) != 1)
   {
-    CLog::Log(LOGERROR, "CFDEventMonitor::RemoveFD - Tried to remove non-existing monitoredFD %d", id);
+    CLog::Log(LOGERROR, "CFDEventMonitor::RemoveFD - Tried to remove non-existing monitoredFD {}",
+              id);
   }
 
   UpdatePollDescs();
@@ -84,14 +90,17 @@ void CFDEventMonitor::RemoveFD(int id)
 
 void CFDEventMonitor::RemoveFDs(const std::vector<int>& ids)
 {
-  CSingleLock lock(m_mutex);
+  std::unique_lock<CCriticalSection> lock(m_mutex);
   InterruptPoll();
 
   for (unsigned int i = 0; i < ids.size(); ++i)
   {
     if (m_monitoredFDs.erase(ids[i]) != 1)
     {
-      CLog::Log(LOGERROR, "CFDEventMonitor::RemoveFDs - Tried to remove non-existing monitoredFD %d while removing %u FDs", ids[i], (unsigned)ids.size());
+      CLog::Log(LOGERROR,
+                "CFDEventMonitor::RemoveFDs - Tried to remove non-existing monitoredFD {} while "
+                "removing {} FDs",
+                ids[i], (unsigned)ids.size());
     }
   }
 
@@ -104,8 +113,8 @@ void CFDEventMonitor::Process()
 
   while (!m_bStop)
   {
-    CSingleLock lock(m_mutex);
-    CSingleLock pollLock(m_pollMutex);
+    std::unique_lock<CCriticalSection> lock(m_mutex);
+    std::unique_lock<CCriticalSection> pollLock(m_pollMutex);
 
     /*
      * Leave the main mutex here to allow another thread to
@@ -114,13 +123,14 @@ void CFDEventMonitor::Process()
      * wake up poll and wait for the processing to pause at
      * the above lock(m_mutex).
      */
-    lock.Leave();
+    lock.unlock();
 
     int err = poll(&m_pollDescs[0], m_pollDescs.size(), -1);
 
     if (err < 0 && errno != EINTR)
     {
-      CLog::Log(LOGERROR, "CFDEventMonitor::Process - poll() failed, error %d, stopping monitoring", errno);
+      CLog::Log(LOGERROR, "CFDEventMonitor::Process - poll() failed, error {}, stopping monitoring",
+                errno);
       StopThread(false);
     }
 
@@ -143,7 +153,9 @@ void CFDEventMonitor::Process()
 
         if (pollDesc.revents & (POLLERR | POLLHUP | POLLNVAL))
         {
-          CLog::Log(LOGERROR, "CFDEventMonitor::Process - polled fd %d got revents 0x%x, removing it", pollDesc.fd, pollDesc.revents);
+          CLog::Log(LOGERROR,
+                    "CFDEventMonitor::Process - polled fd {} got revents 0x{:x}, removing it",
+                    pollDesc.fd, pollDesc.revents);
 
           /* Probably would be nice to inform our caller that their FD was
            * dropped, but oh well... */
@@ -207,7 +219,8 @@ void CFDEventMonitor::StartMonitoring()
     m_wakeupfd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
     if (m_wakeupfd < 0)
     {
-      CLog::Log(LOGERROR, "CFDEventMonitor::StartMonitoring - Failed to create eventfd, error %d", errno);
+      CLog::Log(LOGERROR, "CFDEventMonitor::StartMonitoring - Failed to create eventfd, error {}",
+                errno);
       return;
     }
 
@@ -225,6 +238,6 @@ void CFDEventMonitor::InterruptPoll()
   {
     eventfd_write(m_wakeupfd, 1);
     /* wait for the poll() result handling (if any) to end */
-    CSingleLock pollLock(m_pollMutex);
+    std::unique_lock<CCriticalSection> pollLock(m_pollMutex);
   }
 }

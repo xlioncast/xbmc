@@ -19,12 +19,13 @@
 
 CInputStreamPVRBase::CInputStreamPVRBase(IVideoPlayer* pPlayer, const CFileItem& fileitem)
   : CDVDInputStream(DVDSTREAM_TYPE_PVRMANAGER, fileitem),
-    m_eof(true),
     m_StreamProps(new PVR_STREAM_PROPERTIES()),
     m_client(CServiceBroker::GetPVRManager().GetClient(fileitem))
 {
   if (!m_client)
-    CLog::Log(LOGERROR, "CInputStreamPVRBase - %s - unable to obtain pvr addon instance for item '%s'", __FUNCTION__, fileitem.GetPath().c_str());
+    CLog::Log(LOGERROR,
+              "CInputStreamPVRBase - {} - unable to obtain pvr addon instance for item '{}'",
+              __FUNCTION__, fileitem.GetPath());
 }
 
 CInputStreamPVRBase::~CInputStreamPVRBase()
@@ -200,6 +201,7 @@ std::vector<CDemuxStream*> CInputStreamPVRBase::GetStreams() const
 {
   std::vector<CDemuxStream*> streams;
 
+  streams.reserve(m_streamMap.size());
   for (const auto& st : m_streamMap)
     streams.emplace_back(st.second.get());
 
@@ -293,7 +295,7 @@ void CInputStreamPVRBase::UpdateStreamMap()
       streamVideo->iFpsRate = stream.iFPSRate;
       streamVideo->iHeight = stream.iHeight;
       streamVideo->iWidth = stream.iWidth;
-      streamVideo->fAspect = stream.fAspect;
+      streamVideo->fAspect = static_cast<double>(stream.fAspect);
 
       dStream = streamVideo;
     }
@@ -319,12 +321,11 @@ void CInputStreamPVRBase::UpdateStreamMap()
 
       if (stream.iSubtitleInfo)
       {
-        streamSubtitle->ExtraData = new uint8_t[4];
-        streamSubtitle->ExtraSize = 4;
-        streamSubtitle->ExtraData[0] = (stream.iSubtitleInfo >> 8) & 0xff;
-        streamSubtitle->ExtraData[1] = (stream.iSubtitleInfo >> 0) & 0xff;
-        streamSubtitle->ExtraData[2] = (stream.iSubtitleInfo >> 24) & 0xff;
-        streamSubtitle->ExtraData[3] = (stream.iSubtitleInfo >> 16) & 0xff;
+        streamSubtitle->extraData = FFmpegExtraData(4);
+        streamSubtitle->extraData.GetData()[0] = (stream.iSubtitleInfo >> 8) & 0xff;
+        streamSubtitle->extraData.GetData()[1] = (stream.iSubtitleInfo >> 0) & 0xff;
+        streamSubtitle->extraData.GetData()[2] = (stream.iSubtitleInfo >> 24) & 0xff;
+        streamSubtitle->extraData.GetData()[3] = (stream.iSubtitleInfo >> 16) & 0xff;
       }
       dStream = streamSubtitle;
     }
@@ -340,6 +341,17 @@ void CInputStreamPVRBase::UpdateStreamMap()
         streamRadioRDS = std::make_shared<CDemuxStreamRadioRDS>();
 
       dStream = streamRadioRDS;
+    }
+    else if (stream.iCodecType == PVR_CODEC_TYPE_ID3)
+    {
+      std::shared_ptr<CDemuxStreamAudioID3> streamAudioID3;
+
+      if (dStream)
+        streamAudioID3 = std::dynamic_pointer_cast<CDemuxStreamAudioID3>(dStream);
+      if (!streamAudioID3)
+        streamAudioID3 = std::make_shared<CDemuxStreamAudioID3>();
+
+      dStream = std::move(streamAudioID3);
     }
     else
       dStream = std::make_shared<CDemuxStream>();

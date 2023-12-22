@@ -39,7 +39,7 @@ static bool translatePathIntoKey(const std::string& path, std::string& key)
 
       NSData* nsdata = [defaults dataForKey:aKey];
       size_t size = nsdata.length;
-      CLog::Log(LOGINFO, "nsuserdefaults: %s with size %ld", aKey.UTF8String, size);
+      CLog::Log(LOGINFO, "nsuserdefaults: {} with size {}", aKey.UTF8String, size);
     }
     firstLookup = false;
   }
@@ -67,19 +67,10 @@ bool CTVOSNSUserDefaults::Synchronize()
 void CTVOSNSUserDefaults::GetDirectoryContents(const std::string& path,
                                                std::vector<std::string>& contents)
 {
-  // tvos path adds /private/../..
-  // We need to strip this as GetUserHomeDirectory() doesnt have private in the path
-  std::string subpath = path;
-  const std::string& str_private = "/private";
-  size_t pos = subpath.find(str_private.c_str(), 0, str_private.length());
-
-  if (pos != std::string::npos)
-    subpath.erase(pos, str_private.length());
-
   std::string userDataDir =
       URIUtils::AddFileToFolder(CTVOSFileUtils::GetUserHomeDirectory(), "userdata");
 
-  if (subpath.find(userDataDir) == std::string::npos)
+  if (path.find(userDataDir) == std::string::npos)
     return;
 
   NSDictionary<NSString*, id>* dict =
@@ -94,7 +85,7 @@ void CTVOSNSUserDefaults::GetDirectoryContents(const std::string& path,
     std::string fullKeyPath =
         URIUtils::AddFileToFolder(CTVOSFileUtils::GetUserHomeDirectory(), keypath);
     std::string endingDirectory = URIUtils::GetDirectory(fullKeyPath);
-    if (subpath == endingDirectory)
+    if (path == endingDirectory)
     {
       contents.push_back(fullKeyPath);
     }
@@ -181,7 +172,7 @@ bool CTVOSNSUserDefaults::SetKeyData(const std::string& key,
     NSData* nsdata_value = [NSData dataWithBytes:lpBuf length:uiBufSize];
 
     NSData* compressed = [nsdata_value gzippedData];
-    CLog::Log(LOGDEBUG, "NSUSerDefaults: compressed %s from %ld to %ld", key.c_str(), uiBufSize,
+    CLog::Log(LOGDEBUG, "NSUSerDefaults: compressed {} from {} to {}", key, uiBufSize,
               compressed.length);
 
     [defaults setObject:compressed forKey:nsstring_key];
@@ -227,7 +218,7 @@ bool CTVOSNSUserDefaults::IsKeyFromPath(const std::string& path)
   std::string translated_key;
   if (translatePathIntoKey(path, translated_key) && !translated_key.empty())
   {
-    CLog::Log(LOGDEBUG, "found key %s", translated_key.c_str());
+    CLog::Log(LOGDEBUG, "found key {}", translated_key);
     return true;
   }
 

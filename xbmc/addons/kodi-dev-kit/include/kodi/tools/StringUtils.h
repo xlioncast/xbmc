@@ -47,7 +47,7 @@
 // for example: class A { bool log_string(int logLevel, const char* functionName, const char* format, ...) PARAM3_PRINTF_FORMAT; };
 #define PARAM3_PRINTF_FORMAT __attribute__((format(printf, 3, 4)))
 
-// for use in functions that take printf format string as fourth parameter and additional printf parameters as fith parameter
+// for use in functions that take printf format string as fourth parameter and additional printf parameters as fifth parameter
 // note: all non-static class member functions take pointer to class object as hidden first parameter
 // for example: class A { bool log_string(int logLevel, const char* functionName, int component, const char* format, ...) PARAM4_PRINTF_FORMAT; };
 #define PARAM4_PRINTF_FORMAT __attribute__((format(printf, 4, 5)))
@@ -552,7 +552,7 @@ public:
   /// ~~~~~~~~~~~~~{.cpp}
   /// #include <kodi/tools/StringUtils.h>
   ///
-  /// std::string str = kodi::tools::StringUtils::Format("Hello %s %i", "World", 2020);
+  /// std::string str = kodi::tools::StringUtils::Format("Hello {} {}", "World", 2020);
   /// ~~~~~~~~~~~~~
   ///
   inline static std::string Format(const char* fmt, ...)
@@ -1666,10 +1666,10 @@ public:
   /// std::string refstr = "test";
   ///
   /// ret = kodi::tools::StringUtils::StartsWith(refstr, "te");
-  /// fprintf(stderr, "Excpect true for here and is '%s'\n", ret ? "true" : "false");
+  /// fprintf(stderr, "Expect true for here and is '%s'\n", ret ? "true" : "false");
   ///
   /// ret = kodi::tools::StringUtils::StartsWith(refstr, "abc");
-  /// fprintf(stderr, "Excpect false for here and is '%s'\n", ret ? "true" : "false");
+  /// fprintf(stderr, "Expect false for here and is '%s'\n", ret ? "true" : "false");
   /// ~~~~~~~~~~~~~
   ///
   inline static bool StartsWith(const std::string& str1, const std::string& str2)
@@ -1732,13 +1732,13 @@ public:
   /// std::string refstr = "test";
   ///
   /// ret = kodi::tools::StringUtils::StartsWithNoCase(refstr, "te");
-  /// fprintf(stderr, "Excpect true for here and is '%s'\n", ret ? "true" : "false");
+  /// fprintf(stderr, "Expect true for here and is '%s'\n", ret ? "true" : "false");
   ///
   /// ret = kodi::tools::StringUtils::StartsWithNoCase(refstr, "TEs");
-  /// fprintf(stderr, "Excpect true for here and is '%s'\n", ret ? "true" : "false");
+  /// fprintf(stderr, "Expect true for here and is '%s'\n", ret ? "true" : "false");
   ///
   /// ret = kodi::tools::StringUtils::StartsWithNoCase(refstr, "abc");
-  /// fprintf(stderr, "Excpect false for here and is '%s'\n", ret ? "true" : "false");
+  /// fprintf(stderr, "Expect false for here and is '%s'\n", ret ? "true" : "false");
   /// ~~~~~~~~~~~~~
   ///
   inline static bool StartsWithNoCase(const std::string& str1, const std::string& str2)
@@ -1802,10 +1802,10 @@ public:
   /// std::string refstr = "test";
   ///
   /// ret = kodi::tools::StringUtils::EndsWith(refstr, "st");
-  /// fprintf(stderr, "Excpect true for here and is '%s'\n", ret ? "true" : "false");
+  /// fprintf(stderr, "Expect true for here and is '%s'\n", ret ? "true" : "false");
   ///
   /// ret = kodi::tools::StringUtils::EndsWith(refstr, "abc");
-  /// fprintf(stderr, "Excpect false for here and is '%s'\n", ret ? "true" : "false");
+  /// fprintf(stderr, "Expect false for here and is '%s'\n", ret ? "true" : "false");
   /// ~~~~~~~~~~~~~
   ///
   inline static bool EndsWith(const std::string& str1, const std::string& str2)
@@ -1852,10 +1852,10 @@ public:
   /// std::string refstr = "test";
   ///
   /// ret = kodi::tools::StringUtils::EndsWithNoCase(refstr, "ST");
-  /// fprintf(stderr, "Excpect true for here and is '%s'\n", ret ? "true" : "false");
+  /// fprintf(stderr, "Expect true for here and is '%s'\n", ret ? "true" : "false");
   ///
   /// ret = kodi::tools::StringUtils::EndsWithNoCase(refstr, "ABC");
-  /// fprintf(stderr, "Excpect false for here and is '%s'\n", ret ? "true" : "false");
+  /// fprintf(stderr, "Expect false for here and is '%s'\n", ret ? "true" : "false");
   /// ~~~~~~~~~~~~~
   ///
   inline static bool EndsWithNoCase(const std::string& str1, const std::string& str2)
@@ -2251,7 +2251,7 @@ public:
   //============================================================================
   /// @brief Check a string for another text.
   ///
-  /// @param[in] str String to seach for keywords
+  /// @param[in] str String to search for keywords
   /// @param[in] keywords List of keywords to search in text
   /// @return true if string contains word in list
   ///
@@ -2936,13 +2936,13 @@ public:
 
     std::string strHMS;
     if (format == TIME_FORMAT_SECS)
-      strHMS = StringUtils::Format("%i", seconds);
+      strHMS = std::to_string(seconds);
     else if (format == TIME_FORMAT_MINS)
-      strHMS = StringUtils::Format("%i", lrintf(static_cast<float>(seconds) / 60.0f));
+      strHMS = std::to_string(lrintf(static_cast<float>(seconds) / 60.0f));
     else if (format == TIME_FORMAT_HOURS)
-      strHMS = StringUtils::Format("%i", lrintf(static_cast<float>(seconds) / 3600.0f));
+      strHMS = std::to_string(lrintf(static_cast<float>(seconds) / 3600.0f));
     else if (format & TIME_FORMAT_M)
-      strHMS += StringUtils::Format("%i", seconds % 3600 / 60);
+      strHMS += std::to_string(seconds % 3600 / 60);
     else
     {
       int hh = seconds / 3600;
@@ -2953,13 +2953,13 @@ public:
       if (format == TIME_FORMAT_GUESS)
         format = (hh >= 1) ? TIME_FORMAT_HH_MM_SS : TIME_FORMAT_MM_SS;
       if (format & TIME_FORMAT_HH)
-        strHMS += StringUtils::Format("%2.2i", hh);
+        strHMS += StringUtils::Format("{:02}", hh);
       else if (format & TIME_FORMAT_H)
-        strHMS += StringUtils::Format("%i", hh);
+        strHMS += std::to_string(hh);
       if (format & TIME_FORMAT_MM)
-        strHMS += StringUtils::Format(strHMS.empty() ? "%2.2i" : ":%2.2i", mm);
+        strHMS += StringUtils::Format(strHMS.empty() ? "{:02}" : ":{:02}", mm);
       if (format & TIME_FORMAT_SS)
-        strHMS += StringUtils::Format(strHMS.empty() ? "%2.2i" : ":%2.2i", ss);
+        strHMS += StringUtils::Format(strHMS.empty() ? "{:02}" : ":{:02}", ss);
     }
 
     if (isNegative)

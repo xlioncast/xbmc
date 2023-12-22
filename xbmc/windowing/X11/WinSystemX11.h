@@ -62,11 +62,12 @@ public:
   bool HasCalibration(const RESOLUTION_INFO &resInfo) override;
   bool UseLimitedColor() override;
 
+  std::vector<std::string> GetConnectedOutputs() override;
+
   // Local to WinSystemX11 only
   Display*  GetDisplay() { return m_dpy; }
   int GetScreen() { return m_screen; }
   void NotifyXRREvent();
-  void GetConnectedOutputs(std::vector<std::string> *outputs);
   bool IsCurrentOutput(const std::string& output);
   void RecreateWindow();
   int GetCrtc() { return m_crtc; }
@@ -82,10 +83,10 @@ protected:
 
   void OnLostDevice();
 
-  Window m_glWindow, m_mainWindow;
+  Window m_glWindow = 0, m_mainWindow = 0;
   int m_screen = 0;
   Display *m_dpy;
-  Cursor m_invisibleCursor;
+  Cursor m_invisibleCursor = 0;
   Pixmap m_icon;
   bool m_bIsRotated;
   bool m_bWasFullScreenBeforeMinimize;
@@ -94,7 +95,7 @@ protected:
   CCriticalSection m_resourceSection;
   std::vector<IDispResource*>  m_resources;
   bool m_delayDispReset;
-  XbmcThreads::EndTime m_dispResetTimer;
+  XbmcThreads::EndTime<> m_dispResetTimer;
   std::string m_currentOutput;
   std::string m_userOutput;
   bool m_windowDirty;

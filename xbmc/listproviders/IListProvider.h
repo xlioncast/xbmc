@@ -23,21 +23,26 @@ class IListProvider
 {
 public:
   explicit IListProvider(int parentID) : m_parentID(parentID) {}
+  explicit IListProvider(const IListProvider& other) = default;
   virtual ~IListProvider() = default;
 
   /*! \brief Factory to create list providers.
    \param parent a parent TiXmlNode for the container.
    \param parentID id of parent window for context.
-   \return the list provider, NULL if none.
+   \return the list provider, empty pointer if none.
    */
-  static IListProvider *Create(const TiXmlNode *parent, int parentID);
+  static std::unique_ptr<IListProvider> Create(const TiXmlNode* parent, int parentID);
 
   /*! \brief Factory to create list providers.  Cannot create a multi-provider.
    \param content the TiXmlNode for the content to create.
    \param parentID id of parent window for context.
-   \return the list provider, NULL if none.
+   \return the list provider, empty pointer if none.
    */
-  static IListProvider *CreateSingle(const TiXmlNode *content, int parentID);
+  static std::unique_ptr<IListProvider> CreateSingle(const TiXmlNode* content, int parentID);
+
+  /*! \brief Create an instance of the derived class. Allows for polymorphic copies.
+   */
+  virtual std::unique_ptr<IListProvider> Clone() = 0;
 
   /*! \brief Update the list content
    \return true if the content has changed, false otherwise.
@@ -57,13 +62,24 @@ public:
   /*! \brief Reset the current list of items.
    Derived classes may choose to ignore this.
    */
-  virtual void Reset() {};
+  virtual void Reset() {}
+
+  /*! \brief Free all GUI resources allocated by the items.
+   \param immediately true to free resources immediately, free resources async later otherwise.
+   */
+  virtual void FreeResources(bool immediately) {}
 
   /*! \brief Click event on an item.
    \param item the item that was clicked.
    \return true if the click was handled, false otherwise.
    */
   virtual bool OnClick(const CGUIListItemPtr &item)=0;
+
+  /*! \brief Play event on an item.
+   \param item the item to play.
+   \return true if the event was handled, false otherwise.
+   */
+  virtual bool OnPlay(const CGUIListItemPtr& item) { return false; }
 
   /*! \brief Open the info dialog for an item provided by this IListProvider.
    \param item the item that was clicked.
@@ -82,7 +98,7 @@ public:
    \param always whether this item should always be used on first focus.
    \sa GetDefaultItem, AlwaysFocusDefaultItem
    */
-  virtual void SetDefaultItem(int item, bool always) {};
+  virtual void SetDefaultItem(int item, bool always) {}
 
   /*! \brief The default item to focus.
    \return the item to focus by default. -1 for none.

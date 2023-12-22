@@ -1,11 +1,5 @@
-include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile
-
-# lib name, version
-LIBNAME=fribidi
-VERSION=1.0.10
-SOURCE=$(LIBNAME)-$(VERSION)
-ARCHIVE=$(SOURCE).tar.gz
+include ../../Makefile.include FRIBIDI-VERSION ../../download-files.include
+DEPS = ../../Makefile.include Makefile FRIBIDI-VERSION ../../download-files.include
 
 MESON_BUILD_TYPE=release
 
@@ -17,30 +11,23 @@ endif
 CONFIGURE = $(NATIVEPREFIX)/bin/python3 $(NATIVEPREFIX)/bin/meson \
 	--buildtype=$(MESON_BUILD_TYPE) \
 	--prefix=$(PREFIX) \
+	--cross-file $(PREFIX)/share/cross-file.meson \
 	-Ddocs=false \
 	-Dtests=false \
 	-Dbin=false \
 	-Ddefault_library=static
 
-ifeq ($(CROSS_COMPILING), yes)
-CONFIGURE += --cross-file $(PREFIX)/share/cross-file.meson
-export CC=$(CC_FOR_BUILD)
-export CXX=$(CXX_FOR_BUILD)
-export CFLAGS=$(CFLAGS_FOR_BUILD)
-export CXXFLAGS=$(CXXFLAGS_FOR_BUILD)
-else
-export CC CXX CFLAGS CXXFLAGS
-endif
+export CC_FOR_BUILD
+export CFLAGS_FOR_BUILD = $(NATIVE_CFLAGS)
+export LDFLAGS_FOR_BUILD = $(NATIVE_LDFLAGS)
+
 export PKG_CONFIG_LIBDIR=$(PREFIX)/lib/pkgconfig
 
 LIBDYLIB=$(PLATFORM)/build/lib/lib$(LIBNAME).a
 
 all: .installed-$(PLATFORM)
 
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); $(CONFIGURE) . build

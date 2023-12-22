@@ -1,40 +1,33 @@
-include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile
-
-# lib name, version
-LIBNAME=libnfs
-VERSION=17f882fbdbe7f739d1285f173781c1525a29a7fa
-# Github commit date of version hash
-COMMITDATE=2020-06-09
-ARCHIVE=$(LIBNAME)-$(VERSION).tar.gz
+include ../../Makefile.include LIBNFS-VERSION ../../download-files.include
+DEPS= ../../Makefile.include Makefile LIBNFS-VERSION ../../download-files.include
 
 # configuration settings
-CONFIGURE=./configure --prefix=$(PREFIX) --disable-shared --disable-utils --disable-examples
+CMAKE_OPTIONS=-DBUILD_SHARED_LIBS=OFF \
+              -DENABLE_TESTS=OFF \
+              -DENABLE_DOCUMENTATION=OFF \
+              -DENABLE_UTILS=OFF \
+              -DENABLE_EXAMPLES=OFF
 
-LIBDYLIB=$(PLATFORM)/lib/.libs/$(LIBNAME).a
+LIBDYLIB=$(PLATFORM)/build/lib/$(BYPRODUCT)
 
 all: .installed-$(PLATFORM)
 
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	-rm -rf $(PLATFORM); mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
-	cd $(PLATFORM); ./bootstrap
-	cd $(PLATFORM); $(CONFIGURE)
+	cd $(PLATFORM); mkdir -p build
+	cd $(PLATFORM)/build; $(CMAKE) $(CMAKE_OPTIONS) ..
 
 $(LIBDYLIB): $(PLATFORM)
-	$(MAKE) -C $(PLATFORM)
+	$(MAKE) -C $(PLATFORM)/build
 
 .installed-$(PLATFORM): $(LIBDYLIB)
-	$(MAKE) -C $(PLATFORM) install
+	$(MAKE) -C $(PLATFORM)/build install
 	touch $@
 
 clean:
-	$(MAKE) -C $(PLATFORM) clean
-	rm -r .installed-$(PLATFORM)
-	rm -rf $(PLATFORM)
+	$(MAKE) -C $(PLATFORM)/build clean
+	rm -f .installed-$(PLATFORM)
 
 distclean::
 	rm -rf $(PLATFORM) .installed-$(PLATFORM)

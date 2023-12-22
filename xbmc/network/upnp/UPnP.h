@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include "threads/CriticalSection.h"
+
 #include <string>
 
 class NPT_LogHandler;
@@ -69,6 +71,8 @@ public:
     static bool SaveFileState(const CFileItem& item,
                               const CBookmark& bookmark,
                               const bool updatePlayCount);
+    static bool UpdateItem(const std::string& path,
+                           const CFileItem& item);
 
     static void RegisterUserdata(void* ptr);
     static void UnregisterUserdata(void* ptr);
@@ -83,7 +87,9 @@ private:
     CUPnPRenderer* CreateRenderer(int port = 0);
     CUPnPServer*   CreateServer(int port = 0);
 
-public:
+    CCriticalSection m_lockMediaBrowser;
+
+  public:
     PLT_SyncMediaBrowser*       m_MediaBrowser;
     PLT_MediaController*        m_MediaController;
 

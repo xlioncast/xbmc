@@ -9,7 +9,7 @@
 #pragma once
 
 #include "GUIColorManager.h"
-#include "utils/Color.h"
+#include "utils/ColorUtils.h"
 #include "utils/Geometry.h"
 
 #include <map>
@@ -36,7 +36,7 @@ typedef enum SHADER_METHOD {
 class ID3DResource
 {
 public:
-  virtual ~ID3DResource() {};
+  virtual ~ID3DResource() {}
 
   virtual void OnDestroyDevice(bool fatal)=0;
   virtual void OnCreateDevice()=0;
@@ -101,7 +101,7 @@ public:
   bool UnlockRect(UINT subresource) const;
 
   // Accessors
-  ID3D11Texture2D* Get() const { return m_texture.Get(); };
+  ID3D11Texture2D* Get() const { return m_texture.Get(); }
   ID3D11ShaderResourceView* GetShaderResource(DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
   ID3D11ShaderResourceView** GetAddressOfSRV(DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
   ID3D11RenderTargetView* GetRenderTarget();
@@ -112,17 +112,31 @@ public:
   void GenerateMipmaps();
 
   // static methods
-  static void DrawQuad(const CPoint points[4], UTILS::Color color, CD3DTexture *texture, const CRect *texCoords,
-    SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
+  static void DrawQuad(const CPoint points[4],
+                       UTILS::COLOR::Color color,
+                       CD3DTexture* texture,
+                       const CRect* texCoords,
+                       SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
 
-  static void DrawQuad(const CPoint points[4], UTILS::Color color, unsigned numViews, ID3D11ShaderResourceView **view, const CRect *texCoords,
-    SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
+  static void DrawQuad(const CPoint points[4],
+                       UTILS::COLOR::Color color,
+                       unsigned numViews,
+                       ID3D11ShaderResourceView** view,
+                       const CRect* texCoords,
+                       SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
 
-  static void DrawQuad(const CRect &coords, UTILS::Color color, CD3DTexture *texture, const CRect *texCoords,
-    SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
+  static void DrawQuad(const CRect& coords,
+                       UTILS::COLOR::Color color,
+                       CD3DTexture* texture,
+                       const CRect* texCoords,
+                       SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
 
-  static void DrawQuad(const CRect &coords, UTILS::Color color, unsigned numViews, ID3D11ShaderResourceView **view, const CRect *texCoords,
-    SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
+  static void DrawQuad(const CRect& coords,
+                       UTILS::COLOR::Color color,
+                       unsigned numViews,
+                       ID3D11ShaderResourceView** view,
+                       const CRect* texCoords,
+                       SHADER_METHOD options = SHADER_METHOD_RENDER_TEXTURE_BLEND);
 
   void OnDestroyDevice(bool fatal) override;
   void OnCreateDevice() override;
@@ -176,7 +190,7 @@ public:
   bool EndPass();
   bool End();
 
-  ID3DX11Effect *Get() const { return m_effect.Get(); };
+  ID3DX11Effect* Get() const { return m_effect.Get(); }
 
   void OnDestroyDevice(bool fatal) override;
   void OnCreateDevice() override;
@@ -206,7 +220,7 @@ public:
   void Release();
   unsigned int GetStride() { return m_stride; }
   DXGI_FORMAT GetFormat() { return m_format; }
-  ID3D11Buffer* Get() const { return m_buffer.Get(); };
+  ID3D11Buffer* Get() const { return m_buffer.Get(); }
 
   void OnDestroyDevice(bool fatal) override;
   void OnCreateDevice() override;

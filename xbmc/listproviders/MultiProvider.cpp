@@ -8,8 +8,9 @@
 
 #include "MultiProvider.h"
 
-#include "threads/SingleLock.h"
 #include "utils/XBMCTinyXML.h"
+
+#include <mutex>
 
 CMultiProvider::CMultiProvider(const TiXmlNode *first, int parentID)
  : IListProvider(parentID)
@@ -18,8 +19,23 @@ CMultiProvider::CMultiProvider(const TiXmlNode *first, int parentID)
   {
     IListProviderPtr sub(IListProvider::CreateSingle(content, parentID));
     if (sub)
-      m_providers.push_back(sub);
+      m_providers.push_back(std::move(sub));
   }
+}
+
+CMultiProvider::CMultiProvider(const CMultiProvider& other) : IListProvider(other.m_parentID)
+{
+  for (const auto& provider : other.m_providers)
+  {
+    std::unique_ptr<IListProvider> newProvider = provider->Clone();
+    if (newProvider)
+      m_providers.emplace_back(std::move(newProvider));
+  }
+}
+
+std::unique_ptr<IListProvider> CMultiProvider::Clone()
+{
+  return std::make_unique<CMultiProvider>(*this);
 }
 
 bool CMultiProvider::Update(bool forceRefresh)
@@ -32,7 +48,7 @@ bool CMultiProvider::Update(bool forceRefresh)
 
 void CMultiProvider::Fetch(std::vector<CGUIListItemPtr> &items)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
   std::vector<CGUIListItemPtr> subItems;
   items.clear();
   m_itemMap.clear();
@@ -42,7 +58,7 @@ void CMultiProvider::Fetch(std::vector<CGUIListItemPtr> &items)
     for (auto& item : subItems)
     {
       auto key = GetItemKey(item);
-      m_itemMap[key] = provider;
+      m_itemMap[key] = provider.get();
       items.push_back(item);
     }
     subItems.clear();
@@ -60,7 +76,7 @@ bool CMultiProvider::IsUpdating() const
 void CMultiProvider::Reset()
 {
   {
-    CSingleLock lock(m_section);
+    std::unique_lock<CCriticalSection> lock(m_section);
     m_itemMap.clear();
   }
 
@@ -70,7 +86,7 @@ void CMultiProvider::Reset()
 
 bool CMultiProvider::OnClick(const CGUIListItemPtr &item)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
   auto key = GetItemKey(item);
   auto it = m_itemMap.find(key);
   if (it != m_itemMap.end())
@@ -81,7 +97,7 @@ bool CMultiProvider::OnClick(const CGUIListItemPtr &item)
 
 bool CMultiProvider::OnInfo(const CGUIListItemPtr &item)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
   auto key = GetItemKey(item);
   auto it = m_itemMap.find(key);
   if (it != m_itemMap.end())
@@ -92,7 +108,7 @@ bool CMultiProvider::OnInfo(const CGUIListItemPtr &item)
 
 bool CMultiProvider::OnContextMenu(const CGUIListItemPtr &item)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
   auto key = GetItemKey(item);
   auto it = m_itemMap.find(key);
   if (it != m_itemMap.end())

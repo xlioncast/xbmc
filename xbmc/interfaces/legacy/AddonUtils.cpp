@@ -7,10 +7,11 @@
  */
 
 #include "AddonUtils.h"
-#include "Application.h"
-#include "utils/XBMCTinyXML.h"
-#include "addons/Skin.h"
+
 #include "LanguageHook.h"
+#include "addons/Skin.h"
+#include "application/Application.h"
+#include "utils/XBMCTinyXML.h"
 #ifdef ENABLE_XBMC_TRACE_API
 #include "utils/log.h"
 #endif
@@ -97,7 +98,7 @@ namespace XBMCAddonUtils
 
     tlParent = this;
 
-    CLog::Log(LOGDEBUG, "%sNEWADDON Entering %s", spaces[depth], function);
+    CLog::Log(LOGDEBUG, "{}NEWADDON Entering {}", spaces[depth], function);
   }
 
   TraceGuard::TraceGuard() :function(NULL)
@@ -111,7 +112,7 @@ namespace XBMCAddonUtils
   TraceGuard::~TraceGuard()
   {
     if (function)
-      CLog::Log(LOGDEBUG, "%sNEWADDON Leaving %s", spaces[depth], function);
+      CLog::Log(LOGDEBUG, "{}NEWADDON Leaving {}", spaces[depth], function);
 
     // need to pop the stack
     tlParent = this->parent;

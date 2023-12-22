@@ -9,22 +9,34 @@
 #pragma once
 
 #include "DVDOverlayCodec.h"
+#include "DVDStreamInfo.h"
+#include "DVDSubtitles/SubtitlesAdapter.h"
 
-class CDVDOverlayText;
+extern "C"
+{
+#include <libavcodec/avcodec.h>
+}
 
-class CDVDOverlayCodecText : public CDVDOverlayCodec
+class CDVDOverlay;
+
+class CDVDOverlayCodecText : public CDVDOverlayCodec, private CSubtitlesAdapter
 {
 public:
   CDVDOverlayCodecText();
-  ~CDVDOverlayCodecText() override;
-  bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options) override;
-  void Dispose() override;
-  int Decode(DemuxPacket *pPacket) override;
+  ~CDVDOverlayCodecText() override = default;
+  bool Open(CDVDStreamInfo& hints, CDVDCodecOptions& options) override;
+  OverlayMessage Decode(DemuxPacket* pPacket) override;
   void Reset() override;
   void Flush() override;
-  CDVDOverlay* GetOverlay() override;
+  std::shared_ptr<CDVDOverlay> GetOverlay() override;
+
+  // Specialization of CSubtitlesAdapter
+  void PostProcess(std::string& text) override;
 
 private:
-  bool             m_bIsSSA;
-  CDVDOverlayText* m_pOverlay;
+  std::shared_ptr<CDVDOverlay> m_pOverlay;
+  CDVDStreamInfo m_hints;
+  int m_prevSubId{-1};
+  bool m_changePrevStopTime{false};
+  AVCodecID m_codecId{AV_CODEC_ID_NONE};
 };

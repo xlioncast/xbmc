@@ -13,24 +13,9 @@
 #include <math.h>
 
 extern "C" {
+#include <libavutil/channel_layout.h>
 #include <libavutil/samplefmt.h>
 }
-
-#if defined(HAVE_SSE) && defined(__SSE__)
-#include <xmmintrin.h>
-#else
-#define __m128 void
-#endif
-
-#if defined(HAVE_SSE2) && defined(__SSE2__)
-#include <emmintrin.h>
-#endif
-
-#ifdef __GNUC__
-  #define MEMALIGN(b, x) x __attribute__((aligned(b)))
-#else
-  #define MEMALIGN(b, x) __declspec(align(b)) x
-#endif
 
 // AV sync options
 enum AVSync
@@ -106,10 +91,6 @@ private:
 class CAEUtil
 {
 private:
-  static unsigned int m_seed;
-  #if defined(HAVE_SSE2) && defined(__SSE2__)
-    static __m128i m_sseSeed;
-  #endif
 
   static float SoftClamp(const float x);
 
@@ -191,6 +172,7 @@ public:
   static uint64_t GetAVChannelLayout(const CAEChannelInfo &info);
   static CAEChannelInfo GetAEChannelLayout(uint64_t layout);
   static AVSampleFormat GetAVSampleFormat(AEDataFormat format);
-  static uint64_t GetAVChannel(enum AEChannel aechannel);
+  static uint64_t GetAVChannelMask(enum AEChannel aechannel);
+  static enum AVChannel GetAVChannel(enum AEChannel aechannel);
   static int GetAVChannelIndex(enum AEChannel aechannel, uint64_t layout);
 };

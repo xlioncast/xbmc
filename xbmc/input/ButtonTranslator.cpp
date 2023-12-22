@@ -16,14 +16,14 @@
 #include "IRTranslator.h"
 #include "Key.h"
 #include "KeyboardTranslator.h"
-#include "Util.h"
 #include "WindowTranslator.h"
 #include "filesystem/Directory.h"
 #include "guilib/WindowIDs.h"
 #include "input/actions/ActionIDs.h"
 #include "input/actions/ActionTranslator.h"
 #include "input/mouse/MouseTranslator.h"
-#include "utils/XBMCTinyXML.h"
+#include "utils/StringUtils.h"
+#include "utils/XBMCTinyXML2.h"
 #include "utils/log.h"
 
 #include <algorithm>
@@ -114,8 +114,8 @@ bool CButtonTranslator::Load()
 
   if (!success)
   {
-    CLog::Log(LOGERROR, "Error loading keymaps from: %s or %s or %s", DIRS_TO_CHECK[0].c_str(),
-              DIRS_TO_CHECK[1].c_str(), DIRS_TO_CHECK[2].c_str());
+    CLog::Log(LOGERROR, "Error loading keymaps from: {} or {} or {}", DIRS_TO_CHECK[0],
+              DIRS_TO_CHECK[1], DIRS_TO_CHECK[2]);
     return false;
   }
 
@@ -125,35 +125,35 @@ bool CButtonTranslator::Load()
 
 bool CButtonTranslator::LoadKeymap(const std::string& keymapPath)
 {
-  CXBMCTinyXML xmlDoc;
+  CXBMCTinyXML2 xmlDoc;
 
-  CLog::Log(LOGINFO, "Loading %s", keymapPath.c_str());
+  CLog::Log(LOGINFO, "Loading {}", keymapPath);
   if (!xmlDoc.LoadFile(keymapPath))
   {
-    CLog::Log(LOGERROR, "Error loading keymap: %s, Line %d\n%s", keymapPath.c_str(),
-              xmlDoc.ErrorRow(), xmlDoc.ErrorDesc());
+    CLog::Log(LOGERROR, "Error loading keymap: {}, Line {}\n{}", keymapPath, xmlDoc.ErrorLineNum(),
+              xmlDoc.ErrorStr());
     return false;
   }
 
-  TiXmlElement* pRoot = xmlDoc.RootElement();
+  auto* pRoot = xmlDoc.RootElement();
   if (pRoot == nullptr)
   {
-    CLog::Log(LOGERROR, "Error getting keymap root: %s", keymapPath.c_str());
+    CLog::Log(LOGERROR, "Error getting keymap root: {}", keymapPath);
     return false;
   }
 
   std::string strValue = pRoot->Value();
   if (strValue != "keymap")
   {
-    CLog::Log(LOGERROR, "%s Doesn't contain <keymap>", keymapPath.c_str());
+    CLog::Log(LOGERROR, "{} Doesn't contain <keymap>", keymapPath);
     return false;
   }
 
   // run through our window groups
-  TiXmlNode* pWindow = pRoot->FirstChild();
+  auto* pWindow = pRoot->FirstChild();
   while (pWindow != nullptr)
   {
-    if (pWindow->Type() == TiXmlNode::TINYXML_ELEMENT)
+    if (pWindow->ToElement())
     {
       int windowID = WINDOW_INVALID;
       const char* szWindow = pWindow->Value();
@@ -270,7 +270,7 @@ unsigned int CButtonTranslator::GetActionCode(int window,
   // Some buttoncodes changed in Hardy
   if (action == ACTION_NONE && (code & KEY_VKEY) == KEY_VKEY && (code & 0x0F00))
   {
-    CLog::Log(LOGDEBUG, "%s: Trying Hardy keycode for %#04x", __FUNCTION__, code);
+    CLog::Log(LOGDEBUG, "{}: Trying Hardy keycode for {:#04x}", __FUNCTION__, code);
     code &= ~0x0F00;
     it2 = (*it).second.find(code);
     if (it2 != (*it).second.end())
@@ -306,20 +306,18 @@ void CButtonTranslator::MapAction(uint32_t buttonCode, const std::string& szActi
   }
 }
 
-void CButtonTranslator::MapWindowActions(const TiXmlNode* pWindow, int windowID)
+void CButtonTranslator::MapWindowActions(const tinyxml2::XMLNode* pWindow, int windowID)
 {
   if (pWindow == nullptr || windowID == WINDOW_INVALID)
     return;
-
-  const TiXmlNode* pDevice;
 
   static const std::vector<std::string> types = {"gamepad",  "remote", "universalremote",
                                                  "keyboard", "mouse",  "appcommand"};
 
   for (const auto& type : types)
   {
-    for (pDevice = pWindow->FirstChild(type); pDevice != nullptr;
-         pDevice = pDevice->NextSiblingElement(type))
+    for (auto* pDevice = pWindow->FirstChildElement(type.c_str()); pDevice != nullptr;
+         pDevice = pDevice->NextSiblingElement(type.c_str()))
     {
       buttonMap map;
       std::map<int, buttonMap>::iterator it = m_translatorMap.find(windowID);
@@ -329,7 +327,7 @@ void CButtonTranslator::MapWindowActions(const TiXmlNode* pWindow, int windowID)
         m_translatorMap.erase(it);
       }
 
-      const TiXmlElement* pButton = pDevice->FirstChildElement();
+      const auto* pButton = pDevice->FirstChildElement();
 
       while (pButton != nullptr)
       {
@@ -377,11 +375,11 @@ void CButtonTranslator::MapWindowActions(const TiXmlNode* pWindow, int windowID)
     IButtonMapper* mapper = it.second;
 
     // Map device actions
-    pDevice = pWindow->FirstChild(device);
-    while (pDevice != nullptr)
+    auto* pDevice = pWindow->FirstChildElement(device.c_str());
+    while (pDevice)
     {
       mapper->MapActions(windowID, pDevice);
-      pDevice = pDevice->NextSibling(device);
+      pDevice = pDevice->NextSiblingElement(device.c_str());
     }
   }
 }
@@ -399,7 +397,7 @@ void CButtonTranslator::RegisterMapper(const std::string& device, IButtonMapper*
   m_buttonMappers[device] = mapper;
 }
 
-void CButtonTranslator::UnregisterMapper(IButtonMapper* mapper)
+void CButtonTranslator::UnregisterMapper(const IButtonMapper* mapper)
 {
   for (auto it = m_buttonMappers.begin(); it != m_buttonMappers.end(); ++it)
   {

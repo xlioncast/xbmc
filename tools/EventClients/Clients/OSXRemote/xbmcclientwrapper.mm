@@ -78,8 +78,10 @@ typedef std::map<eATVClientEvent, CPacketBUTTON*> tEventMap;
 typedef std::map<XBMCClientEventSequence, CPacketBUTTON*> tSequenceMap;
 typedef std::map<std::pair<int, eATVClientEvent>, CPacketBUTTON*> tMultiRemoteMap;
 
-class  XBMCClientWrapperImpl{
-	tEventMap m_event_map;
+struct XBMCClientWrapperImpl
+{
+private:
+  tEventMap m_event_map;
   tSequenceMap m_sequence_map;
   tMultiRemoteMap m_multiremote_map;
   eRemoteMode m_mode;
@@ -87,9 +89,9 @@ class  XBMCClientWrapperImpl{
   std::string	m_address;
   int         m_port;
   XBMCClientEventSequence m_sequence;
-  CFRunLoopTimerRef	m_timer;
-  double m_sequence_timeout;
-  int m_device_id;
+  CFRunLoopTimerRef m_timer = 0;
+  double m_sequence_timeout = 0.5;
+  int m_device_id = 150;
   bool m_verbose_mode;
   void populateEventMap();
   void populateSequenceMap();
@@ -147,15 +149,12 @@ void XBMCClientWrapperImpl::restartTimer(){
 	CFRunLoopAddTimer(CFRunLoopGetCurrent(), m_timer, kCFRunLoopCommonModes);
 }
 
-XBMCClientWrapperImpl::XBMCClientWrapperImpl(eRemoteMode f_mode, const std::string& fcr_address, int f_port, bool f_verbose_mode):
-    m_mode(f_mode),
-    m_address(fcr_address),
-    m_port(f_port),
-    m_timer(0),
-    m_sequence_timeout(0.5),
-    m_device_id(150),
-    m_verbose_mode(f_verbose_mode)
-  {
+XBMCClientWrapperImpl::XBMCClientWrapperImpl(eRemoteMode f_mode,
+                                             const std::string& fcr_address,
+                                             int f_port,
+                                             bool f_verbose_mode)
+  : m_mode(f_mode), m_address(fcr_address), m_port(f_port), m_verbose_mode(f_verbose_mode)
+{
     if(m_mode == MULTIREMOTE_MODE){
       if(m_verbose_mode)
         NSLog(@"XBMCClientWrapperImpl started in multiremote mode sending to address %s, port %i", fcr_address.c_str(), f_port);
@@ -412,10 +411,11 @@ void XBMCClientWrapperImpl::populateMultiRemoteModeMap(){
   return [self initWithMode:DEFAULT_MODE serverAddress:@"localhost" port:9777 verbose: false];
 }
 - (id) initWithMode:(eRemoteMode) f_mode serverAddress:(NSString*) fp_server port:(int) f_port verbose:(bool) f_verbose{
-	if( ![super init] )
-		return nil;
-	mp_impl = new XBMCClientWrapperImpl(f_mode, [fp_server UTF8String], f_port, f_verbose);
-	return self;
+  self = [super init];
+  if (self)
+    mp_impl = new XBMCClientWrapperImpl(f_mode, [fp_server UTF8String], f_port, f_verbose);
+
+  return self;
 }
 
 - (void) setUniversalModeTimeout:(double) f_timeout{

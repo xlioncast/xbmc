@@ -14,6 +14,11 @@
 #include "utils/StringUtils.h"
 #include "windowing/GraphicContext.h"
 
+#include <stdexcept>
+
+CreateGUITextureFunc CGUITexture::m_createGUITextureFunc;
+DrawQuadFunc CGUITexture::m_drawQuadFunc;
+
 CTextureInfo::CTextureInfo()
 {
   orientation = 0;
@@ -25,6 +30,35 @@ CTextureInfo::CTextureInfo(const std::string &file):
 {
   orientation = 0;
   useLarge = false;
+}
+
+void CGUITexture::Register(const CreateGUITextureFunc& createFunction,
+                           const DrawQuadFunc& drawQuadFunction)
+{
+  m_createGUITextureFunc = createFunction;
+  m_drawQuadFunc = drawQuadFunction;
+}
+
+CGUITexture* CGUITexture::CreateTexture(
+    float posX, float posY, float width, float height, const CTextureInfo& texture)
+{
+  if (!m_createGUITextureFunc)
+    throw std::runtime_error(
+        "No GUITexture Create function available. Did you forget to register?");
+
+  return m_createGUITextureFunc(posX, posY, width, height, texture);
+}
+
+void CGUITexture::DrawQuad(const CRect& coords,
+                           UTILS::COLOR::Color color,
+                           CTexture* texture,
+                           const CRect* texCoords)
+{
+  if (!m_drawQuadFunc)
+    throw std::runtime_error(
+        "No GUITexture DrawQuad function available. Did you forget to register?");
+
+  m_drawQuadFunc(coords, color, texture, texCoords);
 }
 
 CGUITexture::CGUITexture(
@@ -145,11 +179,12 @@ void CGUITexture::Render()
   #define MIX_ALPHA(a,c) (((a * (c >> 24)) / 255) << 24) | (c & 0x00ffffff)
 
   // diffuse color
-  UTILS::Color color = (m_info.diffuseColor) ? (UTILS::Color)m_info.diffuseColor : m_diffuseColor;
+  UTILS::COLOR::Color color =
+      (m_info.diffuseColor) ? (UTILS::COLOR::Color)m_info.diffuseColor : m_diffuseColor;
   if (m_alpha != 0xFF)
 	  color = MIX_ALPHA(m_alpha, color);
 
-  color = CServiceBroker::GetWinSystem()->GetGfxContext().MergeAlpha(color);
+  color = CServiceBroker::GetWinSystem()->GetGfxContext().MergeColor(color);
 
   // setup our renderer
   Begin(color);
@@ -189,7 +224,9 @@ void CGUITexture::Render()
   // middle segment (u1,0,u2,v3)
   if (m_info.border.y1)
     Render(m_vertex.x1 + m_info.border.x1, m_vertex.y1, m_vertex.x2 - m_info.border.x2, m_vertex.y1 + m_info.border.y1, u1, 0, u2, v1, u3, v3);
-  Render(m_vertex.x1 + m_info.border.x1, m_vertex.y1 + m_info.border.y1, m_vertex.x2 - m_info.border.x2, m_vertex.y2 - m_info.border.y2, u1, v1, u2, v2, u3, v3);
+  if (m_info.m_infill)
+    Render(m_vertex.x1 + m_info.border.x1, m_vertex.y1 + m_info.border.y1,
+           m_vertex.x2 - m_info.border.x2, m_vertex.y2 - m_info.border.y2, u1, v1, u2, v2, u3, v3);
   if (m_info.border.y2)
     Render(m_vertex.x1 + m_info.border.x1, m_vertex.y2 - m_info.border.y2, m_vertex.x2 - m_info.border.x2, m_vertex.y2, u1, v2, u2, v3, u3, v3);
   // right segment
@@ -243,7 +280,7 @@ void CGUITexture::Render(float left,
 
   float x[4], y[4], z[4];
 
-#define ROUND_TO_PIXEL(x) (float)(MathUtils::round_int(x))
+#define ROUND_TO_PIXEL(x) static_cast<float>(MathUtils::round_int(static_cast<double>(x)))
 
   x[0] = ROUND_TO_PIXEL(CServiceBroker::GetWinSystem()->GetGfxContext().ScaleFinalXCoord(vertex.x1, vertex.y1));
   y[0] = ROUND_TO_PIXEL(CServiceBroker::GetWinSystem()->GetGfxContext().ScaleFinalYCoord(vertex.x1, vertex.y1));
@@ -527,11 +564,12 @@ bool CGUITexture::SetAlpha(unsigned char alpha)
   return changed;
 }
 
-bool CGUITexture::SetDiffuseColor(UTILS::Color color)
+bool CGUITexture::SetDiffuseColor(UTILS::COLOR::Color color,
+                                  const CGUIListItem* item /* = nullptr */)
 {
   bool changed = m_diffuseColor != color;
   m_diffuseColor = color;
-  changed |= m_info.diffuseColor.Update();
+  changed |= m_info.diffuseColor.Update(item);
   return changed;
 }
 

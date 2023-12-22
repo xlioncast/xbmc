@@ -12,6 +12,7 @@
 #include <lcms2.h>
 #endif
 
+#include <cstdint>
 #include <string>
 
 extern "C"
@@ -100,7 +101,7 @@ public:
   bool CheckConfiguration(int cmsToken, AVColorPrimaries srcPrimaries);
 
   /*!
-  \brief Get a 3D LUT dimention and data size for video color correction
+  \brief Get a 3D LUT dimension and data size for video color correction
   \param format required format of CLUT data
   \param clutSize pointer to CLUT resolution
   \param dataSize pointer to CLUT data size
@@ -149,7 +150,7 @@ private:
 
 
   // create a gamma curve
-  cmsToneCurve* CreateToneCurve(CMS_TRC_TYPE gammaType, float gammaValue, cmsCIEXYZ blackPoint);
+  cmsToneCurve* CreateToneCurve(CMS_TRC_TYPE gammaType, double gammaValue, cmsCIEXYZ blackPoint);
 
   // create a source profile
   cmsHPROFILE CreateSourceProfile(CMS_PRIMARIES primaries, cmsToneCurve *gamma, CMS_WHITEPOINT whitepoint);
@@ -165,7 +166,7 @@ private:
   void Create3dLut(cmsHTRANSFORM transform, CMS_DATA_FORMAT format, int clutSize, uint16_t *clutData);
 
   // keep current display profile loaded here
-  cmsHPROFILE m_hProfile;
+  cmsHPROFILE m_hProfile = nullptr;
   cmsCIEXYZ   m_blackPoint = { 0, 0, 0 };
 
   // display parameters (gamma, input/output offset, primaries, whitepoint, intent?)

@@ -14,12 +14,13 @@
 
 #include "platform/android/activity/XBMCApp.h"
 
+#include <mutex>
+
 #include <androidjni/ConnectivityManager.h>
 #include <androidjni/InetAddress.h>
 #include <androidjni/LinkAddress.h>
+#include <androidjni/NetworkInfo.h>
 #include <androidjni/RouteInfo.h>
-#include <androidjni/WifiInfo.h>
-#include <androidjni/WifiManager.h>
 #include <arpa/inet.h>
 #include <net/if_arp.h>
 #include <netinet/in.h>
@@ -78,13 +79,10 @@ std::string CNetworkInterfaceAndroid::GetMacAddress() const
   }
   if (interfaceMacAddrRaw.size() >= 6)
   {
-    return (StringUtils::Format("%02X:%02X:%02X:%02X:%02X:%02X",
-                                      (uint8_t)interfaceMacAddrRaw[0],
-                                      (uint8_t)interfaceMacAddrRaw[1],
-                                      (uint8_t)interfaceMacAddrRaw[2],
-                                      (uint8_t)interfaceMacAddrRaw[3],
-                                      (uint8_t)interfaceMacAddrRaw[4],
-                                      (uint8_t)interfaceMacAddrRaw[5]));
+    return (StringUtils::Format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                                (uint8_t)interfaceMacAddrRaw[0], (uint8_t)interfaceMacAddrRaw[1],
+                                (uint8_t)interfaceMacAddrRaw[2], (uint8_t)interfaceMacAddrRaw[3],
+                                (uint8_t)interfaceMacAddrRaw[4], (uint8_t)interfaceMacAddrRaw[5]));
   }
   return "";
 }
@@ -127,7 +125,7 @@ bool CNetworkInterfaceAndroid::GetHostMacAddress(unsigned long host_ip, std::str
 
     if (result != 0)
     {
-      //  CLog::Log(LOGERROR, "%s - GetHostMacAddress/ioctl failed with errno (%d)", __FUNCTION__, errno);
+      //  CLog::Log(LOGERROR, "{} - GetHostMacAddress/ioctl failed with errno ({})", __FUNCTION__, errno);
       return false;
     }
   }
@@ -135,9 +133,10 @@ bool CNetworkInterfaceAndroid::GetHostMacAddress(unsigned long host_ip, std::str
     return false;
 
   struct sockaddr* res = &areq.arp_ha;
-  mac = StringUtils::Format("%02X:%02X:%02X:%02X:%02X:%02X",
-    (uint8_t) res->sa_data[0], (uint8_t) res->sa_data[1], (uint8_t) res->sa_data[2],
-    (uint8_t) res->sa_data[3], (uint8_t) res->sa_data[4], (uint8_t) res->sa_data[5]);
+  mac = StringUtils::Format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", (uint8_t)res->sa_data[0],
+                            (uint8_t)res->sa_data[1], (uint8_t)res->sa_data[2],
+                            (uint8_t)res->sa_data[3], (uint8_t)res->sa_data[4],
+                            (uint8_t)res->sa_data[5]);
 
   for (int i=0; i<6; ++i)
     if (res->sa_data[i])
@@ -186,22 +185,23 @@ std::string CNetworkInterfaceAndroid::GetCurrentNetmask() const
 
   int prefix = la.getPrefixLength();
   unsigned long mask = (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF;
-  return StringUtils::Format("%lu.%lu.%lu.%lu", mask >> 24, (mask >> 16) & 0xFF, (mask >> 8) & 0xFF, mask & 0xFF);
+  return StringUtils::Format("{}.{}.{}.{}", mask >> 24, (mask >> 16) & 0xFF, (mask >> 8) & 0xFF,
+                             mask & 0xFF);
 }
 
 std::string CNetworkInterfaceAndroid::GetCurrentDefaultGateway() const
 {
   CJNIList<CJNIRouteInfo> ris = m_lp.getRoutes();
+
   for (int i = 0; i < ris.size(); ++i)
   {
     CJNIRouteInfo ri = ris.get(i);
     if (!ri.isDefaultRoute())
       continue;
 
-    CJNIInetAddress ia = ri.getGateway();
-    std::vector<char> adr = ia.getAddress();
-    return StringUtils::Format("%u.%u.%u.%u", adr[0], adr[1], adr[2], adr[3]);
+    return ri.getGateway().getHostAddress();
   }
+
   return "";
 }
 
@@ -228,10 +228,20 @@ std::string CNetworkInterfaceAndroid::GetHostName()
 
 /*************************/
 
-CNetworkAndroid::CNetworkAndroid()
- : CNetworkBase()
+std::unique_ptr<CNetworkBase> CNetworkBase::GetNetwork()
+{
+  return std::make_unique<CNetworkAndroid>();
+}
+
+CNetworkAndroid::CNetworkAndroid() : CNetworkBase(), CJNIXBMCConnectivityManagerNetworkCallback()
 {
   RetrieveInterfaces();
+
+  if (CJNIBase::GetSDKVersion() >= 24)
+  {
+    CJNIConnectivityManager connman{CXBMCApp::getSystemService(CJNIContext::CONNECTIVITY_SERVICE)};
+    connman.registerDefaultNetworkCallback(this->get_raw());
+  }
 }
 
 CNetworkAndroid::~CNetworkAndroid()
@@ -240,6 +250,12 @@ CNetworkAndroid::~CNetworkAndroid()
     delete intf;
   for (auto intf : m_oldInterfaces)
     delete intf;
+
+  if (CJNIBase::GetSDKVersion() >= 24)
+  {
+    CJNIConnectivityManager connman{CXBMCApp::getSystemService(CJNIContext::CONNECTIVITY_SERVICE)};
+    connman.unregisterNetworkCallback(this->get_raw());
+  }
 }
 
 bool CNetworkAndroid::GetHostName(std::string& hostname)
@@ -255,18 +271,23 @@ bool CNetworkAndroid::GetHostName(std::string& hostname)
 
 std::vector<CNetworkInterface*>& CNetworkAndroid::GetInterfaceList()
 {
-  CSingleLock lock(m_refreshMutex);
+  std::unique_lock<CCriticalSection> lock(m_refreshMutex);
   return m_interfaces;
 }
 
 CNetworkInterface* CNetworkAndroid::GetFirstConnectedInterface()
 {
-  CSingleLock lock(m_refreshMutex);
+  std::unique_lock<CCriticalSection> lock(m_refreshMutex);
 
-  for(CNetworkInterface* intf : m_interfaces)
+  if (m_defaultInterface)
+    return m_defaultInterface.get();
+  else
   {
-    if (intf->IsEnabled() && intf->IsConnected() && !intf->GetCurrentDefaultGateway().empty())
-      return intf;
+    for (CNetworkInterface* intf : m_interfaces)
+    {
+      if (intf->IsEnabled() && intf->IsConnected() && !intf->GetCurrentDefaultGateway().empty())
+        return intf;
+    }
   }
 
   return nullptr;
@@ -288,7 +309,8 @@ bool CNetworkAndroid::PingHost(unsigned long remote_ip, unsigned int timeout_ms)
   struct in_addr host_ip;
   host_ip.s_addr = remote_ip;
 
-  sprintf(cmd_line, "ping -c 1 -w %d %s", timeout_ms / 1000 + (timeout_ms % 1000) != 0, inet_ntoa(host_ip));
+  snprintf(cmd_line, sizeof(cmd_line), "ping -c 1 -w %d %s",
+           timeout_ms / 1000 + (timeout_ms % 1000) != 0, inet_ntoa(host_ip));
 
   int status = system (cmd_line);
 
@@ -300,14 +322,14 @@ bool CNetworkAndroid::PingHost(unsigned long remote_ip, unsigned int timeout_ms)
   // else some error
 
   if (result < 0 || result > 1)
-    CLog::Log(LOGERROR, "Ping fail : status = %d, errno = %d : '%s'", status, errno, cmd_line);
+    CLog::Log(LOGERROR, "Ping fail : status = {}, errno = {} : '{}'", status, errno, cmd_line);
 
   return result == 0;
 }
 
 void CNetworkAndroid::RetrieveInterfaces()
 {
-  CSingleLock lock(m_refreshMutex);
+  std::unique_lock<CCriticalSection> lock(m_refreshMutex);
 
   // Cannot delete interfaces here, as there still might have references to it
   for (auto intf : m_oldInterfaces)
@@ -327,15 +349,41 @@ void CNetworkAndroid::RetrieveInterfaces()
       if (xbmc_jnienv()->ExceptionCheck())
       {
         xbmc_jnienv()->ExceptionClear();
-        CLog::Log(LOGERROR, "CNetworkAndroid::RetrieveInterfaces Cannot get interface by name: %s", lp.getInterfaceName().c_str());
+        CLog::Log(LOGERROR, "CNetworkAndroid::RetrieveInterfaces Cannot get interface by name: {}",
+                  lp.getInterfaceName());
         continue;
       }
       if (intf)
         m_interfaces.push_back(new CNetworkInterfaceAndroid(n, lp, intf));
       else
-        CLog::Log(LOGERROR, "CNetworkAndroid::RetrieveInterfaces Cannot get interface by name: %s", lp.getInterfaceName().c_str());
+        CLog::Log(LOGERROR, "CNetworkAndroid::RetrieveInterfaces Cannot get interface by name: {}",
+                  lp.getInterfaceName());
     }
     else
-      CLog::Log(LOGERROR, "CNetworkAndroid::RetrieveInterfaces Cannot get link properties for network: %s", n.toString().c_str());
+      CLog::Log(LOGERROR,
+                "CNetworkAndroid::RetrieveInterfaces Cannot get link properties for network: {}",
+                n.toString());
   }
+}
+
+void CNetworkAndroid::onAvailable(const CJNINetwork n)
+{
+  CLog::Log(LOGDEBUG, "CNetworkAndroid::onAvailable The default network is now: {}", n.toString());
+
+  CJNIConnectivityManager connman{CXBMCApp::getSystemService(CJNIContext::CONNECTIVITY_SERVICE)};
+  CJNILinkProperties lp = connman.getLinkProperties(n);
+
+  if (lp)
+  {
+    CJNINetworkInterface intf = CJNINetworkInterface::getByName(lp.getInterfaceName());
+    if (intf)
+      m_defaultInterface = std::make_unique<CNetworkInterfaceAndroid>(n, lp, intf);
+  }
+}
+
+void CNetworkAndroid::onLost(const CJNINetwork n)
+{
+  CLog::Log(LOGDEBUG, "CNetworkAndroid::onLost No default network (the last was: {})",
+            n.toString());
+  m_defaultInterface = nullptr;
 }

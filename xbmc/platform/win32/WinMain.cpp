@@ -6,23 +6,24 @@
  *  See LICENSES/README.md for more information.
  */
 
-#include "AppParamParser.h"
 #include "CompileInfo.h"
 #include "ServiceBroker.h"
+#include "application/AppEnvironment.h"
+#include "application/AppParamParser.h"
+#include "application/AppParams.h"
 #include "platform/Environment.h"
 #include "platform/xbmc.h"
 #include "threads/Thread.h"
-#include "threads/platform/win/Win32Exception.h"
 #include "utils/CharsetConverter.h" // Required to initialize converters before usage
 
 #include "platform/win32/CharsetConverter.h"
+#include "platform/win32/threads/Win32Exception.h"
 
 #include <Objbase.h>
 #include <WinSock2.h>
 #include <dbghelp.h>
 #include <mmsystem.h>
 #include <shellapi.h>
-
 
 // Minidump creation function
 LONG WINAPI CreateMiniDump(EXCEPTION_POINTERS* pEp)
@@ -32,13 +33,70 @@ LONG WINAPI CreateMiniDump(EXCEPTION_POINTERS* pEp)
   return pEp->ExceptionRecord->ExceptionCode;
 }
 
+static bool isConsoleAttached{false};
+
+/*!
+ * \brief Basic error reporting before the log subsystem is initialized
+ *
+ * The message is formatted using printf and output to debugger and cmd.exe, as applicable.
+ * 
+ * \param[in] format printf-style format string
+ * \param[in] ... optional parameters for the format string.
+ */
+template<typename... Args>
+static void LogError(const wchar_t* format, Args&&... args)
+{
+  const int count = _snwprintf(nullptr, 0, format, args...);
+  // terminating null character not included in count
+  auto buf = std::make_unique<wchar_t[]>(count + 1);
+  swprintf(buf.get(), format, args...);
+
+  OutputDebugString(buf.get());
+
+  if (!isConsoleAttached && AttachConsole(ATTACH_PARENT_PROCESS))
+  {
+    (void)freopen("CONOUT$", "w", stdout);
+    wprintf(L"\n");
+    isConsoleAttached = true;
+  }
+  wprintf(buf.get());
+}
+
+static std::shared_ptr<CAppParams> ParseCommandLine()
+{
+  int argc = 0;
+  LPWSTR* argvW = CommandLineToArgvW(GetCommandLineW(), &argc);
+  char** argv = new char*[argc];
+
+  for (int i = 0; i < argc; ++i)
+  {
+    int size = WideCharToMultiByte(CP_UTF8, 0, argvW[i], -1, nullptr, 0, nullptr, nullptr);
+    if (size > 0)
+    {
+      argv[i] = new char[size];
+      WideCharToMultiByte(CP_UTF8, 0, argvW[i], -1, argv[i], size, nullptr, nullptr);
+    }
+  }
+
+  CAppParamParser appParamParser;
+  appParamParser.Parse(argv, argc);
+
+  for (int i = 0; i < argc; ++i)
+    delete[] argv[i];
+  delete[] argv;
+
+  return appParamParser.GetAppParams();
+}
+
 //-----------------------------------------------------------------------------
 // Name: WinMain()
 // Desc: The application's entry point
 //-----------------------------------------------------------------------------
-INT WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR commandLine, INT)
+_Use_decl_annotations_ INT WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, INT)
 {
-  using KODI::PLATFORM::WINDOWS::ToW;
+  // parse command line parameters
+  const auto params = ParseCommandLine();
+
   // this fixes crash if OPENSSL_CONF is set to existed openssl.cfg
   // need to set it as soon as possible
   CEnvironment::unsetenv("OPENSSL_CONF");
@@ -55,13 +113,20 @@ INT WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR commandLine, INT)
   if (win32_exception::ShouldHook())
   {
     win32_exception::set_version(std::string(ver));
+    win32_exception::set_platformDirectories(params->HasPlatformDirectories());
     SetUnhandledExceptionFilter(CreateMiniDump);
   }
 
+  int status{0};
+  HRESULT hrCOM{E_FAIL};
+  int rcWinsock{WSANOTINITIALISED};
+  WSADATA wd{};
+
   // check if Kodi is already running
+  using KODI::PLATFORM::WINDOWS::ToW;
   std::string appName = CCompileInfo::GetAppName();
   HANDLE appRunningMutex = CreateMutex(nullptr, FALSE, ToW(appName + " Media Center").c_str());
-  if (GetLastError() == ERROR_ALREADY_EXISTS)
+  if (appRunningMutex != nullptr && GetLastError() == ERROR_ALREADY_EXISTS)
   {
     auto appNameW = ToW(appName);
     HWND hwnd = FindWindow(appNameW.c_str(), appNameW.c_str());
@@ -71,32 +136,25 @@ INT WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR commandLine, INT)
       ShowWindow(hwnd, SW_RESTORE);
       SetForegroundWindow(hwnd);
     }
-    ReleaseMutex(appRunningMutex);
-    return 0;
+    status = 0;
+    goto cleanup;
   }
 
   //Initialize COM
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-
-
-  int argc;
-  LPWSTR* argvW = CommandLineToArgvW(GetCommandLineW(), &argc);
-
-  char** argv = new char*[argc];
-
-  for (int i = 0; i < argc; ++i)
+  if ((hrCOM = CoInitializeEx(nullptr, COINIT_MULTITHREADED)) != S_OK)
   {
-    int size = WideCharToMultiByte(CP_UTF8, 0, argvW[i], -1, nullptr, 0, nullptr, nullptr);
-    if (size > 0)
-    {
-      argv[i] = new char[size];
-      int result = WideCharToMultiByte(CP_UTF8, 0, argvW[i], -1, argv[i], size, nullptr, nullptr);
-    }
+    LogError(L"unable to initialize COM, error %ld\n", hrCOM);
+    status = -2;
+    goto cleanup;
   }
 
   // Initialise Winsock
-  WSADATA wd;
-  WSAStartup(MAKEWORD(2, 2), &wd);
+  if ((rcWinsock = WSAStartup(MAKEWORD(2, 2), &wd)) != 0)
+  {
+    LogError(L"unable to initialize Windows Sockets, error %i\n", rcWinsock);
+    status = -3;
+    goto cleanup;
+  }
 
   // use 1 ms timer precision - like SDL initialization used to do
   timeBeginPeriod(1);
@@ -106,24 +164,24 @@ INT WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR commandLine, INT)
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
 #endif
 
-  int status;
-  {
-    CAppParamParser appParamParser;
-    appParamParser.Parse(argv, argc);
-    // Create and run the app
-    status = XBMC_Run(true, appParamParser);
-  }
+  CAppEnvironment::SetUp(params);
 
-  for (int i = 0; i < argc; ++i)
-    delete[] argv[i];
-  delete[] argv;
+  // Create and run the app
+  status = XBMC_Run(true);
+
+  CAppEnvironment::TearDown();
 
   // clear previously set timer resolution
   timeEndPeriod(1);
 
-  WSACleanup();
-  CoUninitialize();
-  ReleaseMutex(appRunningMutex);
+cleanup:
+
+  if (rcWinsock == 0)
+    WSACleanup();
+  if (hrCOM == S_OK)
+    CoUninitialize();
+  if (appRunningMutex)
+    CloseHandle(appRunningMutex);
 
   return status;
 }

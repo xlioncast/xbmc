@@ -26,10 +26,11 @@ public:
   void ReleaseBuffer(int idx) override;
   bool ConfigChanged(const VideoPicture &picture) override;
   bool NeedBuffer(int idx) override;
+  bool Flush(bool saveBuffers) override;
 
   // Feature support
-  bool Supports(ERENDERFEATURE feature) override;
-  bool Supports(ESCALINGMETHOD method) override;
+  bool Supports(ERENDERFEATURE feature) const override;
+  bool Supports(ESCALINGMETHOD method) const override;
 
 protected:
   bool LoadShadersHook() override;
@@ -51,7 +52,7 @@ protected:
 
   EShaderFormat GetShaderFormat() override;
 
-  bool CanSaveBuffers() override { return false; };
+  bool CanSaveBuffers() override { return false; }
 
   bool m_isYuv = false;
 

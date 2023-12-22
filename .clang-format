@@ -38,7 +38,9 @@ ExperimentalAutoDetectBinPacking: false
 ForEachMacros:   [ foreach, Q_FOREACH, BOOST_FOREACH ]
 IncludeBlocks: Regroup
 IncludeCategories:
-  - Regex:           '(["/]PlatformDefs|"(system|system_gl))\.h"'
+  - Regex:           '<EGL/.*\.h>'
+    Priority:        6
+  - Regex:           '(["/]PlatformDefs|"(system|system_gl|system_egl))\.h"'
     Priority:        5
   - Regex:           '"platform/[^/]+/'
     Priority:        2
@@ -59,7 +61,7 @@ JavaScriptWrapImports: true
 KeepEmptyLinesAtTheStartOfBlocks: true
 MacroBlockBegin: ''
 MacroBlockEnd:   ''
-MaxEmptyLinesToKeep: 2
+MaxEmptyLinesToKeep: 1
 NamespaceIndentation: None
 ObjCBlockIndentWidth: 2
 ObjCSpaceAfterProperty: false

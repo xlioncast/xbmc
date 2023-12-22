@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "XBDateTime.h"
+#include "games/controllers/ControllerTypes.h"
 #include "input/joysticks/interfaces/IInputProvider.h"
 #include "input/keyboard/interfaces/IKeyboardInputProvider.h"
 #include "input/mouse/interfaces/IMouseInputProvider.h"
@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-class TiXmlDocument;
+class CDateTime;
 class CSetting;
 class IKeymap;
 
@@ -80,7 +80,7 @@ public:
   int ProductId(void) const { return m_iProductId; }
   const char* ProductIdAsString(void) const { return m_strProductId.c_str(); }
   PeripheralType Type(void) const { return m_type; }
-  PeripheralBusType GetBusType(void) const { return m_busType; };
+  PeripheralBusType GetBusType(void) const { return m_busType; }
   const std::string& DeviceName(void) const { return m_strDeviceName; }
   bool IsHidden(void) const { return m_bHidden; }
   void SetHidden(bool bSetTo = true) { m_bHidden = bSetTo; }
@@ -134,7 +134,7 @@ public:
    * @brief Called when a setting changed.
    * @param strChangedSetting The changed setting.
    */
-  virtual void OnSettingChanged(const std::string& strChangedSetting){};
+  virtual void OnSettingChanged(const std::string& strChangedSetting) {}
 
   /*!
    * @brief Called when this device is removed, before calling the destructor.
@@ -249,7 +249,24 @@ public:
    *
    * \return The time of last activation, or invalid if unknown/never active
    */
-  virtual CDateTime LastActive() { return CDateTime(); }
+  virtual CDateTime LastActive();
+
+  /*!
+   * \brief Get the controller profile that best represents this peripheral
+   *
+   * \return The controller profile, or empty if unknown
+   */
+  virtual KODI::GAME::ControllerPtr ControllerProfile() const { return m_controllerProfile; }
+
+  /*!
+   * \brief Set the controller profile for this peripheral
+   *
+   * \param controller The new controller profile
+   */
+  virtual void SetControllerProfile(const KODI::GAME::ControllerPtr& controller)
+  {
+    m_controllerProfile = controller;
+  }
 
 protected:
   virtual void ClearSettings(void);
@@ -267,9 +284,9 @@ protected:
   int m_iProductId;
   std::string m_strProductId;
   std::string m_strVersionInfo;
-  bool m_bInitialised;
-  bool m_bHidden;
-  bool m_bError;
+  bool m_bInitialised = false;
+  bool m_bHidden = false;
+  bool m_bError = false;
   std::vector<PeripheralFeature> m_features;
   PeripheralVector m_subDevices;
   std::map<std::string, PeripheralDeviceSetting> m_settings;
@@ -283,5 +300,6 @@ protected:
   std::map<KODI::MOUSE::IMouseInputHandler*, std::unique_ptr<KODI::MOUSE::IMouseDriverHandler>>
       m_mouseHandlers;
   std::map<KODI::JOYSTICK::IButtonMapper*, std::unique_ptr<CAddonButtonMapping>> m_buttonMappers;
+  KODI::GAME::ControllerPtr m_controllerProfile;
 };
 } // namespace PERIPHERALS

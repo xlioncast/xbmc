@@ -146,7 +146,7 @@ bool CFanart::ParseColors(const std::string &colorsIn, std::string &colorsOut)
   // 1: The TVDB RGB Int Triplets, pipe separate with leading/trailing pipes "|68,69,59|69,70,58|78,78,68|"
 
   // Essentially we read the colors in using the proper format, and store them in our own fixed temporary format (3 DWORDS), and then
-  // write them back in in the specified format.
+  // write them back in the specified format.
 
   if (colorsIn.empty())
     return false;
@@ -163,7 +163,8 @@ bool CFanart::ParseColors(const std::string &colorsIn, std::string &colorsOut)
       { // convert
         if (colorsOut.size())
           colorsOut += ",";
-        colorsOut += StringUtils::Format("FF%2lx%2lx%2lx", atol(strTriplets[0].c_str()), atol(strTriplets[1].c_str()), atol(strTriplets[2].c_str()));
+        colorsOut += StringUtils::Format("FF{:2x}{:2x}{:2x}", std::stol(strTriplets[0]),
+                                         std::stol(strTriplets[1]), std::stol(strTriplets[2]));
       }
     }
   }

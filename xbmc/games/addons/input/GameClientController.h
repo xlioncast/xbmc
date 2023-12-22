@@ -23,6 +23,7 @@
 #include "addons/kodi-dev-kit/include/kodi/addon-instance/Game.h"
 #include "games/controllers/ControllerTypes.h"
 
+#include <string>
 #include <vector>
 
 namespace KODI
@@ -32,6 +33,8 @@ namespace GAME
 class CGameClientInput;
 
 /*!
+ * \ingroup games
+ *
  * \brief A container for the layout of a controller connected to a game
  *        client input port
  */

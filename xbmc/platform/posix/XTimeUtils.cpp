@@ -11,15 +11,10 @@
 #include "PosixTimezone.h"
 
 #include <errno.h>
+#include <mutex>
 #include <time.h>
 
-#include <sched.h>
 #include <sys/times.h>
-#include <unistd.h>
-
-#if defined(TARGET_DARWIN)
-#include "threads/Atomics.h"
-#endif
 
 #if defined(TARGET_ANDROID) && !defined(__LP64__)
 #include <time64.h>
@@ -37,19 +32,6 @@ namespace TIME
  * divisible by 400
  */
 #define IsLeapYear(y) ((!(y % 4)) ? (((!(y % 400)) && (y % 100)) ? 1 : 0) : 0)
-
-void Sleep(uint32_t milliSeconds)
-{
-#if _POSIX_PRIORITY_SCHEDULING
-  if (milliSeconds == 0)
-  {
-    sched_yield();
-    return;
-  }
-#endif
-
-  usleep(milliSeconds * 1000);
-}
 
 uint32_t GetTimeZoneInformation(TimeZoneInformation* timeZoneInformation)
 {
@@ -107,7 +89,7 @@ int SystemTimeToFileTime(const SystemTime* systemTime, FileTime* fileTime)
 {
   static const int dayoffset[12] = {0, 31, 59, 90, 120, 151, 182, 212, 243, 273, 304, 334};
 #if defined(TARGET_DARWIN)
-  static std::atomic_flag timegm_lock = ATOMIC_FLAG_INIT;
+  static std::mutex timegm_lock;
 #endif
 
   struct tm sysTime = {};
@@ -126,7 +108,7 @@ int SystemTimeToFileTime(const SystemTime* systemTime, FileTime* fileTime)
     sysTime.tm_yday++;
 
 #if defined(TARGET_DARWIN)
-  CAtomicSpinLock lock(timegm_lock);
+  std::lock_guard<std::mutex> lock(timegm_lock);
 #endif
 
 #if defined(TARGET_ANDROID) && !defined(__LP64__)
@@ -177,7 +159,7 @@ int FileTimeToSystemTime(const FileTime* fileTime, SystemTime* systemTime)
   time_t ft = file.QuadPart;
 
   struct tm tm_ft;
-  gmtime_r(&ft,&tm_ft);
+  gmtime_r(&ft, &tm_ft);
 
   systemTime->year = tm_ft.tm_year + 1900;
   systemTime->month = tm_ft.tm_mon + 1;
@@ -221,7 +203,7 @@ int FileTimeToTimeT(const FileTime* localFileTime, time_t* pTimeT)
   time_t ft = fileTime.QuadPart;
 
   struct tm tm_ft;
-  localtime_r(&ft,&tm_ft);
+  localtime_r(&ft, &tm_ft);
 
   *pTimeT = mktime(&tm_ft);
   return 1;

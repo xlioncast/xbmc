@@ -178,7 +178,7 @@ public:
     m_cStructure->provides_joystick_rumble = providesJoystickRumble;
   }
 
-    /// @brief To get with @ref SetProvidesJoystickRumble changed values.
+  /// @brief To get with @ref SetProvidesJoystickRumble changed values.
   bool GetProvidesJoystickRumble() const { return m_cStructure->provides_joystick_rumble; }
 
   /// @brief Set true if the add-on provides power off about joystick.
@@ -611,7 +611,7 @@ public:
   /// @brief Class copy constructor.
   ///
   /// @param[in] other Other class to copy on construct here
-  Joystick(const Joystick& other) { *this = other; }
+  Joystick(const Joystick& other) : Peripheral(other) { *this = other; }
 
   /// @brief Destructor.
   ///

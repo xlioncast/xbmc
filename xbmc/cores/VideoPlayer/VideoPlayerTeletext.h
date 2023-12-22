@@ -29,7 +29,11 @@ public:
   // waits until all available data has been rendered
   void WaitForBuffers() { m_messageQueue.WaitUntilEmpty(); }
   bool AcceptsData() const override { return !m_messageQueue.IsFull(); }
-  void SendMessage(CDVDMsg* pMsg, int priority = 0) override { if(m_messageQueue.IsInited()) m_messageQueue.Put(pMsg, priority); }
+  void SendMessage(std::shared_ptr<CDVDMsg> pMsg, int priority = 0) override
+  {
+    if (m_messageQueue.IsInited())
+      m_messageQueue.Put(pMsg, priority);
+  }
   void FlushMessages() override { m_messageQueue.Flush(); }
   bool IsInited() const override { return true; }
   bool IsStalled() const override { return true; }
@@ -50,7 +54,6 @@ private:
 
   int m_speed;
   std::shared_ptr<TextCacheStruct_t> m_TXTCache = std::make_shared<TextCacheStruct_t>();
-  CCriticalSection m_critSection;
   CDVDMessageQueue m_messageQueue;
 };
 

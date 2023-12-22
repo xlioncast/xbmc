@@ -13,7 +13,11 @@
 #include "guilib/XBTF.h"
 #include "guilib/XBTFReader.h"
 
+#include <cstdint>
+#include <cstdio>
 #include <vector>
+
+#include "PlatformDefs.h"
 
 namespace XFILE
 {
@@ -38,7 +42,7 @@ public:
 
   uint32_t GetImageWidth() const;
   uint32_t GetImageHeight() const;
-  uint32_t GetImageFormat() const;
+  XB_FMT GetImageFormat() const;
   bool HasImageAlpha() const;
 
 private:
@@ -58,6 +62,6 @@ private:
   uint64_t m_positionWithinFrame = 0;
   int64_t m_positionTotal = 0;
 
-  std::vector<uint8_t*> m_unpackedFrames;
+  std::vector<std::vector<uint8_t>> m_unpackedFrames;
 };
 }

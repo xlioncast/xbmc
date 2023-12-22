@@ -112,11 +112,7 @@ class BufferReader
   : public CueReader
 {
 public:
-  explicit BufferReader(const std::string &strContent)
-    : m_data(strContent)
-    , m_pos(0)
-  {
-  }
+  explicit BufferReader(const std::string& strContent) : m_data(strContent) {}
   bool ReadLine(std::string &line) override
   {
     // Read the next line.
@@ -145,7 +141,7 @@ public:
   }
 private:
   std::string m_data;
-  size_t m_pos;
+  size_t m_pos = 0;
 };
 
 CCueDocument::~CCueDocument() = default;
@@ -191,7 +187,7 @@ void CCueDocument::GetSongs(VECSONGS &songs)
     aSong.SetAlbumArtist(StringUtils::Split(m_strArtist, advancedSettings->m_musicItemSeparator));
     aSong.strAlbum = m_strAlbum;
     aSong.genre = StringUtils::Split(m_strGenre, advancedSettings->m_musicItemSeparator);
-    aSong.strReleaseDate = StringUtils::Format("%04i", m_iYear);
+    aSong.strReleaseDate = StringUtils::Format("{:04}", m_iYear);
     aSong.iTrack = track.iTrackNumber;
     if (m_iDiscNumber > 0)
       aSong.iTrack |= (m_iDiscNumber << 16); // see CMusicInfoTag::GetDiscNumber()
@@ -481,7 +477,7 @@ bool CCueDocument::ResolvePath(std::string &strPath, const std::string &strBase)
         return true;
       }
     }
-    CLog::Log(LOGERROR,"Could not find '%s' referenced in cue, case sensitivity issue?", strPath.c_str());
+    CLog::Log(LOGERROR, "Could not find '{}' referenced in cue, case sensitivity issue?", strPath);
     return false;
   }
 

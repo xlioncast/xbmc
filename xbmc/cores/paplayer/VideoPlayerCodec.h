@@ -26,7 +26,7 @@ public:
 
   bool Init(const CFileItem &file, unsigned int filecache) override;
   bool Seek(int64_t iSeekTime) override;
-  int ReadPCM(unsigned char *pBuffer, int size, int *actualsize) override;
+  int ReadPCM(uint8_t* pBuffer, size_t size, size_t* actualsize) override;
   int ReadRaw(uint8_t **pBuffer, int *bufferSize) override;
   bool CanInit() override;
   bool CanSeek() override;
@@ -41,24 +41,24 @@ public:
 private:
   CAEStreamInfo::DataType GetPassthroughStreamType(AVCodecID codecId, int samplerate, int profile);
 
-  CDVDDemux* m_pDemuxer;
+  CDVDDemux* m_pDemuxer{nullptr};
   std::shared_ptr<CDVDInputStream> m_pInputStream;
-  CDVDAudioCodec* m_pAudioCodec;
+  std::unique_ptr<CDVDAudioCodec> m_pAudioCodec;
 
   std::string m_strContentType;
   std::string m_strFileName;
-  int m_nAudioStream;
-  int  m_nDecodedLen;
+  int m_nAudioStream{-1};
+  size_t m_nDecodedLen{0};
 
-  bool m_bInited;
-  bool m_bCanSeek;
+  bool m_bInited{false};
+  bool m_bCanSeek{false};
 
-  ActiveAE::IAEResample *m_pResampler;
-  DVDAudioFrame m_audioFrame;
-  int m_planes;
-  bool m_needConvert;
-  AEAudioFormat m_srcFormat;
-  int m_channels;
+  std::unique_ptr<ActiveAE::IAEResample> m_pResampler;
+  DVDAudioFrame m_audioFrame{};
+  int m_planes{0};
+  bool m_needConvert{false};
+  AEAudioFormat m_srcFormat{};
+  int m_channels{0};
 
   std::unique_ptr<CProcessInfo> m_processInfo;
 };

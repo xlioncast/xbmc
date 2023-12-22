@@ -6,7 +6,10 @@
  *  See LICENSES/README.md for more information.
  */
 #include "RenderSystemDX.h"
-#include "Application.h"
+
+#include "application/Application.h"
+
+#include <mutex>
 #if defined(TARGET_WINDOWS_DESKTOP)
 #include "cores/RetroPlayer/process/windows/RPProcessInfoWin.h"
 #include "cores/RetroPlayer/rendering/VideoRenderers/RPWinRenderer.h"
@@ -25,7 +28,6 @@
 #include "guilib/GUIShaderDX.h"
 #include "guilib/GUITextureD3D.h"
 #include "guilib/GUIWindowManager.h"
-#include "threads/SingleLock.h"
 #include "utils/MathUtils.h"
 #include "utils/log.h"
 
@@ -39,9 +41,9 @@ using namespace KODI;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
 using namespace Microsoft::WRL;
+using namespace std::chrono_literals;
 
 CRenderSystemDX::CRenderSystemDX() : CRenderSystemBase()
-  , m_interlaced(false)
 {
   m_bVSync = true;
 
@@ -86,13 +88,14 @@ bool CRenderSystemDX::InitRenderSystem()
   CPoint camPoint = { outputSize.Width * 0.5f, outputSize.Height * 0.5f };
   SetCameraPosition(camPoint, outputSize.Width, outputSize.Height);
 
-  DXGI_ADAPTER_DESC AIdentifier = { 0 };
-  m_deviceResources->GetAdapterDesc(&AIdentifier);
+  const DXGI_ADAPTER_DESC AIdentifier = m_deviceResources->GetAdapterDesc();
   m_RenderRenderer = KODI::PLATFORM::WINDOWS::FromW(AIdentifier.Description);
   uint32_t version = 0;
   for (uint32_t decimal = m_deviceResources->GetDeviceFeatureLevel() >> 8, round = 0; decimal > 0; decimal >>= 4, ++round)
     version += (decimal % 16) * std::pow(10, round);
-  m_RenderVersion = StringUtils::Format("%.1f", static_cast<float>(version) / 10.0f);
+  m_RenderVersion = StringUtils::Format("{:.1f}", static_cast<float>(version) / 10.0f);
+
+  CGUITextureD3D::Register();
 
   return true;
 }
@@ -121,7 +124,7 @@ bool CRenderSystemDX::IsFormatSupport(DXGI_FORMAT format, unsigned int usage) co
 
 bool CRenderSystemDX::DestroyRenderSystem()
 {
-  CSingleLock lock(m_resourceSection);
+  std::unique_lock<CCriticalSection> lock(m_resourceSection);
 
   if (m_pGUIShader)
   {
@@ -158,7 +161,7 @@ void CRenderSystemDX::CheckInterlacedStereoView()
     DXGI_FORMAT texFormat = m_deviceResources->GetBackBuffer().GetFormat();
     if (!m_rightEyeTex.Create(outputSize.Width, outputSize.Height, 1, D3D11_USAGE_DEFAULT, texFormat))
     {
-      CLog::Log(LOGERROR, "%s - Failed to create right eye buffer.", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - Failed to create right eye buffer.", __FUNCTION__);
       CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoMode(RENDER_STEREO_MODE_SPLIT_HORIZONTAL); // try fallback to split horizontal
     }
     else
@@ -178,8 +181,7 @@ bool CRenderSystemDX::CreateStates()
   m_BlendDisableState = nullptr;
 
   // Initialize the description of the stencil state.
-  D3D11_DEPTH_STENCIL_DESC depthStencilDesc;
-  ZeroMemory(&depthStencilDesc, sizeof(D3D11_DEPTH_STENCIL_DESC));
+  D3D11_DEPTH_STENCIL_DESC depthStencilDesc = {};
 
   // Set up the description of the stencil state.
   depthStencilDesc.DepthEnable = false;
@@ -230,8 +232,7 @@ bool CRenderSystemDX::CreateStates()
 
   m_pContext->RSSetState(m_RSScissorDisable.Get()); // by default
 
-  D3D11_BLEND_DESC blendState = { 0 };
-  ZeroMemory(&blendState, sizeof(D3D11_BLEND_DESC));
+  D3D11_BLEND_DESC blendState = {};
   blendState.RenderTarget[0].BlendEnable = true;
   blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA; // D3D11_BLEND_SRC_ALPHA;
   blendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA; // D3D11_BLEND_INV_SRC_ALPHA;
@@ -280,12 +281,12 @@ void CRenderSystemDX::PresentRender(bool rendered, bool videoLayer)
 
   // time for decoder that may require the context
   {
-    CSingleLock lock(m_decoderSection);
-    XbmcThreads::EndTime timer;
-    timer.Set(5);
+    std::unique_lock<CCriticalSection> lock(m_decoderSection);
+    XbmcThreads::EndTime<> timer;
+    timer.Set(5ms);
     while (!m_decodingTimer.IsTimePast() && !timer.IsTimePast())
     {
-      m_decodingEvent.wait(lock, 1);
+      m_decodingEvent.wait(lock, 1ms);
     }
   }
 
@@ -294,13 +295,13 @@ void CRenderSystemDX::PresentRender(bool rendered, bool videoLayer)
 
 void CRenderSystemDX::RequestDecodingTime()
 {
-  CSingleLock lock(m_decoderSection);
-  m_decodingTimer.Set(3);
+  std::unique_lock<CCriticalSection> lock(m_decoderSection);
+  m_decodingTimer.Set(3ms);
 }
 
 void CRenderSystemDX::ReleaseDecodingTime()
 {
-  CSingleLock lock(m_decoderSection);
+  std::unique_lock<CCriticalSection> lock(m_decoderSection);
   m_decodingTimer.SetExpired();
   m_decodingEvent.notify();
 }
@@ -325,7 +326,7 @@ bool CRenderSystemDX::EndRender()
   return true;
 }
 
-bool CRenderSystemDX::ClearBuffers(UTILS::Color color)
+bool CRenderSystemDX::ClearBuffers(UTILS::COLOR::Color color)
 {
   if (!m_bRenderCreated)
     return false;

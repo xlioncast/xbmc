@@ -25,10 +25,10 @@ public:
   std::string m_strDescription;
   int m_controlID;
   CGUIControl::GUICONTROLTYPES m_ControlType;
-  unsigned int m_visTime;
-  unsigned int m_renderTime;
-  int64_t m_i64VisStart;
-  int64_t m_i64RenderStart;
+  unsigned int m_visTime = 0;
+  unsigned int m_renderTime = 0;
+  int64_t m_i64VisStart = 0;
+  int64_t m_i64RenderStart = 0;
 
   CGUIControlProfilerItem(CGUIControlProfiler *pProfiler, CGUIControlProfilerItem *pParent, CGUIControl *pControl);
   ~CGUIControlProfilerItem(void);
@@ -39,7 +39,7 @@ public:
   void BeginRender(void);
   void EndRender(void);
   void SaveToXML(TiXmlElement *parent);
-  unsigned int GetTotalTime(void) const { return m_visTime + m_renderTime; };
+  unsigned int GetTotalTime(void) const { return m_visTime + m_renderTime; }
 
   CGUIControlProfilerItem *AddControl(CGUIControl *pControl);
   CGUIControlProfilerItem *FindOrAddControl(CGUIControl *pControl, bool recurse);
@@ -57,12 +57,12 @@ public:
   void EndVisibility(CGUIControl *pControl);
   void BeginRender(CGUIControl *pControl);
   void EndRender(CGUIControl *pControl);
-  int GetMaxFrameCount(void) const { return m_iMaxFrameCount; };
-  void SetMaxFrameCount(int iMaxFrameCount) { m_iMaxFrameCount = iMaxFrameCount; };
-  void SetOutputFile(const std::string &strOutputFile) { m_strOutputFile = strOutputFile; };
-  const std::string &GetOutputFile(void) const { return m_strOutputFile; };
+  int GetMaxFrameCount(void) const { return m_iMaxFrameCount; }
+  void SetMaxFrameCount(int iMaxFrameCount) { m_iMaxFrameCount = iMaxFrameCount; }
+  void SetOutputFile(const std::string& strOutputFile) { m_strOutputFile = strOutputFile; }
+  const std::string& GetOutputFile(void) const { return m_strOutputFile; }
   bool SaveResults(void);
-  unsigned int GetTotalTime(void) const { return m_ItemHead.GetTotalTime(); };
+  unsigned int GetTotalTime(void) const { return m_ItemHead.GetTotalTime(); }
 
   float m_fPerfScale;
 private:

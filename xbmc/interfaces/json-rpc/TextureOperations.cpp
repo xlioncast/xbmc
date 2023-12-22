@@ -8,9 +8,13 @@
 
 #include "TextureOperations.h"
 
+#include "FileItem.h"
+#include "ServiceBroker.h"
 #include "TextureCache.h"
 #include "TextureDatabase.h"
 #include "utils/Variant.h"
+
+#include <algorithm>
 
 using namespace JSONRPC;
 
@@ -86,7 +90,7 @@ JSONRPC_STATUS CTextureOperations::RemoveTexture(const std::string &method, ITra
 {
   int id = (int)parameterObject["textureid"].asInteger();
 
-  if (!CTextureCache::GetInstance().ClearCachedImage(id))
+  if (!CServiceBroker::GetTextureCache()->ClearCachedImage(id))
     return InvalidParams;
 
   return ACK;

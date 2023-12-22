@@ -37,28 +37,46 @@ void CRendererShaders::GetWeight(std::map<RenderMethod, int>& weights, const Vid
   unsigned weight = 0;
   const AVPixelFormat av_pixel_format = picture.videoBuffer->GetFormat();
 
-  if (av_pixel_format == AV_PIX_FMT_D3D11VA_VLD)
+  switch (av_pixel_format)
   {
-    if (IsHWPicSupported(picture))
-      // support natively
-      weight += 1000;
-    else
-      // double copying (GPU->CPU->GPU)
-      weight += 200;
+    case AV_PIX_FMT_D3D11VA_VLD:
+      if (IsHWPicSupported(picture))
+        weight += 1000; // support natively
+      else
+        weight += 200; // double copying (GPU->CPU->GPU)
+      break;
+    case AV_PIX_FMT_YUV420P:
+    case AV_PIX_FMT_NV12:
+      weight += 500; // single copying
+      break;
+    case AV_PIX_FMT_YUV420P10:
+    case AV_PIX_FMT_YUV420P16:
+      if (DX::Windowing()->IsFormatSupport(DXGI_FORMAT_R16_UNORM, D3D11_FORMAT_SUPPORT_TEXTURE2D))
+        weight += 500; // single copying
+      else
+        CLog::LogF(LOGWARNING, "Texture format DXGI_FORMAT_R16_UNORM is not supported.");
+      break;
+    case AV_PIX_FMT_P010:
+    case AV_PIX_FMT_P016:
+      if (DX::Windowing()->IsFormatSupport(DXGI_FORMAT_R16_UNORM, D3D11_FORMAT_SUPPORT_TEXTURE2D) &&
+          DX::Windowing()->IsFormatSupport(DXGI_FORMAT_R16G16_UNORM,
+                                           D3D11_FORMAT_SUPPORT_TEXTURE2D))
+        weight += 500; // single copying
+      else
+        CLog::LogF(LOGWARNING, "Texture format R16_UNORM / R16G16_UNORM is not supported.");
+      break;
   }
-  else if (av_pixel_format == AV_PIX_FMT_YUV420P ||
-    av_pixel_format == AV_PIX_FMT_YUV420P10 ||
-    av_pixel_format == AV_PIX_FMT_YUV420P16 ||
-    av_pixel_format == AV_PIX_FMT_NV12 ||
-    av_pixel_format == AV_PIX_FMT_P010 ||
-    av_pixel_format == AV_PIX_FMT_P016)
-    weight += 500; // single copying
 
   if (weight > 0)
     weights[RENDER_PS] = weight;
 }
 
-bool CRendererShaders::Supports(ESCALINGMETHOD method)
+CRendererShaders::CRendererShaders(CVideoSettings& videoSettings) : CRendererHQ(videoSettings)
+{
+  m_renderMethodName = "Pixel Shaders";
+}
+
+bool CRendererShaders::Supports(ESCALINGMETHOD method) const
 {
   if (method == VS_SCALINGMETHOD_LINEAR)
     return true;
@@ -80,8 +98,9 @@ bool CRendererShaders::Configure(const VideoPicture& picture, float fps, unsigne
       if (!IsHWPicSupported(picture))
         m_format = GetAVFormat(dxgi_format);
     }
+    m_srcPrimaries = picture.color_primaries;
 
-    CreateIntermediateTarget(m_sourceWidth, m_sourceHeight);
+    CreateIntermediateTarget(m_sourceWidth, m_sourceHeight, false, CalcIntermediateTargetFormat());
     return true;
   }
   return false;
@@ -118,11 +137,10 @@ void CRendererShaders::CheckVideoParameters()
   __super::CheckVideoParameters();
 
   CRenderBuffer* buf = m_renderBuffers[m_iBufferIndex];
-  const AVColorPrimaries srcPrim = GetSrcPrimaries(buf->primaries, buf->GetWidth(), buf->GetHeight());
-  if (srcPrim != m_srcPrimaries)
+  if (buf->primaries != m_srcPrimaries)
   {
     // source params is changed, reset shader
-    m_srcPrimaries = srcPrim;
+    m_srcPrimaries = buf->primaries;
     m_colorShader.reset();
   }
 }
@@ -171,17 +189,34 @@ bool CRendererShaders::IsHWPicSupported(const VideoPicture& picture)
   return false;
 }
 
-AVColorPrimaries CRendererShaders::GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned width, unsigned height)
+DXGI_FORMAT CRendererShaders::CalcIntermediateTargetFormat() const
 {
-  AVColorPrimaries ret = srcPrimaries;
-  if (ret == AVCOL_PRI_UNSPECIFIED)
-  {
-    if (width > 1024 || height >= 600)
-      ret = AVCOL_PRI_BT709;
-    else
-      ret = AVCOL_PRI_BT470BG;
-  }
-  return ret;
+  // Default value: same as the back buffer
+  DXGI_FORMAT format{DX::Windowing()->GetBackBuffer().GetFormat()};
+
+  // High precision setting not enabled: use back buffer format, 8 or 10 bits
+  // enabled: look for higher quality format
+  if (!DX::Windowing()->IsHighPrecisionProcessingSettingEnabled())
+    return format;
+
+  UINT reqSupport{D3D11_FORMAT_SUPPORT_SHADER_SAMPLE | D3D11_FORMAT_SUPPORT_RENDER_TARGET};
+
+  // Preferred: float16 as the yuv-rgb conversion takes place in float
+  // => avoids a conversion / quantization round-trip, but uses more memory / bandwidth
+  const std::array hdrformats{DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_R10G10B10A2_UNORM,
+                              DXGI_FORMAT_R32G32B32A32_FLOAT};
+
+  const auto it =
+      std::find_if(hdrformats.cbegin(), hdrformats.cend(), [&](DXGI_FORMAT outputFormat) {
+        return DX::Windowing()->IsFormatSupport(outputFormat, reqSupport);
+      });
+
+  if (it != hdrformats.cend())
+    format = *it;
+  else
+    CLog::LogF(LOGDEBUG, "no compatible high precision format found.");
+
+  return format;
 }
 
 CRenderBuffer* CRendererShaders::CreateBuffer()
@@ -424,7 +459,6 @@ bool CRendererShaders::CRenderBufferImpl::UploadFromBuffer() const
   int srcLines[3];
   videoBuffer->GetPlanes(bufData);
   videoBuffer->GetStrides(srcLines);
-  std::vector<Concurrency::task<void>> tasks;
 
   for (unsigned plane = 0; plane < m_viewCount; ++plane)
   {
@@ -438,34 +472,22 @@ bool CRendererShaders::CRenderBufferImpl::UploadFromBuffer() const
     int dstLine = mapping.RowPitch;
     int height = plane ? m_height >> 1 : m_height;
 
-    auto task = Concurrency::create_task([src, dst, srcLine, dstLine, height]()
+    if (srcLine == dstLine)
     {
-      if (srcLine == dstLine)
+      memcpy(dst, src, srcLine * height);
+    }
+    else
+    {
+      uint8_t* s = src;
+      uint8_t* d = dst;
+      for (int i = 0; i < height; ++i)
       {
-        memcpy(dst, src, srcLine * height);
+        memcpy(d, s, std::min(srcLine, dstLine));
+        d += dstLine;
+        s += srcLine;
       }
-      else
-      {
-        uint8_t* s = src;
-        uint8_t* d = dst;
-        for (int i = 0; i < height; ++i)
-        {
-          memcpy(d, s, std::min(srcLine, dstLine));
-          d += dstLine;
-          s += srcLine;
-        }
-      }
-    });
-    tasks.push_back(task);
+    }
   }
-
-  // event based await is required on WinRT because
-  // blocking WinRT STA threads with task.wait() isn't allowed
-  auto sync = std::make_shared<Concurrency::event>();
-  when_all(tasks.begin(), tasks.end()).then([&sync]() {
-    sync->set();
-  });
-  sync->wait();
 
   for (unsigned plane = 0; plane < m_viewCount; ++plane)
     if (!m_textures[plane].UnlockRect(0)) {}

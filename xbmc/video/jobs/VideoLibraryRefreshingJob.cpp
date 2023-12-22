@@ -8,8 +8,10 @@
 
 #include "VideoLibraryRefreshingJob.h"
 
+#include "FileItem.h"
 #include "ServiceBroker.h"
 #include "TextureDatabase.h"
+#include "URL.h"
 #include "addons/Scraper.h"
 #include "dialogs/GUIDialogSelect.h"
 #include "dialogs/GUIDialogYesNo.h"
@@ -30,12 +32,13 @@
 #include "video/tags/VideoInfoTagLoaderFactory.h"
 #include "video/tags/VideoTagLoaderPlugin.h"
 
+#include <memory>
 #include <utility>
 
 using namespace KODI::MESSAGING;
 using namespace VIDEO;
 
-CVideoLibraryRefreshingJob::CVideoLibraryRefreshingJob(CFileItemPtr item,
+CVideoLibraryRefreshingJob::CVideoLibraryRefreshingJob(std::shared_ptr<CFileItem> item,
                                                        bool forceRefresh,
                                                        bool refreshAll,
                                                        bool ignoreNfo /* = false */,
@@ -76,9 +79,9 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
   if (URIUtils::IsPlugin(m_item->GetPath()) && !XFILE::CPluginDirectory::IsMediaLibraryScanningAllowed(ADDON::TranslateContent(scraper->Content()), m_item->GetPath()))
   {
     CLog::Log(LOGINFO,
-              "CVideoLibraryRefreshingJob: Plugin '%s' does not support media library scanning and "
+              "CVideoLibraryRefreshingJob: Plugin '{}' does not support media library scanning and "
               "refreshing",
-              CURL::GetRedacted(m_item->GetPath()).c_str());
+              CURL::GetRedacted(m_item->GetPath()));
     return false;
   }
 
@@ -162,7 +165,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
     // if we don't have an url or need to refresh anyway do the web search
     if (!hasDetails && (needsRefresh || !scraperUrl.HasUrls()))
     {
-      SetTitle(StringUtils::Format(g_localizeStrings.Get(197).c_str(), scraper->Name().c_str()));
+      SetTitle(StringUtils::Format(g_localizeStrings.Get(197), scraper->Name()));
       SetText(itemTitle);
       SetProgress(0);
 
@@ -218,8 +221,8 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
               return false;
           }
 
-          CLog::Log(LOGDEBUG, "CVideoLibraryRefreshingJob: user selected item '%s' with URL '%s'",
-                    scraperUrl.GetTitle().c_str(), scraperUrl.GetFirstThumbUrl());
+          CLog::Log(LOGDEBUG, "CVideoLibraryRefreshingJob: user selected item '{}' with URL '{}'",
+                    scraperUrl.GetTitle(), scraperUrl.GetFirstThumbUrl());
         }
       }
       else if (result < 0 || !VIDEO::CVideoInfoScanner::DownloadFailed(GetProgressDialog()))
@@ -279,13 +282,13 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
       }
       // otherwise just add a copy of the item
       else
-        items.Add(CFileItemPtr(new CFileItem(*m_item->GetVideoInfoTag())));
+        items.Add(std::make_shared<CFileItem>(*m_item->GetVideoInfoTag()));
 
       // update the path to the real path (instead of a videodb:// one)
       path = m_item->GetVideoInfoTag()->m_strPath;
     }
     else
-      items.Add(CFileItemPtr(new CFileItem(*m_item)));
+      items.Add(std::make_shared<CFileItem>(*m_item));
 
     // set the proper path of the list of items to lookup
     items.SetPath(m_item->m_bIsFolder ? URIUtils::GetParentPath(path) : URIUtils::GetDirectory(path));
@@ -303,7 +306,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
 
     // prepare the progress dialog for downloading all the necessary information
     SetTitle(g_localizeStrings.Get(headingLabel));
-    SetText(scraperUrl.GetTitle());
+    SetText(itemTitle);
     SetProgress(0);
 
     // remove any existing data for the item we're going to refresh
@@ -318,6 +321,8 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
       {
         if (!m_item->m_bIsFolder)
           db.DeleteEpisode(dbId);
+        else if (m_item->GetVideoInfoTag()->m_type == MediaTypeSeason)
+          db.DeleteSeason(dbId);
         else if (m_refreshAll)
           db.DeleteTvShow(dbId);
         else
@@ -326,6 +331,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
     }
 
     if (pluginTag || pluginArt)
+    {
       // set video info and art from plugin source with metadata.local scraper to items
       for (auto &i: items)
       {
@@ -334,6 +340,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
         if (pluginArt)
           i->SetArt(*pluginArt);
       }
+    }
 
     // finally download the information for the item
     CVideoInfoScanner scanner;
@@ -359,9 +366,20 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
       db.GetMusicVideoInfo(m_item->GetPath(), *m_item->GetVideoInfoTag());
     else if (scraper->Content() == CONTENT_TVSHOWS)
     {
-      // update tvshow info to get updated episode numbers
+      // update tvshow/season info to get updated episode numbers
       if (m_item->m_bIsFolder)
-        db.GetTvShowInfo(m_item->GetPath(), *m_item->GetVideoInfoTag());
+      {
+        // Note: don't use any database ids (m_iDbId, m_idSeason, m_IdShow) of m_item's video
+        // info tag here. The db information might have been deleted and recreated afterwards,
+        // invalidating the old db ids and m_item is not (yet) updated at this point.
+        bool hasInfo = false;
+        const CVideoInfoTag* videoTag = m_item->GetVideoInfoTag();
+        if (videoTag && videoTag->m_type == MediaTypeSeason && videoTag->m_iSeason != -1)
+          hasInfo = db.GetSeasonInfo(m_item->GetPath(), videoTag->m_iSeason,
+                                     *m_item->GetVideoInfoTag(), m_item.get());
+        if (!hasInfo)
+          db.GetTvShowInfo(m_item->GetPath(), *m_item->GetVideoInfoTag());
+      }
       else
         db.GetEpisodeInfo(m_item->GetPath(), *m_item->GetVideoInfoTag());
     }

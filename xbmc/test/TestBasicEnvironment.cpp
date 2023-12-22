@@ -7,19 +7,22 @@
  */
 
 #include "TestBasicEnvironment.h"
-#include "TestUtils.h"
+
+#include "FileItem.h"
 #include "ServiceBroker.h"
+#include "ServiceManager.h"
+#include "TestUtils.h"
+#include "application/AppEnvironment.h"
+#include "application/AppParams.h"
+#include "application/Application.h"
 #include "filesystem/Directory.h"
 #include "filesystem/File.h"
 #include "filesystem/SpecialProtocol.h"
-#include "profiles/ProfileManager.h"
-#include "settings/AdvancedSettings.h"
-#include "settings/Settings.h"
-#include "settings/SettingsComponent.h"
-#include "Application.h"
-#include "AppParamParser.h"
-#include "windowing/WinSystem.h"
+#include "messaging/ApplicationMessenger.h"
 #include "platform/Filesystem.h"
+#include "profiles/ProfileManager.h"
+#include "settings/SettingsComponent.h"
+#include "windowing/WinSystem.h"
 
 #ifdef TARGET_DARWIN
 #include "Util.h"
@@ -36,13 +39,12 @@ TestBasicEnvironment::TestBasicEnvironment() = default;
 
 void TestBasicEnvironment::SetUp()
 {
-  CAppParamParser params;
-  params.m_platformDirectories = false;
+  const auto params = std::make_shared<CAppParams>();
+  params->SetPlatformDirectories(false);
 
-  CServiceBroker::CreateLogging();
+  CAppEnvironment::SetUp(params);
 
-  m_pSettingsComponent.reset(new CSettingsComponent());
-  m_pSettingsComponent->Init(params);
+  CServiceBroker::RegisterAppMessenger(std::make_shared<KODI::MESSAGING::CApplicationMessenger>());
 
   XFILE::CFile *f;
 
@@ -95,8 +97,8 @@ void TestBasicEnvironment::SetUp()
   }
 
   const CProfile profile("special://temp");
-  m_pSettingsComponent->GetProfileManager()->AddProfile(profile);
-  m_pSettingsComponent->GetProfileManager()->CreateProfileFolders();
+  CServiceBroker::GetSettingsComponent()->GetProfileManager()->AddProfile(profile);
+  CServiceBroker::GetSettingsComponent()->GetProfileManager()->CreateProfileFolders();
 
   if (!g_application.m_ServiceManager->InitForTesting())
     exit(1);
@@ -108,8 +110,9 @@ void TestBasicEnvironment::TearDown()
 
   g_application.m_ServiceManager->DeinitTesting();
 
-  m_pSettingsComponent->Deinit();
-  m_pSettingsComponent.reset();
+  CServiceBroker::UnregisterAppMessenger();
+
+  CAppEnvironment::TearDown();
 }
 
 void TestBasicEnvironment::SetUpError()

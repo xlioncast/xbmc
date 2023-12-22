@@ -14,9 +14,11 @@
 class IDispResource
 {
 public:
-  virtual void OnLostDisplay() {};
-  virtual void OnResetDisplay() {};
-  virtual void OnAppFocusChange(bool focus) {};
+  virtual ~IDispResource() = default;
+
+  virtual void OnLostDisplay() {}
+  virtual void OnResetDisplay() {}
+  virtual void OnAppFocusChange(bool focus) {}
 };
 
 // interface used by clients to register into render loop
@@ -24,5 +26,7 @@ public:
 class IRenderLoop
 {
 public:
+  virtual ~IRenderLoop() = default;
+
   virtual void FrameMove() = 0;
 };

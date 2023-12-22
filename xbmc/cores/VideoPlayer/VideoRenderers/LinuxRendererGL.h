@@ -13,15 +13,10 @@
 #include "system_gl.h"
 
 #include "FrameBufferObject.h"
-#include "guilib/Shader.h"
 #include "cores/VideoSettings.h"
-#include "RenderFlags.h"
 #include "RenderInfo.h"
-#include "windowing/GraphicContext.h"
 #include "BaseRenderer.h"
 #include "ColorManager.h"
-#include "threads/Event.h"
-#include "VideoShaders/ShaderFormats.h"
 #include "utils/Geometry.h"
 
 extern "C" {
@@ -32,16 +27,14 @@ class CRenderCapture;
 class CRenderSystemGL;
 
 class CTexture;
-namespace Shaders { class BaseYUV2RGBGLSLShader; }
-namespace Shaders { class BaseVideoFilterShader; }
-
-struct DRAWRECT
+namespace Shaders
 {
-  float left;
-  float top;
-  float right;
-  float bottom;
-};
+namespace GL
+{
+class BaseYUV2RGBGLSLShader;
+class BaseVideoFilterShader;
+}
+} // namespace Shaders
 
 enum RenderMethod
 {
@@ -55,10 +48,6 @@ enum RenderQuality
   RQ_SINGLEPASS,
   RQ_MULTIPASS,
 };
-
-#define PLANE_Y 0
-#define PLANE_U 1
-#define PLANE_V 2
 
 #define FIELD_FULL 0
 #define FIELD_TOP 1
@@ -89,8 +78,10 @@ public:
 
   // Feature support
   bool SupportsMultiPassRendering() override;
-  bool Supports(ERENDERFEATURE feature) override;
-  bool Supports(ESCALINGMETHOD method) override;
+  bool Supports(ERENDERFEATURE feature) const override;
+  bool Supports(ESCALINGMETHOD method) const override;
+
+  CRenderCapture* GetRenderCapture() override;
 
 protected:
 
@@ -144,10 +135,10 @@ protected:
   GLint GetInternalFormat(GLint format, int bpp);
 
   // hooks for HwDec Renderer
-  virtual bool LoadShadersHook() { return false; };
-  virtual bool RenderHook(int idx) { return false; };
-  virtual void AfterRenderHook(int idx) {};
-  virtual bool CanSaveBuffers() { return true; };
+  virtual bool LoadShadersHook() { return false; }
+  virtual bool RenderHook(int idx) { return false; }
+  virtual void AfterRenderHook(int idx) {}
+  virtual bool CanSaveBuffers() { return true; }
 
   struct
   {
@@ -160,7 +151,7 @@ protected:
 
   bool m_bConfigured = false;
   bool m_bValidated = false;
-  GLenum m_textureTarget;
+  GLenum m_textureTarget = GL_TEXTURE_2D;
   int m_renderMethod = RENDER_GLSL;
   RenderQuality m_renderQuality = RQ_SINGLEPASS;
   CRenderSystemGL *m_renderSystem = nullptr;
@@ -211,8 +202,8 @@ protected:
   // field index 0 is full image, 1 is odd scanlines, 2 is even scanlines
   CPictureBuffer m_buffers[NUM_BUFFERS];
 
-  Shaders::BaseYUV2RGBGLSLShader *m_pYUVShader = nullptr;
-  Shaders::BaseVideoFilterShader *m_pVideoFilterShader = nullptr;
+  Shaders::GL::BaseYUV2RGBGLSLShader* m_pYUVShader = nullptr;
+  Shaders::GL::BaseVideoFilterShader* m_pVideoFilterShader = nullptr;
   ESCALINGMETHOD m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
   ESCALINGMETHOD m_scalingMethodGui = VS_SCALINGMETHOD_MAX;
   bool m_useDithering;
@@ -220,7 +211,7 @@ protected:
   bool m_fullRange;
   AVColorPrimaries m_srcPrimaries;
   bool m_toneMap = false;
-  int m_toneMapMethod = 0;
+  ETONEMAPMETHOD m_toneMapMethod = VS_TONEMAPMETHOD_OFF;
   float m_clearColour = 0.0f;
   bool m_pboSupported = true;
   bool m_pboUsed = false;

@@ -12,7 +12,7 @@
 #include "DllLibCurl.h"
 #include "URL.h"
 #include "utils/RegExp.h"
-#include "utils/XBMCTinyXML.h"
+#include "utils/XBMCTinyXML2.h"
 #include "utils/log.h"
 
 using namespace XFILE;
@@ -30,7 +30,7 @@ bool CDAVFile::Execute(const CURL& url)
   CURL url2(url);
   ParseAndCorrectUrl(url2);
 
-  CLog::Log(LOGDEBUG, "CDAVFile::Execute(%p) %s", (void*)this, m_url.c_str());
+  CLog::Log(LOGDEBUG, "CDAVFile::Execute({}) {}", fmt::ptr(this), m_url);
 
   assert(!(!m_state->m_easyHandle ^ !m_state->m_multiHandle));
   if( m_state->m_easyHandle == NULL )
@@ -56,23 +56,23 @@ bool CDAVFile::Execute(const CURL& url)
     std::string strResponse;
     ReadData(strResponse);
 
-    CXBMCTinyXML davResponse;
+    CXBMCTinyXML2 davResponse;
     davResponse.Parse(strResponse);
 
     if (!davResponse.Parse(strResponse))
     {
-      CLog::Log(LOGERROR, "CDAVFile::Execute - Unable to process dav response (%s)", CURL(m_url).GetRedacted().c_str());
+      CLog::Log(LOGERROR, "CDAVFile::Execute - Unable to process dav response ({})",
+                CURL(m_url).GetRedacted());
       Close();
       return false;
     }
 
-    TiXmlNode *pChild;
     // Iterate over all responses
-    for (pChild = davResponse.RootElement()->FirstChild(); pChild != 0; pChild = pChild->NextSibling())
+    for (auto* child = davResponse.RootElement()->FirstChild(); child; child = child->NextSibling())
     {
-      if (CDAVCommon::ValueWithoutNamespace(pChild, "response"))
+      if (CDAVCommon::ValueWithoutNamespace(child, "response"))
       {
-        std::string sRetCode = CDAVCommon::GetStatusTag(pChild->ToElement());
+        std::string sRetCode = CDAVCommon::GetStatusTag(child->ToElement());
         CRegExp rxCode;
         rxCode.RegComp("HTTP/.+\\s(\\d+)\\s.*");
         if (rxCode.RegFind(sRetCode) >= 0)
@@ -102,10 +102,10 @@ bool CDAVFile::Delete(const CURL& url)
 
   dav.SetCustomRequest(strRequest);
 
-  CLog::Log(LOGDEBUG, "CDAVFile::Delete - Execute DELETE (%s)", url.GetRedacted().c_str());
+  CLog::Log(LOGDEBUG, "CDAVFile::Delete - Execute DELETE ({})", url.GetRedacted());
   if (!dav.Execute(url))
   {
-    CLog::Log(LOGERROR, "CDAVFile::Delete - Unable to delete dav resource (%s)", url.GetRedacted().c_str());
+    CLog::Log(LOGERROR, "CDAVFile::Delete - Unable to delete dav resource ({})", url.GetRedacted());
     return false;
   }
 
@@ -129,10 +129,12 @@ bool CDAVFile::Rename(const CURL& url, const CURL& urlnew)
   dav.SetCustomRequest(strRequest);
   dav.SetRequestHeader("Destination", url2.GetWithoutUserDetails());
 
-  CLog::Log(LOGDEBUG, "CDAVFile::Rename - Execute MOVE (%s -> %s)", url.GetRedacted().c_str(), url2.GetRedacted().c_str());
+  CLog::Log(LOGDEBUG, "CDAVFile::Rename - Execute MOVE ({} -> {})", url.GetRedacted(),
+            url2.GetRedacted());
   if (!dav.Execute(url))
   {
-    CLog::Log(LOGERROR, "CDAVFile::Rename - Unable to rename dav resource (%s -> %s)", url.GetRedacted().c_str(), url2.GetRedacted().c_str());
+    CLog::Log(LOGERROR, "CDAVFile::Rename - Unable to rename dav resource ({} -> {})",
+              url.GetRedacted(), url2.GetRedacted());
     return false;
   }
 

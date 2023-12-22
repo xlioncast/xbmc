@@ -29,16 +29,14 @@ class CRenderCapture;
 class CRenderSystemGLES;
 
 class CTexture;
-namespace Shaders { class BaseYUV2RGBGLSLShader; }
-namespace Shaders { class BaseVideoFilterShader; }
-
-struct DRAWRECT
+namespace Shaders
 {
-  float left;
-  float top;
-  float right;
-  float bottom;
-};
+namespace GLES
+{
+class BaseYUV2RGBGLSLShader;
+class BaseVideoFilterShader;
+}
+} // namespace Shaders
 
 enum RenderMethod
 {
@@ -83,8 +81,10 @@ public:
 
   // Feature support
   bool SupportsMultiPassRendering() override;
-  bool Supports(ERENDERFEATURE feature) override;
-  bool Supports(ESCALINGMETHOD method) override;
+  bool Supports(ERENDERFEATURE feature) const override;
+  bool Supports(ESCALINGMETHOD method) const override;
+
+  CRenderCapture* GetRenderCapture() override;
 
 protected:
   static const int FIELD_FULL{0};
@@ -124,9 +124,9 @@ protected:
   void RenderSinglePass(int index, int field); // single pass glsl renderer
 
   // hooks for HwDec Renderered
-  virtual bool LoadShadersHook() { return false; };
-  virtual bool RenderHook(int idx) { return false; };
-  virtual void AfterRenderHook(int idx) {};
+  virtual bool LoadShadersHook() { return false; }
+  virtual bool RenderHook(int idx) { return false; }
+  virtual void AfterRenderHook(int idx) {}
 
   struct
   {
@@ -140,7 +140,7 @@ protected:
 
   bool m_bConfigured{false};
   bool m_bValidated{false};
-  GLenum m_textureTarget;
+  GLenum m_textureTarget = GL_TEXTURE_2D;
   int m_renderMethod{RENDER_GLSL};
   RenderQuality m_renderQuality{RQ_SINGLEPASS};
 
@@ -194,14 +194,15 @@ protected:
                  unsigned width,  unsigned height,
                  int stride, int bpp, void* data);
 
-  Shaders::BaseYUV2RGBGLSLShader *m_pYUVProgShader{nullptr};
-  Shaders::BaseYUV2RGBGLSLShader *m_pYUVBobShader{nullptr};
-  Shaders::BaseVideoFilterShader *m_pVideoFilterShader{nullptr};
+  Shaders::GLES::BaseYUV2RGBGLSLShader* m_pYUVProgShader{nullptr};
+  Shaders::GLES::BaseYUV2RGBGLSLShader* m_pYUVBobShader{nullptr};
+  Shaders::GLES::BaseVideoFilterShader* m_pVideoFilterShader{nullptr};
   ESCALINGMETHOD m_scalingMethod{VS_SCALINGMETHOD_LINEAR};
   ESCALINGMETHOD m_scalingMethodGui{VS_SCALINGMETHOD_MAX};
   bool m_fullRange;
   AVColorPrimaries m_srcPrimaries;
   bool m_toneMap = false;
+  ETONEMAPMETHOD m_toneMapMethod = VS_TONEMAPMETHOD_OFF;
   bool m_passthroughHDR = false;
   unsigned char* m_planeBuffer = nullptr;
   size_t m_planeBufferSize = 0;

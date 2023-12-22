@@ -8,12 +8,55 @@
 
 #include "DVDSubtitleTagSami.h"
 
-#include "DVDCodecs/Overlay/DVDOverlayText.h"
 #include "DVDSubtitleStream.h"
 #include "utils/CharsetConverter.h"
+#include "utils/ColorUtils.h"
 #include "utils/HTMLUtil.h"
 #include "utils/RegExp.h"
 #include "utils/StringUtils.h"
+
+#include <algorithm>
+
+namespace
+{
+
+std::string TranslateColorValue(std::string value)
+{
+  // Get hex color limited to first 6 chars only (e.g. #000000)
+  if (value[0] == '#' && value.size() >= 7)
+    return value.substr(1, 6);
+
+  // Find hex by color name
+  //! @todo: is needed to implement a common way to get color resources
+  //!        in order to find the color name on CSS colors list
+  StringUtils::ToLower(value);
+  const auto itHtmlColor = UTILS::COLOR::HTML_BASIC_COLORS.find(value);
+  if (itHtmlColor != UTILS::COLOR::HTML_BASIC_COLORS.cend())
+    return UTILS::COLOR::ConvertToHexRGB(itHtmlColor->second);
+
+  // Try validate hex color value
+  if (value.size() == 6)
+  {
+    bool isHex = true;
+    for (size_t i = 0; i < 6; i++)
+    {
+      const char currChar = value[i];
+      if (!(('0' <= currChar && currChar <= '9') || ('a' <= currChar && currChar <= 'f') ||
+            ('A' <= currChar && currChar <= 'F')))
+      {
+        isHex = false;
+        break;
+      }
+    }
+    if (isHex)
+      return value;
+  }
+
+  // Fallback to white
+  return "FFFFFF";
+}
+
+} // unnamed namespace
 
 CDVDSubtitleTagSami::~CDVDSubtitleTagSami()
 {
@@ -26,7 +69,7 @@ bool CDVDSubtitleTagSami::Init()
   delete m_tags;
   delete m_tagOptions;
   m_tags = new CRegExp(true);
-  if (!m_tags->RegComp("(<[^>]*>|\\{[^\\}]*\\})|\\[nh]"))
+  if (!m_tags->RegComp("(<[^>]*>|\\[nh])"))
     return false;
 
   m_tagOptions = new CRegExp(true);
@@ -36,66 +79,71 @@ bool CDVDSubtitleTagSami::Init()
   return true;
 }
 
-void CDVDSubtitleTagSami::ConvertLine(CDVDOverlayText* pOverlay, const char* line, int len, const char* lang)
+void CDVDSubtitleTagSami::ConvertLine(std::string& strUTF8, const char* langClassID)
 {
-  std::string strUTF8;
-  strUTF8.assign(line, len);
   StringUtils::Trim(strUTF8);
 
   int pos = 0;
   int del_start = 0;
-  while ((pos=m_tags->RegFind(strUTF8.c_str(), pos)) >= 0)
+  while ((pos = m_tags->RegFind(strUTF8.c_str(), pos)) >= 0)
   {
-    // Parse Tags
+    // Parser for SubRip/SAMI Tags
     std::string fullTag = m_tags->GetMatch(0);
     StringUtils::ToLower(fullTag);
     strUTF8.erase(pos, fullTag.length());
-    if (fullTag == "<b>" || fullTag == "{\\b1}")
+    if (fullTag == "<b>")
     {
       m_flag[FLAG_BOLD] = true;
-      strUTF8.insert(pos, "[B]");
-      pos += 3;
+      strUTF8.insert(pos, "{\\b1}");
+      pos += 5;
     }
-    else if ((fullTag == "</b>" || fullTag == "{\\b0}") && m_flag[FLAG_BOLD])
+    else if ((fullTag == "</b>") && m_flag[FLAG_BOLD])
     {
       m_flag[FLAG_BOLD] = false;
-      strUTF8.insert(pos, "[/B]");
-      pos += 4;
+      strUTF8.insert(pos, "{\\b0}");
+      pos += 5;
     }
-    else if (fullTag == "<i>" || fullTag == "{\\i1}")
+    else if (fullTag == "<i>")
     {
       m_flag[FLAG_ITALIC] = true;
-      strUTF8.insert(pos, "[I]");
-      pos += 3;
+      strUTF8.insert(pos, "{\\i1}");
+      pos += 5;
     }
-    else if ((fullTag == "</i>" || fullTag == "{\\i0}") && m_flag[FLAG_ITALIC])
+    else if ((fullTag == "</i>") && m_flag[FLAG_ITALIC])
     {
       m_flag[FLAG_ITALIC] = false;
-      strUTF8.insert(pos, "[/I]");
-      pos += 4;
+      strUTF8.insert(pos, "{\\i0}");
+      pos += 5;
     }
-    else if ((fullTag == "</font>" || fullTag == "{\\c}") && m_flag[FLAG_COLOR])
+    else if (fullTag == "<u>")
+    {
+      m_flag[FLAG_UNDERLINE] = true;
+      strUTF8.insert(pos, "{\\u1}");
+      pos += 5;
+    }
+    else if ((fullTag == "</u>") && m_flag[FLAG_UNDERLINE])
+    {
+      m_flag[FLAG_UNDERLINE] = false;
+      strUTF8.insert(pos, "{\\u0}");
+      pos += 5;
+    }
+    else if (fullTag == "<s>")
+    {
+      m_flag[FLAG_STRIKETHROUGH] = true;
+      strUTF8.insert(pos, "{\\s1}");
+      pos += 5;
+    }
+    else if ((fullTag == "</s>") && m_flag[FLAG_STRIKETHROUGH])
+    {
+      m_flag[FLAG_STRIKETHROUGH] = false;
+      strUTF8.insert(pos, "{\\s0}");
+      pos += 5;
+    }
+    else if ((fullTag == "</font>") && m_flag[FLAG_COLOR])
     {
       m_flag[FLAG_COLOR] = false;
-      strUTF8.insert(pos, "[/COLOR]");
-      pos += 8;
-    }
-    else if (StringUtils::StartsWith(fullTag, "{\\c&h") ||
-             StringUtils::StartsWith(fullTag, "{\\1c&h"))
-    {
-      m_flag[FLAG_COLOR] = true;
-      std::string tempColorTag = "[COLOR FF";
-      std::string tagOptionValue;
-      if (StringUtils::StartsWith(fullTag, "{\\c&h"))
-         tagOptionValue = fullTag.substr(5,6);
-      else
-         tagOptionValue = fullTag.substr(6,6);
-      tempColorTag += tagOptionValue.substr(4,2);
-      tempColorTag += tagOptionValue.substr(2,2);
-      tempColorTag += tagOptionValue.substr(0,2);
-      tempColorTag += "]";
-      strUTF8.insert(pos, tempColorTag);
-      pos += tempColorTag.length();
+      strUTF8.insert(pos, "{\\c}");
+      pos += 4;
     }
     else if (StringUtils::StartsWith(fullTag, "<font"))
     {
@@ -104,47 +152,31 @@ void CDVDSubtitleTagSami::ConvertLine(CDVDOverlayText* pOverlay, const char* lin
       {
         std::string tagOptionName = m_tagOptions->GetMatch(1);
         std::string tagOptionValue = m_tagOptions->GetMatch(2);
-        pos2 += tagOptionName.length() + tagOptionValue.length();
+        pos2 += static_cast<int>(tagOptionName.length() + tagOptionValue.length());
         if (tagOptionName == "color")
         {
           m_flag[FLAG_COLOR] = true;
-          std::string tempColorTag = "[COLOR ";
-          if (tagOptionValue[0] == '#')
-          {
-            tagOptionValue.erase(0, 1);
-            tempColorTag += "FF";
-          }
-          else if( tagOptionValue.size() == 6 )
-          {
-            bool bHex = true;
-            for( int i=0 ; i<6 ; i++ )
-            {
-              char temp = tagOptionValue[i];
-              if( !(('0' <= temp && temp <= '9') ||
-                ('a' <= temp && temp <= 'f') ||
-                ('A' <= temp && temp <= 'F') ))
-              {
-                bHex = false;
-                break;
-              }
-            }
-            if( bHex ) tempColorTag += "FF";
-          }
-          tempColorTag += tagOptionValue;
-          tempColorTag += "]";
-          strUTF8.insert(pos, tempColorTag);
-          pos += tempColorTag.length();
+
+          std::string colorHex = TranslateColorValue(tagOptionValue);
+          // Convert RGB to BGR
+          std::swap(colorHex[0], colorHex[4]);
+          std::swap(colorHex[1], colorHex[5]);
+
+          std::string colorTag = "{\\c&H" + colorHex + "&}";
+          strUTF8.insert(pos, colorTag);
+          pos += static_cast<int>(colorTag.length());
         }
       }
     }
-    else if (lang && (StringUtils::StartsWith(fullTag, "<p ")))
+    // Parse specific SAMI Tags (all below)
+    else if (langClassID && (StringUtils::StartsWith(fullTag, "<p ")))
     {
       int pos2 = 3;
       while ((pos2 = m_tagOptions->RegFind(fullTag.c_str(), pos2)) >= 0)
       {
         std::string tagOptionName = m_tagOptions->GetMatch(1);
-        std::string tagOptionValue = m_tagOptions->GetMatch(2);
-        pos2 += tagOptionName.length() + tagOptionValue.length();
+        std::string tagOptionValue = StringUtils::ToLower(m_tagOptions->GetMatch(2));
+        pos2 += static_cast<int>(tagOptionName.length() + tagOptionValue.length());
         if (tagOptionName == "class")
         {
           if (m_flag[FLAG_LANGUAGE])
@@ -152,7 +184,7 @@ void CDVDSubtitleTagSami::ConvertLine(CDVDOverlayText* pOverlay, const char* lin
             strUTF8.erase(del_start, pos - del_start);
             pos = del_start;
           }
-          if (!tagOptionValue.compare(lang))
+          if (!tagOptionValue.compare(langClassID))
           {
             m_flag[FLAG_LANGUAGE] = false;
           }
@@ -165,7 +197,7 @@ void CDVDSubtitleTagSami::ConvertLine(CDVDOverlayText* pOverlay, const char* lin
         }
       }
     }
-    else if (fullTag == "</p>" && m_flag[FLAG_LANGUAGE])
+    else if ((fullTag == "</p>") && m_flag[FLAG_LANGUAGE])
     {
       strUTF8.erase(del_start, pos - del_start);
       pos = del_start;
@@ -185,58 +217,67 @@ void CDVDSubtitleTagSami::ConvertLine(CDVDOverlayText* pOverlay, const char* lin
     }
   }
 
-  if(m_flag[FLAG_LANGUAGE])
+  if (m_flag[FLAG_LANGUAGE])
     strUTF8.erase(del_start);
 
   if (strUTF8.empty())
     return;
-
-  if( strUTF8[strUTF8.size()-1] == '\n' )
-    strUTF8.erase(strUTF8.size()-1);
+  if (strUTF8 == "&nbsp;") // SAMI specific blank paragraph parameter
+  {
+    strUTF8.clear();
+    return;
+  }
 
   std::wstring wStrHtml, wStr;
   g_charsetConverter.utf8ToW(strUTF8, wStrHtml, false);
   HTML::CHTMLUtil::ConvertHTMLToW(wStrHtml, wStr);
   g_charsetConverter.wToUTF8(wStr, strUTF8);
-
-  // add a new text element to our container
-  pOverlay->AddElement(new CDVDOverlayText::CElementText(strUTF8.c_str()));
 }
 
-void CDVDSubtitleTagSami::CloseTag(CDVDOverlayText* pOverlay)
+void CDVDSubtitleTagSami::CloseTag(std::string& text)
 {
   if (m_flag[FLAG_BOLD])
   {
-    pOverlay->AddElement(new CDVDOverlayText::CElementText("[/B]"));
     m_flag[FLAG_BOLD] = false;
+    text += "{\\b0}";
   }
   if (m_flag[FLAG_ITALIC])
   {
-    pOverlay->AddElement(new CDVDOverlayText::CElementText("[/I]"));
     m_flag[FLAG_ITALIC] = false;
+    text += "{\\i0}";
+  }
+  if (m_flag[FLAG_UNDERLINE])
+  {
+    m_flag[FLAG_UNDERLINE] = false;
+    text += "{\\u0}";
+  }
+  if (m_flag[FLAG_STRIKETHROUGH])
+  {
+    m_flag[FLAG_STRIKETHROUGH] = false;
+    text += "{\\s0}";
   }
   if (m_flag[FLAG_COLOR])
   {
-    pOverlay->AddElement(new CDVDOverlayText::CElementText("[/COLOR]"));
     m_flag[FLAG_COLOR] = false;
+    text += "{\\c}";
   }
   m_flag[FLAG_LANGUAGE] = false;
 }
 
 void CDVDSubtitleTagSami::LoadHead(CDVDSubtitleStream* samiStream)
 {
-  char cLine[1024];
   bool inSTYLE = false;
   CRegExp reg(true);
-  if (!reg.RegComp("\\.([a-z]+)[ \t]*\\{[ \t]*name:([^;]*?);[ \t]*lang:([^;]*?);[ \t]*SAMIType:([^;]*?);[ \t]*\\}"))
+  if (!reg.RegComp("\\.([a-z]+)[ \t]*\\{[ \t]*name:([^;]*?);[ \t]*lang:([^;]*?);[ "
+                   "\t]*SAMIType:([^;]*?);[ \t]*\\}"))
     return;
 
-  while (samiStream->ReadLine(cLine, sizeof(cLine)))
+  std::string line;
+  while (samiStream->ReadLine(line))
   {
-    std::string line = cLine;
     StringUtils::Trim(line);
 
-   if (StringUtils::EqualsNoCase(line, "<BODY>"))
+    if (StringUtils::EqualsNoCase(line, "<BODY>"))
       break;
     if (inSTYLE)
     {

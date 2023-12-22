@@ -9,7 +9,7 @@
 #pragma once
 
 #include "IConfigurationWindow.h"
-#include "games/controllers/ControllerFeature.h"
+#include "games/controllers/input/PhysicalFeature.h"
 #include "input/XBMC_keysym.h"
 #include "input/joysticks/DriverPrimitive.h"
 #include "input/joysticks/interfaces/IButtonMapper.h"
@@ -34,6 +34,9 @@ class IActionMap;
 
 namespace GAME
 {
+/*!
+ * \ingroup games
+ */
 class CGUIConfigurationWizard : public IConfigurationWizard,
                                 public JOYSTICK::IButtonMapper,
                                 public KEYBOARD::IKeyboardDriverHandler,
@@ -50,7 +53,7 @@ public:
            const std::vector<IFeatureButton*>& buttons) override;
   void OnUnfocus(IFeatureButton* button) override;
   bool Abort(bool bWait = true) override;
-  void RegisterKey(const CControllerFeature& key) override;
+  void RegisterKey(const CPhysicalFeature& key) override;
   void UnregisterKeys() override;
 
   // implementation of IButtonMapper
@@ -78,7 +81,7 @@ private:
   void InitializeState(void);
 
   bool IsMapping() const;
-  bool IsMapping(const std::string& deviceName) const;
+  bool IsMapping(const std::string& location) const;
 
   void InstallHooks(void);
   void RemoveHooks(void);
@@ -99,7 +102,7 @@ private:
   JOYSTICK::THROTTLE_DIRECTION m_throttleDirection;
   std::set<JOYSTICK::CDriverPrimitive> m_history; // History to avoid repeated features
   bool m_lateAxisDetected; // Set to true if an axis is detected during button mapping
-  std::string m_deviceName; // Name of device that we're mapping
+  std::string m_location; // Peripheral location of device that we're mapping
   bool m_bIsKeyboard = false; // True if we're mapping keyboard keys
   CCriticalSection m_stateMutex;
 
@@ -111,7 +114,7 @@ private:
 
   // Keyboard handling
   std::unique_ptr<KEYBOARD::IActionMap> m_actionMap;
-  std::map<XBMCKey, CControllerFeature> m_keyMap; // Keycode -> feature
+  std::map<XBMCKey, CPhysicalFeature> m_keyMap; // Keycode -> feature
 };
 } // namespace GAME
 } // namespace KODI

@@ -1,13 +1,14 @@
 ![Kodi Logo](resources/banner_slim.png)
 
 # macOS build guide
-This guide has been tested with macOS 10.13.4()17E199 High Sierra and Xcode 9.3(9E145). It is meant to build Kodi for macOS using **[Kodi's unified depends build system](../tools/depends/README.md)**. Please read it in full before you proceed to familiarize yourself with the build procedure.
+This guide has been tested using Xcode 11.3.1 running on MacOS 10.14.4 (Mojave). Please note this combination is the only version our CI system builds. The minimum OS requirement for this version of Xcode is MacOS 10.14.4. Other combinations may work but we provide no assurances that other combinations will build correctly and run identically to Team Kodi releases. It is meant to build Kodi for macOS using **[Kodi's unified depends build system](../tools/depends/README.md)**. Please read it in full before you proceed to familiarize yourself with the build procedure.
 
 ## Table of Contents
 1. **[Document conventions](#1-document-conventions)**
 2. **[Prerequisites](#2-prerequisites)**
 3. **[Get the source code](#3-get-the-source-code)**
-4. **[Configure and build tools and dependencies](#4-configure-and-build-tools-and-dependencies)**
+4. **[Configure and build tools and dependencies](#4-configure-and-build-tools-and-dependencies)**  
+  4.1. **[Advanced Configure Options](#41-advanced-configure-options)**  
 5. **[Build binary add-ons](#5-build-binary-add-ons)**
 6. **[Build Kodi](#6-build-kodi)**  
   6.1. **[Build with Xcode](#61-build-with-xcode)**  
@@ -55,11 +56,13 @@ Several different strategies are used to draw your attention to certain pieces o
 ## 2. Prerequisites
 * **[Java Development Kit (JDK)](http://www.oracle.com/technetwork/java/javase/downloads/index.html)**
 * **[Xcode](https://developer.apple.com/xcode/)**. Install it from the AppStore or from the **[Apple Developer Homepage](https://developer.apple.com/)**.
-* Device with **OSX 10.13 or newer** to run Kodi after build.
+* Device with **OSX 10.14 or newer** to run Kodi after build.
 
 Building for OSX/macOS should work with the following constellations of Xcode and OSX/macOS versions:
-  * Xcode 9.x on macOS 10.13.x (High Sierra)
+  * Xcode 12.4 against MacOSX SDK 11.1 on 10.15.7 (Catalina)(recommended)(CI)
+  * Xcode 13.x against MacOSX SDK 12.3 on 12.x (Monterey)(recommended)
 
+Team Kodi CI infrastructure is limited, and therefore we only have the single combination tested. Newer xcode/macos combinations generally should work, however the team does not actively test/use pre-release versions, so use with caution. Earlier versions may work, however we dont actively support them, so use with caution.
 **WARNING:** Start Xcode after installation finishes. You need to accept the licenses and install missing components.
 
 **[back to top](#table-of-contents)**
@@ -83,11 +86,18 @@ Kodi can be built as either a 32bit or 64bit program. The dependencies are built
 **TIP:** Look for comments starting with `Or ...` and only execute the command(s) you need.
 **NOTE:** `--with-platform` is mandatory for all Apple platforms
 
-Configure build:
+Configure build (x86 intel):
 ```
 cd $HOME/kodi/tools/depends
 ./bootstrap
 ./configure --host=x86_64-apple-darwin --with-platform=macos
+```
+
+Configure build (apple silicon):
+```
+cd $HOME/kodi/tools/depends
+./bootstrap
+./configure --host=aarch64-apple-darwin --with-platform=macos
 ```
 
 Build tools and dependencies:
@@ -99,10 +109,82 @@ make -j$(getconf _NPROCESSORS_ONLN)
 
 **WARNING:** Look for the `Dependencies built successfully.` success message. If in doubt run a single threaded `make` command until the message appears. If the single make fails, clean the specific library by issuing `make -C target/<name_of_failed_lib> distclean` and run `make`again.
 
-**NOTE:** **Advanced developers** may want to specify an SDK version (if multiple versions are installed) in the configure line(s) shown above. The example below would use SDK 10.13:
+**NOTE:** **Advanced developers** may want to specify an SDK version (if multiple versions are installed) in the configure line(s) shown above. The example below would use SDK 10.14:
 ```
-./configure --host=x86_64-apple-darwin --with-platform=macos --with-sdk=10.13
+./configure --host=x86_64-apple-darwin --with-platform=macos --with-sdk=10.14
 ```
+
+### 4.1. Advanced Configure Options
+
+
+**All platforms:**
+
+```
+--with-toolchain=<path>
+```
+  specify path to toolchain. Auto set for android. Defaults to xcode root for darwin, /usr for linux
+
+```
+--enable-debug=<yes:no>
+```
+  enable debugging information (default is yes)
+
+```
+--disable-ccache
+```
+  disable ccache
+
+```
+--with-tarballs=<path>
+```
+  path where tarballs will be saved [prefix/xbmc-tarballs]
+
+```
+--with-cpu=<cpu>
+```
+  optional. specify target cpu. guessed if not specified
+
+```
+--with-linker=<linker>
+```
+  specify linker to use. (default is ld)
+
+```
+--with-platform=<platform>
+```
+  target platform
+
+```
+--enable-gplv3=<yes:no>
+```
+  enable gplv3 components. (default is yes)
+
+```
+--with-target-cflags=<cflags>
+```
+  C compiler flags (target)
+
+```
+--with-target-cxxflags=<cxxflags>
+```
+  C++ compiler flags (target)
+
+```
+--with-target-ldflags=<ldflags>
+```
+  linker flags. Use e.g. for -l<lib> (target)
+
+```
+--with-ffmpeg-options
+```
+  FFmpeg configure options, e.g. --enable-vaapi (target)
+
+**Apple Specific:**
+
+```
+--with-sdk=<sdknumber>
+```
+  specify sdk platform version.
 
 **[back to top](#table-of-contents)** | **[back to section top](#4-configure-and-build-tools-and-dependencies)**
 
@@ -161,12 +243,12 @@ Change to build directory:
 cd $HOME/kodi-build
 ```
 
-Generate Xcode project:
+Generate Xcode project (x86_64 intel):
 ```
-/Users/Shared/xbmc-depends/x86_64-darwin17.5.0-native/bin/cmake -G Xcode -DCMAKE_TOOLCHAIN_FILE=/Users/Shared/xbmc-depends/macosx10.13_x86_64-target-debug/share/Toolchain.cmake ../kodi
+/Users/Shared/xbmc-depends/x86_64-darwin17.5.0-native/bin/cmake -G Xcode -DCMAKE_TOOLCHAIN_FILE=/Users/Shared/xbmc-depends/macosx10.14_x86_64-target-debug/share/Toolchain.cmake ../kodi
 ```
 
-**WARNING:** The toolchain file location differs depending on SDK version. You have to replace `x86_64-darwin17.5.0-native` and `macosx10.13_x86_64-target-debug` in the paths above with the correct ones on your system.
+**WARNING:** The toolchain file location differs depending on SDK version. You have to replace `x86_64-darwin17.5.0-native` and `macosx10.14_x86_64-target-debug` in the paths above with the correct ones on your system.
 
 You can check `Users/Shared/xbmc-depends` directory content with:
 ```
@@ -254,7 +336,7 @@ xcodebuild -target dmg
 ````
 **OR**
 ```
-cd $HOME/kodi-build/build
+cd $HOME/kodi-build
 /Users/Shared/xbmc-depends/x86_64-darwin17.5.0-native/bin/cmake --build . --target "dmg" --config "Debug"
 ```
 
@@ -262,11 +344,11 @@ Generated `dmg` file will be inside `$HOME/kodi-build/tools/darwin/packaging/osx
 
 Alternatively, if you built using make:
 ```
-cd $HOME/kodi/build
+cd $HOME/kodi-build
 make dmg
 ```
 
-Generated `dmg` file will be inside `$HOME/kodi/build/tools/darwin/packaging/osx/`.
+Generated `dmg` file will be inside `$HOME/kodi-build/tools/darwin/packaging/osx/`.
 
 **[back to top](#table-of-contents)**
 

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "DebugInfo.h"
+#include "RenderCapture.h"
 #include "RenderInfo.h"
 #include "VideoShaders/ShaderFormats.h"
 #include "cores/IPlayer.h"
@@ -42,7 +44,6 @@ enum RenderMethods
 };
 
 struct VideoPicture;
-class CRenderCapture;
 
 class CBaseRenderer
 {
@@ -54,9 +55,9 @@ public:
   virtual bool Configure(const VideoPicture &picture, float fps, unsigned int orientation) = 0;
   virtual bool IsConfigured() = 0;
   virtual void AddVideoPicture(const VideoPicture &picture, int index) = 0;
-  virtual bool IsPictureHW(const VideoPicture &picture) { return false; };
+  virtual bool IsPictureHW(const VideoPicture& picture) { return false; }
   virtual void UnInit() = 0;
-  virtual bool Flush(bool saveBuffers) { return false; };
+  virtual bool Flush(bool saveBuffers) { return false; }
   virtual void SetBufferSize(int numBuffers) { }
   virtual void ReleaseBuffer(int idx) { }
   virtual bool NeedBuffer(int idx) { return false; }
@@ -70,10 +71,10 @@ public:
 
   // Feature support
   virtual bool SupportsMultiPassRendering() = 0;
-  virtual bool Supports(ERENDERFEATURE feature) { return false; };
-  virtual bool Supports(ESCALINGMETHOD method) = 0;
+  virtual bool Supports(ERENDERFEATURE feature) const { return false; }
+  virtual bool Supports(ESCALINGMETHOD method) const = 0;
 
-  virtual bool WantsDoublePass() { return false; };
+  virtual bool WantsDoublePass() { return false; }
 
   void SetViewMode(int viewMode);
 
@@ -82,7 +83,7 @@ public:
   \param dest is the target rendering area honoring aspect ratio of source
   \param view is the entire target rendering area for the video (including black bars)
   */
-  void GetVideoRect(CRect &source, CRect &dest, CRect &view);
+  void GetVideoRect(CRect& source, CRect& dest, CRect& view) const;
   float GetAspectRatio() const;
 
   static void SettingOptionsRenderMethodsFiller(const std::shared_ptr<const CSetting>& setting,
@@ -92,7 +93,20 @@ public:
 
   void SetVideoSettings(const CVideoSettings &settings);
 
+  // Gets debug info from render buffer
+  virtual DEBUG_INFO_VIDEO GetDebugInfo(int idx) { return {}; }
+
+  virtual CRenderCapture* GetRenderCapture() { return nullptr; }
+
 protected:
+  void CalcDestRect(float offsetX,
+                    float offsetY,
+                    float width,
+                    float height,
+                    float inputFrameRatio,
+                    float zoomAmount,
+                    float verticalShift,
+                    CRect& destRect);
   void CalcNormalRenderRect(float offsetX, float offsetY, float width, float height,
                             float inputFrameRatio, float zoomAmount, float verticalShift);
   void CalculateFrameAspectRatio(unsigned int desired_width, unsigned int desired_height);
@@ -100,6 +114,7 @@ protected:
   virtual void ReorderDrawPoints();
   virtual EShaderFormat GetShaderFormat();
   void MarkDirty();
+  void EnableAlwaysClip();
 
   //@todo drop those
   void saveRotatedCoords();//saves the current state of m_rotatedDestCoords
@@ -127,4 +142,7 @@ protected:
   AVPixelFormat m_format = AV_PIX_FMT_NONE;
 
   CVideoSettings m_videoSettings;
+
+private:
+  bool m_alwaysClip = false;
 };

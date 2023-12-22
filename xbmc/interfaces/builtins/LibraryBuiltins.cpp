@@ -8,7 +8,6 @@
 
 #include "LibraryBuiltins.h"
 
-#include "Application.h"
 #include "GUIUserMessages.h"
 #include "MediaSource.h"
 #include "ServiceBroker.h"
@@ -18,7 +17,9 @@
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
 #include "messaging/helpers/DialogHelper.h"
+#include "messaging/helpers/DialogOKHelper.h"
 #include "music/MusicLibraryQueue.h"
+#include "music/infoscanner/MusicInfoScanner.h"
 #include "settings/LibExportSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -26,6 +27,7 @@
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 #include "video/VideoDatabase.h"
+#include "video/VideoLibraryQueue.h"
 
 using namespace KODI::MESSAGING;
 
@@ -43,23 +45,65 @@ static int CleanLibrary(const std::vector<std::string>& params)
                      || StringUtils::EqualsNoCase(params[0], "tvshows")
                      || StringUtils::EqualsNoCase(params[0], "musicvideos"))
   {
-    if (!g_application.IsVideoScanning())
+    if (!CVideoLibraryQueue::GetInstance().IsScanningLibrary())
     {
-      const std::string content = (params.empty() || params[0] == "video") ? "" : params[0];
-      g_application.StartVideoCleanup(userInitiated, content, params.size() > 2 ? params[2] : "");
+      if (userInitiated && CVideoLibraryQueue::GetInstance().IsRunning())
+        HELPERS::ShowOKDialogText(CVariant{700}, CVariant{703});
+      else
+      {
+        const std::string content = (params.empty() || params[0] == "video") ? "" : params[0];
+        const std::string directory = params.size() > 2 ? params[2] : "";
+
+        std::set<int> paths;
+        if (!content.empty() || !directory.empty())
+        {
+          CVideoDatabase db;
+          std::set<std::string> contentPaths;
+          if (db.Open())
+          {
+            if (!directory.empty())
+              contentPaths.insert(directory);
+            else
+              db.GetPaths(contentPaths);
+            for (const std::string& path : contentPaths)
+            {
+              if (db.GetContentForPath(path) == content)
+              {
+                paths.insert(db.GetPathId(path));
+                std::vector<std::pair<int, std::string>> sub;
+                if (db.GetSubPaths(path, sub))
+                {
+                  for (const auto& it : sub)
+                    paths.insert(it.first);
+                }
+              }
+            }
+          }
+          if (paths.empty())
+            return 0;
+        }
+
+        if (userInitiated)
+          CVideoLibraryQueue::GetInstance().CleanLibraryModal(paths);
+        else
+          CVideoLibraryQueue::GetInstance().CleanLibrary(paths, true);
+      }
     }
     else
       CLog::Log(LOGERROR, "CleanLibrary is not possible while scanning or cleaning");
   }
   else if (StringUtils::EqualsNoCase(params[0], "music"))
   {
-    if (!g_application.IsMusicScanning())
-      g_application.StartMusicCleanup(userInitiated);
+    if (!CMusicLibraryQueue::GetInstance().IsScanningLibrary())
+    {
+      if (!(userInitiated && CMusicLibraryQueue::GetInstance().IsRunning()))
+        CMusicLibraryQueue::GetInstance().CleanLibrary(userInitiated);
+    }
     else
       CLog::Log(LOGERROR, "CleanLibrary is not possible while scanning for media info");
   }
   else
-    CLog::Log(LOGERROR, "Unknown content type '%s' passed to CleanLibrary, ignoring", params[0].c_str());
+    CLog::Log(LOGERROR, "Unknown content type '{}' passed to CleanLibrary, ignoring", params[0]);
 
   return 0;
 }
@@ -93,8 +137,8 @@ static int ExportLibrary(const std::vector<std::string>& params)
   else
   {
     HELPERS::DialogResponse result = HELPERS::ShowYesNoDialogText(CVariant{iHeading}, CVariant{20426}, CVariant{20428}, CVariant{20429});
-    cancelled = result == HELPERS::DialogResponse::CANCELLED;
-    singleFile = result != HELPERS::DialogResponse::YES;
+    cancelled = result == HELPERS::DialogResponse::CHOICE_CANCELLED;
+    singleFile = result != HELPERS::DialogResponse::CHOICE_YES;
   }
 
   if (cancelled)
@@ -107,8 +151,8 @@ static int ExportLibrary(const std::vector<std::string>& params)
     else
     {
       HELPERS::DialogResponse result = HELPERS::ShowYesNoDialogText(CVariant{iHeading}, CVariant{20430});
-      cancelled = result == HELPERS::DialogResponse::CANCELLED;
-      thumbs = result == HELPERS::DialogResponse::YES;
+      cancelled = result == HELPERS::DialogResponse::CHOICE_CANCELLED;
+      thumbs = result == HELPERS::DialogResponse::CHOICE_YES;
     }
   }
 
@@ -122,7 +166,7 @@ static int ExportLibrary(const std::vector<std::string>& params)
     if (movieSetsInfoPath.empty())
     {
       auto result = HELPERS::ShowYesNoDialogText(CVariant{iHeading}, CVariant{36301});
-      cancelled = result != HELPERS::DialogResponse::YES;
+      cancelled = result != HELPERS::DialogResponse::CHOICE_YES;
     }
   }
 
@@ -136,8 +180,8 @@ static int ExportLibrary(const std::vector<std::string>& params)
     else
     {
       HELPERS::DialogResponse result = HELPERS::ShowYesNoDialogText(CVariant{iHeading}, CVariant{20436});
-      cancelled = result == HELPERS::DialogResponse::CANCELLED;
-      actorThumbs = result == HELPERS::DialogResponse::YES;
+      cancelled = result == HELPERS::DialogResponse::CHOICE_CANCELLED;
+      actorThumbs = result == HELPERS::DialogResponse::CHOICE_YES;
     }
   }
 
@@ -151,8 +195,8 @@ static int ExportLibrary(const std::vector<std::string>& params)
     else
     {
       HELPERS::DialogResponse result = HELPERS::ShowYesNoDialogText(CVariant{iHeading}, CVariant{20431});
-      cancelled = result == HELPERS::DialogResponse::CANCELLED;
-      overwrite = result == HELPERS::DialogResponse::YES;
+      cancelled = result == HELPERS::DialogResponse::CHOICE_CANCELLED;
+      overwrite = result == HELPERS::DialogResponse::CHOICE_YES;
     }
   }
 
@@ -196,7 +240,7 @@ Avoiding breaking change to original ExportLibrary routine parameters
 *           params[1] = export type "singlefile", "separate", or "library".
 *           params[2] = path of destination folder.
 *           params[3,...] = "unscraped" to include unscraped items
-*           params[3,...] = "overwrite" to overwrite exitsing files.
+*           params[3,...] = "overwrite" to overwrite existing files.
 *           params[3,...] = "artwork" to include images such as thumbs and fanart.
 *           params[3,...] = "skipnfo" to not include nfo files (just art).
 *           params[3,...] = "ablums" to include albums.
@@ -270,17 +314,20 @@ static int UpdateLibrary(const std::vector<std::string>& params)
     userInitiated = StringUtils::EqualsNoCase(params[2], "true");
   if (StringUtils::EqualsNoCase(params[0], "music"))
   {
-    if (g_application.IsMusicScanning())
-      g_application.StopMusicScan();
+    if (CMusicLibraryQueue::GetInstance().IsScanningLibrary())
+      CMusicLibraryQueue::GetInstance().StopLibraryScanning();
     else
-      g_application.StartMusicScan(params.size() > 1 ? params[1] : "", userInitiated);
+      CMusicLibraryQueue::GetInstance().ScanLibrary(params.size() > 1 ? params[1] : "",
+                                                    MUSIC_INFO::CMusicInfoScanner::SCAN_NORMAL,
+                                                    userInitiated);
   }
   else if (StringUtils::EqualsNoCase(params[0], "video"))
   {
-    if (g_application.IsVideoScanning())
-      g_application.StopVideoScan();
+    if (CVideoLibraryQueue::GetInstance().IsScanningLibrary())
+      CVideoLibraryQueue::GetInstance().StopLibraryScanning();
     else
-      g_application.StartVideoScan(params.size() > 1 ? params[1] : "", userInitiated);
+      CVideoLibraryQueue::GetInstance().ScanLibrary(params.size() > 1 ? params[1] : "", false,
+                                                    userInitiated);
   }
 
   return 0;
@@ -333,7 +380,7 @@ static int SearchVideoLibrary(const std::vector<std::string>& params)
 ///     @param[in] exportFiletype        "singlefile"\, "separate" or "library".
 ///     @param[in] path                  Path to destination folder.
 ///     @param[in] unscraped             Add "unscraped" to include unscraped items.
-///     @param[in] overwrite             Add "overwrite" to overwrite exitsing files.
+///     @param[in] overwrite             Add "overwrite" to overwrite existing files.
 ///     @param[in] artwork               Add "artwork" to include images such as thumbs and fanart.
 ///     @param[in] skipnfo               Add "skipnfo" to not include nfo files(just art).
 ///     @param[in] albums                Add "ablums" to include albums.

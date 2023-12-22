@@ -18,10 +18,12 @@
  \brief
  */
 
-#include "utils/Color.h"
+#include "utils/ColorUtils.h"
 
 #include <map>
 #include <string>
+#include <utility>
+#include <vector>
 
 class CXBMCTinyXML;
 
@@ -33,12 +35,22 @@ public:
 
   void Load(const std::string &colorFile);
 
-  UTILS::Color GetColor(const std::string &color) const;
+  UTILS::COLOR::Color GetColor(const std::string& color) const;
 
   void Clear();
 
-protected:
-  bool LoadXML(CXBMCTinyXML &xmlDoc);
+  /*! \brief Load a colors list from a XML file
+    \param filePath The path to the XML file
+    \param colors The vector to populate
+    \param sortColors if true the colors will be sorted in a hue scale
+    \return true if success, otherwise false
+  */
+  bool LoadColorsListFromXML(const std::string& filePath,
+                             std::vector<std::pair<std::string, UTILS::COLOR::ColorInfo>>& colors,
+                             bool sortColors);
 
-  std::map<std::string, UTILS::Color> m_colors;
+protected:
+  bool LoadXML(CXBMCTinyXML& xmlDoc);
+
+  std::map<std::string, UTILS::COLOR::Color> m_colors;
 };

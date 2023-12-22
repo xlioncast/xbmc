@@ -9,7 +9,6 @@
 #include "LibraryDirectory.h"
 
 #include "Directory.h"
-#include "File.h"
 #include "FileItem.h"
 #include "GUIInfoManager.h"
 #include "SmartPlaylistDirectory.h"
@@ -18,6 +17,7 @@
 #include "guilib/TextureManager.h"
 #include "playlists/SmartPlayList.h"
 #include "profiles/ProfileManager.h"
+#include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/XMLUtils.h"
@@ -48,7 +48,8 @@ bool CLibraryDirectory::GetDirectory(const CURL& url, CFileItemList &items)
         XMLUtils::GetString(node, "content", type);
         if (type.empty())
         {
-          CLog::Log(LOGERROR, "<content> tag must not be empty for type=\"filter\" node '%s'", libNode.c_str());
+          CLog::Log(LOGERROR, "<content> tag must not be empty for type=\"filter\" node '{}'",
+                    libNode);
           return false;
         }
         if (XMLUtils::GetString(node, "label", label))
@@ -133,7 +134,7 @@ bool CLibraryDirectory::GetDirectory(const CURL& url, CFileItemList &items)
 
 TiXmlElement *CLibraryDirectory::LoadXML(const std::string &xmlFile)
 {
-  if (!CFile::Exists(xmlFile))
+  if (!CFileUtils::Exists(xmlFile))
     return nullptr;
 
   if (!m_doc.LoadFile(xmlFile))
@@ -146,7 +147,8 @@ TiXmlElement *CLibraryDirectory::LoadXML(const std::string &xmlFile)
   // check the condition
   std::string condition = XMLUtils::GetAttribute(xml, "visible");
   CGUIComponent* gui = CServiceBroker::GetGUI();
-  if (condition.empty() || (gui && gui->GetInfoManager().EvaluateBool(condition)))
+  if (condition.empty() ||
+      (gui && gui->GetInfoManager().EvaluateBool(condition, INFO::DEFAULT_CONTEXT)))
     return xml;
 
   return nullptr;
@@ -173,7 +175,7 @@ std::string CLibraryDirectory::GetNode(const CURL& url)
   std::string xmlNode = libDir;
   URIUtils::RemoveSlashAtEnd(xmlNode);
 
-  if (CFile::Exists(xmlNode))
+  if (CFileUtils::Exists(xmlNode))
     return xmlNode;
 
   return "";

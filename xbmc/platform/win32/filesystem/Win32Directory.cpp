@@ -46,8 +46,6 @@ CWin32Directory::~CWin32Directory(void)
 
 bool CWin32Directory::GetDirectory(const CURL& url, CFileItemList &items)
 {
-  items.Clear();
-
   std::string pathWithSlash(url.Get());
   if (!pathWithSlash.empty() && pathWithSlash.back() != '\\')
     pathWithSlash.push_back('\\');
@@ -76,7 +74,7 @@ bool CWin32Directory::GetDirectory(const CURL& url, CFileItemList &items)
     std::string itemName;
     if (!g_charsetConverter.wToUTF8(itemNameW, itemName, true) || itemName.empty())
     {
-      CLog::Log(LOGERROR, "%s: Can't convert wide string name to UTF-8 encoding", __FUNCTION__);
+      CLog::Log(LOGERROR, "{}: Can't convert wide string name to UTF-8 encoding", __FUNCTION__);
       continue;
     }
 
@@ -166,10 +164,8 @@ bool CWin32Directory::RemoveRecursive(const CURL& url)
   HANDLE hSearch;
   WIN32_FIND_DATAW findData = {};
 
-  if (g_sysinfo.IsWindowsVersionAtLeast(CSysInfo::WindowsVersionWin7))
-    hSearch = FindFirstFileExW(searchMask.c_str(), FindExInfoBasic, &findData, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
-  else
-    hSearch = FindFirstFileExW(searchMask.c_str(), FindExInfoStandard, &findData, FindExSearchNameMatch, nullptr, 0);
+  hSearch = FindFirstFileExW(searchMask.c_str(), FindExInfoBasic, &findData, FindExSearchNameMatch,
+                             nullptr, FIND_FIRST_EX_LARGE_FETCH);
 
   if (hSearch == INVALID_HANDLE_VALUE)
     return GetLastError() == ERROR_FILE_NOT_FOUND ? Exists(url) : false; // return true if directory exist and empty
@@ -187,7 +183,7 @@ bool CWin32Directory::RemoveRecursive(const CURL& url)
       std::string path;
       if (!g_charsetConverter.wToUTF8(pathW, path, true))
       {
-        CLog::Log(LOGERROR, "%s: Can't convert wide string name to UTF-8 encoding", __FUNCTION__);
+        CLog::Log(LOGERROR, "{}: Can't convert wide string name to UTF-8 encoding", __FUNCTION__);
         continue;
       }
 

@@ -1,56 +1,53 @@
 package @APP_PACKAGE@;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.lang.System;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.Iterator;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Properties;
-import java.util.Enumeration;
-import java.util.ArrayList;
+import static android.content.pm.PackageManager.FEATURE_LEANBACK;
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import android.Manifest;
-import android.net.Uri;
-import android.os.AsyncTask;
-import android.os.Build;
-import android.os.Bundle;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningTaskInfo;
 import android.app.AlertDialog;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.util.Log;
+import android.content.IntentFilter;
+import android.content.res.Resources;
+import android.content.res.Resources.NotFoundException;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
+import android.provider.Settings;
 import android.text.Html;
 import android.text.method.LinkMovementMethod;
+import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.content.res.Resources;
-import android.content.res.Resources.NotFoundException;
 
-import android.os.Handler;
-import android.os.Message;
-import android.content.BroadcastReceiver;
-import android.content.IntentFilter;
-import android.os.Environment;
-
-import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.lang.System;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 public class Splash extends Activity
 {
@@ -68,12 +65,12 @@ public class Splash extends Activity
   private static final int CheckingPermissionsDone = 10;
   private static final int CheckingPermissionsInfo = 11;
   private static final int CheckExternalStorage = 12;
-  private static final int DownloadingObb = 90;
-  private static final int DownloadObbDone = 91;
+  private static final int RecordAudioPermission = 13;
   private static final int StartingXBMC = 99;
 
   private static final String TAG = "@APP_NAME@";
 
+  private static final int RECORDAUDIO_RESULT_CODE = 8946;
   private static final int PERMISSION_RESULT_CODE = 8947;
 
   private String mCpuinfo = "";
@@ -91,6 +88,8 @@ public class Splash extends Activity
   private String sXbmcdata = "";
   private File fPackagePath = null;
   private File fXbmcHome = null;
+  private String sXbmcTemp = "";
+  private File fXbmcTemp = null;
 
   private BroadcastReceiver mExternalStorageReceiver = null;
   private boolean mExternalStorageChecked = false;
@@ -105,6 +104,7 @@ public class Splash extends Activity
 
     StateMachine(Splash a)
     {
+      super(Looper.myLooper());
       this.mSplash = a;
     }
 
@@ -128,17 +128,38 @@ public class Splash extends Activity
             @Override
             public void onClick(DialogInterface dialog, int which)
             {
-              mStateMachine.sendEmptyMessage(CheckingPermissions);
+              mStateMachine.sendEmptyMessage(RecordAudioPermission);
             }
           });
           dialog.show();
           break;
-        case CheckingPermissions:
+        case RecordAudioPermission:
           mSplash.mTextView.setText("Asking for permissions...");
           mSplash.mProgress.setVisibility(View.INVISIBLE);
 
-          requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+          requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},
+                  RECORDAUDIO_RESULT_CODE);
+          break;
+        case CheckingPermissions:
+          if (Build.VERSION.SDK_INT >= 33 || (Build.VERSION.SDK_INT >= 30 && !isAndroidTV()))
+          {
+            try
+            {
+              Intent intent = new Intent();
+              intent.setAction(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+              intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
+              startActivityForResult(intent, PERMISSION_RESULT_CODE);
+            }
+            catch (Exception e)
+            {
+              Log.d(TAG, "Exception asking for permissions: " + e.getMessage());
+            }
+          }
+          else
+          {
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
                     PERMISSION_RESULT_CODE);
+          }
           break;
         case CheckingPermissionsDone:
           if (mPermissionOK)
@@ -155,11 +176,6 @@ public class Splash extends Activity
         case Clearing:
           mSplash.mTextView.setText("Clearing cache...");
           mSplash.mProgress.setVisibility(View.INVISIBLE);
-          break;
-        case DownloadingObb:
-          break;
-        case DownloadObbDone:
-          new FillCache(mSplash).execute();
           break;
         case Caching:
           if (!mCachingDone)
@@ -228,145 +244,31 @@ public class Splash extends Activity
 
   private StateMachine mStateMachine = new StateMachine(this);
 
-  private class DownloadObb extends AsyncTask<String, Integer, Integer>
+  private class FillCache
   {
     private Splash mSplash = null;
     private int mProgressStatus = 0;
-
-    public DownloadObb(Splash splash)
-    {
-      this.mSplash = splash;
-    }
-
-    @Override
-    protected Integer doInBackground(String... sUrl)
-    {
-      InputStream input = null;
-      OutputStream output = null;
-      HttpURLConnection connection = null;
-
-      String src = sUrl[0];
-      String dest = sUrl[1];
-      File fObb = new File(dest);
-
-      Log.d(TAG, "Downloading " + src + " to " + dest);
-
-      if (!fObb.getParentFile().exists() && !fObb.getParentFile().mkdirs())
-      {
-        Log.e(TAG, "Error creating directory " + fObb.getParentFile().getAbsolutePath());
-        return -1;
-      }
-
-      int ret = 0;
-      try
-      {
-        URL url = new URL(src);
-        connection = (HttpURLConnection) url.openConnection();
-        connection.connect();
-
-        // expect HTTP 200 OK, so we don't mistakenly save error report
-        // instead of the file
-        if (connection.getResponseCode() != HttpURLConnection.HTTP_OK)
-        {
-          return -1;
-        }
-
-        // this will be useful to display download percentage
-        // might be -1: server did not report the length
-        int fileLength = connection.getContentLength();
-
-        // download the file
-        input = connection.getInputStream();
-        output = new FileOutputStream(dest);
-
-        byte data[] = new byte[4096];
-        long total = 0;
-        int count;
-        mProgress.setProgress(0);
-        mProgress.setMax(fileLength);
-        while ((count = input.read(data)) != -1)
-        {
-          // allow canceling with back button
-          if (isCancelled())
-          {
-            ret = -1;
-            break;
-          }
-          total += count;
-          // publishing the progress....
-          if (fileLength > 0) // only if total length is known
-            publishProgress((int) total);
-          output.write(data, 0, count);
-        }
-      }
-      catch (Exception e)
-      {
-        return -1;
-      }
-      finally
-      {
-        try
-        {
-          if (output != null)
-            output.close();
-          if (input != null)
-            input.close();
-        }
-        catch (IOException ignored)
-        {
-        }
-
-        if (connection != null)
-          connection.disconnect();
-      }
-      if (ret == 0)
-        mState = DownloadObbDone;
-      else
-        fObb.delete();
-
-      publishProgress(0);
-      return ret;
-    }
-
-    @Override
-    protected void onProgressUpdate(Integer... values)
-    {
-      switch (mState)
-      {
-        case DownloadingObb:
-          mSplash.mTextView.setText("Downloading OBB...");
-          mSplash.mProgress.setVisibility(View.VISIBLE);
-          mSplash.mProgress.setProgress(values[0]);
-          break;
-        case DownloadObbDone:
-          mSplash.mProgress.setVisibility(View.INVISIBLE);
-          break;
-      }
-    }
-
-    @Override
-    protected void onPostExecute(Integer result)
-    {
-      super.onPostExecute(result);
-      if (result < 0)
-      {
-        mState = InError;
-        mErrorMsg = "Cannot download obb.";
-      }
-
-      mStateMachine.sendEmptyMessage(mState);
-    }
-  }
-
-  private class FillCache extends AsyncTask<Void, Integer, Integer>
-  {
-
-    private Splash mSplash = null;
-    private int mProgressStatus = 0;
+    private ExecutorService executor;
+    private Handler handler;
 
     public FillCache(Splash splash)
     {
-      this.mSplash = splash;
+      mSplash = splash;
+      executor = Executors.newSingleThreadExecutor();
+      handler = new Handler(Looper.getMainLooper());
+    }
+
+    public void execute()
+    {
+      executor.execute(() -> {
+        Integer result = doInBackground();
+        handler.post(() -> onPostExecute(result));
+      });
+    }
+
+    protected void publishProgress(Integer value)
+    {
+      handler.post(() -> onProgressUpdate(value));
     }
 
     void DeleteRecursive(File fileOrDirectory)
@@ -378,8 +280,7 @@ public class Splash extends Activity
       fileOrDirectory.delete();
     }
 
-    @Override
-    protected Integer doInBackground(Void... param)
+    protected Integer doInBackground()
     {
       if (fXbmcHome.exists())
       {
@@ -478,15 +379,14 @@ public class Splash extends Activity
       return 0;
     }
 
-    @Override
-    protected void onProgressUpdate(Integer... values)
+    protected void onProgressUpdate(Integer value)
     {
       switch (mState)
       {
         case Caching:
           mSplash.mTextView.setText("Preparing for first run. Please wait...");
           mSplash.mProgress.setVisibility(View.VISIBLE);
-          mSplash.mProgress.setProgress(values[0]);
+          mSplash.mProgress.setProgress(value);
           break;
         case CachingDone:
           mSplash.mProgress.setVisibility(View.INVISIBLE);
@@ -494,10 +394,8 @@ public class Splash extends Activity
       }
     }
 
-    @Override
     protected void onPostExecute(Integer result)
     {
-      super.onPostExecute(result);
       if (result < 0)
       {
         mState = InError;
@@ -515,7 +413,11 @@ public class Splash extends Activity
     AlertDialog.Builder builder = new AlertDialog.Builder(act);
     builder.setTitle(title);
     builder.setIcon(android.R.drawable.ic_dialog_alert);
-    builder.setMessage(Html.fromHtml(message));
+    if (Build.VERSION.SDK_INT >= 24) {
+      builder.setMessage(Html.fromHtml(message, Html.FROM_HTML_MODE_LEGACY));
+    } else {
+      builder.setMessage(Html.fromHtml(message));
+    }
     builder.setPositiveButton("Exit",
             new DialogInterface.OnClickListener()
             {
@@ -595,34 +497,34 @@ public class Splash extends Activity
       }
     }
 
-    sPackagePath = getPackageResourcePath();
-    fPackagePath = new File(sPackagePath);
-    String obbfn = "";
-    if (fPackagePath.length() < 50 * 1024 * 1024)
+    sXbmcTemp = XBMCProperties.getStringProperty("xbmc.temp", "");
+    if (!sXbmcTemp.isEmpty())
     {
-      sPackagePath = XBMCProperties.getStringProperty("@APP_NAME_LC@.obb", "");
-      if (sPackagePath.equals(""))
+      File fXbmcTemp = new File(sXbmcTemp);
+      int loop = 20;
+      while (!fXbmcTemp.exists() && loop > 0)
       {
+        // Wait a while in case of non-primary sdcard
         try
         {
-          obbfn = "main." + getPackageManager().getPackageInfo(getPackageName(), 0).versionCode + "." + getPackageName() + ".obb";
-          sPackagePath = Environment.getExternalStorageDirectory()
-                  + "/Android/obb/" + getPackageName() + "/" + obbfn;
+          Thread.sleep(1000);
         }
-        catch (Exception e)
+        catch (InterruptedException e)
         {
+          continue;
         }
+        loop--;
       }
 
-      fPackagePath = new File(sPackagePath);
-      if (fPackagePath.length() < 10 * 1024 * 1024)
-        fPackagePath.delete();  // borked download
-      if (!fPackagePath.exists())
+      if (!fXbmcTemp.exists())
       {
-        mState = DownloadingObb;
-        new DownloadObb(this).execute("http://mirrors.@APP_NAME_LC@.tv/releases/android/obb/" + obbfn, sPackagePath);
+        sXbmcTemp = "";
+        System.setProperty("xbmc.temp", "");
       }
     }
+
+    sPackagePath = getPackageResourcePath();
+    fPackagePath = new File(sPackagePath);
   }
 
   private boolean ParseCpuFeature()
@@ -711,7 +613,14 @@ public class Splash extends Activity
   private boolean CheckPermissions()
   {
     boolean retVal = false;
-    if (android.os.Build.VERSION.SDK_INT > 22)
+    if (Build.VERSION.SDK_INT >= 33 || (Build.VERSION.SDK_INT >= 30 && !isAndroidTV()))
+    {
+      if (Environment.isExternalStorageManager())
+      {
+        retVal = true;
+      }
+    }
+    else if (Build.VERSION.SDK_INT > 22)
     {
       int permissionCheck;
       permissionCheck = checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE);
@@ -737,9 +646,28 @@ public class Splash extends Activity
         {
           mPermissionOK = true;
         }
+        mStateMachine.sendEmptyMessage(CheckingPermissionsDone);
+        break;
+      }
+      case RECORDAUDIO_RESULT_CODE:
+      {
+        mStateMachine.sendEmptyMessage(CheckingPermissions);
       }
     }
-    mStateMachine.sendEmptyMessage(CheckingPermissionsDone);
+  }
+
+  @Override
+  protected void onActivityResult(int requestCode, int resultCode, Intent data)
+  {
+    super.onActivityResult(requestCode, resultCode, data);
+    if (requestCode == PERMISSION_RESULT_CODE)
+    {
+      if (Environment.isExternalStorageManager())
+      {
+        mPermissionOK = true;
+      }
+      mStateMachine.sendEmptyMessage(CheckingPermissionsDone);
+    }
   }
 
   void updateExternalStorageState()
@@ -861,7 +789,7 @@ public class Splash extends Activity
 
     if (mState != InError)
     {
-      if (pkg_arch.equalsIgnoreCase("arm"))
+      if (pkg_arch.equalsIgnoreCase("armeabi-v7a"))
       {
         // arm arch: check if the cpu supports neon
         boolean ret = ParseCpuFeature();
@@ -902,7 +830,7 @@ public class Splash extends Activity
 
         SetupEnvironment();
 
-        if ((mState != DownloadingObb && mState != InError) && fXbmcHome.exists() && fXbmcHome.lastModified() >= fPackagePath.lastModified() && !mInstallLibs)
+        if (mState != InError && fXbmcHome.exists() && fXbmcHome.lastModified() >= fPackagePath.lastModified() && !mInstallLibs)
         {
           mState = CachingDone;
           mCachingDone = true;
@@ -910,7 +838,7 @@ public class Splash extends Activity
       }
     }
 
-    if ((mState != DownloadingObb && mState != InError) && mCachingDone && mExternalStorageChecked && mPermissionOK)
+    if (mState != InError && mCachingDone && mExternalStorageChecked && mPermissionOK)
     {
       startXBMC();
       return;
@@ -920,7 +848,7 @@ public class Splash extends Activity
     mProgress = (ProgressBar) findViewById(R.id.progressBar1);
     mTextView = (TextView) findViewById(R.id.textView1);
 
-    if (mState == DownloadingObb || mState == InError || mState == CheckingPermissionsInfo)
+    if (mState == InError || mState == CheckingPermissionsInfo)
     {
       mStateMachine.sendEmptyMessage(mState);
       return;
@@ -937,6 +865,20 @@ public class Splash extends Activity
         new FillCache(this).execute();
       else
         mStateMachine.sendEmptyMessage(CachingDone);
+    }
+  }
+
+  private boolean isAndroidTV()
+  {
+    if (getPackageManager().hasSystemFeature(FEATURE_LEANBACK))
+    {
+      Log.d(TAG, "Running on an Android TV Device");
+      return true;
+    }
+    else
+    {
+      Log.d(TAG, "Running on a non Android TV Device");
+      return false;
     }
   }
 

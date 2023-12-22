@@ -8,6 +8,7 @@
 
 #pragma once
 
+// clang-format off
 #define PLAYER_HAS_MEDIA              1
 #define PLAYER_HAS_AUDIO              2
 #define PLAYER_HAS_VIDEO              3
@@ -26,7 +27,7 @@
 #define PLAYER_FORWARDING_16x        16
 #define PLAYER_FORWARDING_32x        17
 #define PLAYER_CACHING               20
-#define PLAYER_DISPLAY_AFTER_SEEK    21
+// unused id 21
 #define PLAYER_PROGRESS              22
 #define PLAYER_SEEKBAR               23
 #define PLAYER_SEEKTIME              24
@@ -35,7 +36,7 @@
 #define PLAYER_TIME                  27
 #define PLAYER_TIME_REMAINING        28
 #define PLAYER_DURATION              29
-// unused 30
+#define PLAYER_HASPERFORMEDSEEK      30
 #define PLAYER_SHOWINFO              31
 #define PLAYER_VOLUME                32
 #define PLAYER_MUTED                 33
@@ -73,11 +74,17 @@
 #define PLAYER_ICON                  66
 #define PLAYER_CUTLIST               67
 #define PLAYER_CHAPTERS              68
+#define PLAYER_EDITLIST 69
+#define PLAYER_CUTS 70
+#define PLAYER_SCENE_MARKERS 71
+#define PLAYER_HAS_SCENE_MARKERS 72
 // Keep player infolabels that work with offset and position together
 #define PLAYER_PATH                  81
 #define PLAYER_FILEPATH              82
 #define PLAYER_TITLE                 83
 #define PLAYER_FILENAME              84
+#define PLAYER_IS_REMOTE      85
+#define PLAYER_IS_EXTERNAL    86
 
 // Range of player infolabels that work with offset and position
 #define PLAYER_OFFSET_POSITION_FIRST PLAYER_PATH
@@ -147,7 +154,7 @@
 #define SYSTEM_PROFILECOUNT         181
 #define SYSTEM_ISFULLSCREEN         182
 #define SYSTEM_ISSTANDALONE         183
-#define SYSTEM_ISINHIBIT            184
+#define SYSTEM_IDLE_SHUTDOWN_INHIBITED 184
 #define SYSTEM_HAS_SHUTDOWN         185
 #define SYSTEM_HAS_PVR              186
 #define SYSTEM_STARTUP_WINDOW       187
@@ -162,7 +169,6 @@
 #define NETWORK_GATEWAY_ADDRESS     195
 #define NETWORK_DNS1_ADDRESS        196
 #define NETWORK_DNS2_ADDRESS        197
-#define NETWORK_DHCP_ADDRESS        198
 
 // Keep musicplayer infolabels that work with offset and position together
 #define MUSICPLAYER_TITLE           200
@@ -218,6 +224,8 @@
 #define MUSICPLAYER_CONTENT         246
 #define MUSICPLAYER_ISMULTIDISC     247
 
+// Videoplayer infolabels
+#define VIDEOPLAYER_HDR_TYPE          249
 // Keep videoplayer infolabels that work with offset and position together
 #define VIDEOPLAYER_TITLE             250
 #define VIDEOPLAYER_GENRE             251
@@ -249,10 +257,11 @@
 #define VIDEOPLAYER_USER_RATING       277
 #define VIDEOPLAYER_DBID              278
 #define VIDEOPLAYER_TVSHOWDBID        279
+#define VIDEOPLAYER_ART               280
 
 // Range of videoplayer infolabels that work with offset and position
 #define VIDEOPLAYER_OFFSET_POSITION_FIRST VIDEOPLAYER_TITLE
-#define VIDEOPLAYER_OFFSET_POSITION_LAST VIDEOPLAYER_TVSHOWDBID
+#define VIDEOPLAYER_OFFSET_POSITION_LAST VIDEOPLAYER_ART
 
 #define VIDEOPLAYER_AUDIO_BITRATE     281
 #define VIDEOPLAYER_VIDEO_BITRATE     282
@@ -389,6 +398,7 @@
 #define INTEGER_LESS_OR_EQUAL       454
 #define INTEGER_EVEN                455
 #define INTEGER_ODD                 456
+#define INTEGER_VALUEOF             457
 
 #define SKIN_BOOL                   600
 #define SKIN_STRING                 601
@@ -398,7 +408,11 @@
 #define SKIN_HAS_THEME              606
 #define SKIN_ASPECT_RATIO           607
 #define SKIN_FONT                   608
+#define SKIN_INTEGER 609
+#define SKIN_TIMER_IS_RUNNING 610
+#define SKIN_TIMER_ELAPSEDSECS 611
 
+#define SYSTEM_IS_SCREENSAVER_INHIBITED 641
 #define SYSTEM_ADDON_UPDATE_COUNT   642
 #define SYSTEM_PRIVACY_POLICY       643
 #define SYSTEM_TOTAL_MEMORY         644
@@ -468,6 +482,7 @@
 #define SYSTEM_MEDIA_AUDIO_CD       754
 
 #define SYSTEM_PLATFORM_DARWIN_TVOS 755
+#define SYSTEM_SUPPORTED_HDR_TYPES 756
 
 #define SLIDESHOW_ISPAUSED          800
 #define SLIDESHOW_ISRANDOM          801
@@ -550,6 +565,11 @@
 #define SYSTEM_HAS_CMS              1006
 #define SYSTEM_BUILD_VERSION_CODE 1007
 #define SYSTEM_BUILD_VERSION_GIT 1008
+
+static constexpr unsigned int SYSTEM_LOCALE_TIMEZONECOUNTRY = 1009;
+static constexpr unsigned int SYSTEM_LOCALE_TIMEZONE = 1010;
+static constexpr unsigned int SYSTEM_LOCALE_REGION = 1011;
+static constexpr unsigned int SYSTEM_LOCALE = 1012;
 
 #define PVR_CONDITIONS_START        1100
 #define PVR_IS_RECORDING            (PVR_CONDITIONS_START)
@@ -646,7 +666,9 @@
 #define PVR_TIMESHIFT_PROGRESS_END_TIME   (PVR_STRINGS_START + 71)
 #define PVR_EPG_EVENT_ICON                (PVR_STRINGS_START + 72)
 #define PVR_TIMESHIFT_SEEKBAR             (PVR_STRINGS_START + 73)
-#define PVR_STRINGS_END                   PVR_TIMESHIFT_SEEKBAR
+#define PVR_BACKEND_PROVIDERS             (PVR_STRINGS_START + 74)
+#define PVR_BACKEND_CHANNEL_GROUPS        (PVR_STRINGS_START + 75)
+#define PVR_STRINGS_END                   PVR_BACKEND_CHANNEL_GROUPS
 
 #define RDS_DATA_START              1400
 #define RDS_HAS_RDS                 (RDS_DATA_START)
@@ -709,6 +731,12 @@
 #define PLAYER_PROCESS_AUDIOCHANNELS (PLAYER_PROCESS + 9)
 #define PLAYER_PROCESS_AUDIOSAMPLERATE (PLAYER_PROCESS + 10)
 #define PLAYER_PROCESS_AUDIOBITSPERSAMPLE (PLAYER_PROCESS + 11)
+#define PLAYER_PROCESS_VIDEOSCANTYPE (PLAYER_PROCESS + 12)
+
+#define ADDON_INFOS                 1600
+#define ADDON_SETTING_STRING        (ADDON_INFOS)
+#define ADDON_SETTING_BOOL          (ADDON_INFOS + 1)
+#define ADDON_SETTING_INT           (ADDON_INFOS + 2)
 
 #define WINDOW_PROPERTY             9993
 #define WINDOW_IS_VISIBLE           9995
@@ -940,6 +968,13 @@
 #define LISTITEM_TVSHOWDBID         (LISTITEM_START + 205)
 #define LISTITEM_ALBUMSTATUS        (LISTITEM_START + 206)
 #define LISTITEM_ISAUTOUPDATEABLE   (LISTITEM_START + 207)
+#define LISTITEM_VIDEO_HDR_TYPE     (LISTITEM_START + 208)
+#define LISTITEM_SONG_VIDEO_URL     (LISTITEM_START + 209)
+#define LISTITEM_PARENTAL_RATING_CODE (LISTITEM_START + 210)
+#define LISTITEM_VIDEO_WIDTH        (LISTITEM_START + 211)
+#define LISTITEM_VIDEO_HEIGHT       (LISTITEM_START + 212)
+#define LISTITEM_HASVIDEOVERSIONS   (LISTITEM_START + 213)
+#define LISTITEM_ISVIDEOEXTRAS      (LISTITEM_START + 214)
 
 #define LISTITEM_END                (LISTITEM_START + 2500)
 
@@ -959,3 +994,4 @@
 #define INFOFLAG_LISTITEM_ABSOLUTE    (static_cast<uint32_t>(1 << 27))  // Absolute ListItem lookups
 #define INFOFLAG_LISTITEM_NOWRAP      (static_cast<uint32_t>(1 << 28))  // Do not wrap ListItem lookups
 #define INFOFLAG_LISTITEM_CONTAINER   (static_cast<uint32_t>(1 << 29))  // Lookup the item in given container
+// clang-format on

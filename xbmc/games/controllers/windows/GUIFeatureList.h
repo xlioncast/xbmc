@@ -10,8 +10,8 @@
 
 #include "IConfigurationWindow.h"
 #include "games/GameTypes.h"
-#include "games/controllers/ControllerFeature.h"
 #include "games/controllers/ControllerTypes.h"
+#include "games/controllers/input/PhysicalFeature.h"
 #include "input/joysticks/JoystickTypes.h"
 
 class CGUIButtonControl;
@@ -24,6 +24,9 @@ namespace KODI
 {
 namespace GAME
 {
+/*!
+ * \ingroup games
+ */
 class CGUIFeatureList : public IFeatureList
 {
 public:
@@ -47,26 +50,26 @@ private:
   struct FeatureGroup
   {
     std::string groupName;
-    std::vector<CControllerFeature> features;
+    std::vector<CPhysicalFeature> features;
     /*!
      * True if this group is a button that allows the user to map a key of
      * their choosing.
      */
     bool bIsVirtualKey = false;
   };
-  std::vector<FeatureGroup> GetFeatureGroups(const std::vector<CControllerFeature>& features) const;
-  std::vector<CGUIButtonControl*> GetButtons(const std::vector<CControllerFeature>& features,
+  std::vector<FeatureGroup> GetFeatureGroups(const std::vector<CPhysicalFeature>& features) const;
+  std::vector<CGUIButtonControl*> GetButtons(const std::vector<CPhysicalFeature>& features,
                                              unsigned int startIndex);
-  CGUIButtonControl* GetSelectKeyButton(const std::vector<CControllerFeature>& features,
+  CGUIButtonControl* GetSelectKeyButton(const std::vector<CPhysicalFeature>& features,
                                         unsigned int buttonIndex);
 
   // GUI stuff
   CGUIWindow* const m_window;
   unsigned int m_buttonCount = 0;
-  CGUIControlGroupList* m_guiList;
-  CGUIButtonControl* m_guiButtonTemplate;
-  CGUILabelControl* m_guiGroupTitle;
-  CGUIImage* m_guiFeatureSeparator;
+  CGUIControlGroupList* m_guiList = nullptr;
+  CGUIButtonControl* m_guiButtonTemplate = nullptr;
+  CGUILabelControl* m_guiGroupTitle = nullptr;
+  CGUIImage* m_guiFeatureSeparator = nullptr;
 
   // Game window stuff
   GameClientPtr m_gameClient;

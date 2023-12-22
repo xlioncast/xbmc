@@ -16,6 +16,8 @@
 #include "utils/XMLUtils.h"
 #include "utils/log.h"
 
+#include <mutex>
+#include <shared_mutex>
 #include <sstream>
 #include <utility>
 
@@ -66,18 +68,18 @@ bool DeserializeOptionsSort(const TiXmlElement* optionsElement, SettingOptionsSo
   return true;
 }
 
-CSetting::CSetting(const std::string& id,
-                   CSettingsManager* settingsManager /* = nullptr */,
-                   const std::string& name /* = "CSetting" */)
-  : ISetting(id, settingsManager), CStaticLoggerBase(name)
-{ }
+Logger CSetting::s_logger;
 
-CSetting::CSetting(const std::string& id,
-                   const CSetting& setting,
-                   const std::string& name /* = "CSetting" */)
-  : ISetting(id, setting.m_settingsManager), CStaticLoggerBase(name)
+CSetting::CSetting(const std::string& id, CSettingsManager* settingsManager /* = nullptr */)
+  : ISetting(id, settingsManager)
 {
-  m_id = id;
+  if (s_logger == nullptr)
+    s_logger = CServiceBroker::GetLogging().GetLogger("CSetting");
+}
+
+CSetting::CSetting(const std::string& id, const CSetting& setting)
+  : CSetting(id, setting.m_settingsManager)
+{
   Copy(setting);
 }
 
@@ -279,6 +281,24 @@ void CSetting::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
   m_callback->OnSettingAction(setting);
 }
 
+bool CSetting::DeserializeIdentification(const TiXmlNode* node,
+                                         std::string& identification,
+                                         bool& isReference)
+{
+  isReference = false;
+
+  // first check if we can simply retrieve the setting's identifier
+  if (ISetting::DeserializeIdentification(node, identification))
+    return true;
+
+  // otherwise try to retrieve a reference to another setting's identifier
+  if (!DeserializeIdentificationFromAttribute(node, SETTING_XML_ATTR_REFERENCE, identification))
+    return false;
+
+  isReference = true;
+  return true;
+}
+
 bool CSetting::OnSettingUpdate(const std::shared_ptr<CSetting>& setting,
                                const char* oldSettingId,
                                const TiXmlNode* oldSettingNode)
@@ -320,17 +340,22 @@ void CSetting::Copy(const CSetting &setting)
   m_changed = setting.m_changed;
 }
 
+Logger CSettingList::s_logger;
+
 CSettingList::CSettingList(const std::string& id,
                            std::shared_ptr<CSetting> settingDefinition,
                            CSettingsManager* settingsManager /* = nullptr */)
-  : CSetting(id, settingsManager, "CSettingList"), m_definition(std::move(settingDefinition))
-{ }
+  : CSetting(id, settingsManager), m_definition(std::move(settingDefinition))
+{
+  if (s_logger == nullptr)
+    s_logger = CServiceBroker::GetLogging().GetLogger("CSettingList");
+}
 
 CSettingList::CSettingList(const std::string& id,
                            std::shared_ptr<CSetting> settingDefinition,
                            int label,
                            CSettingsManager* settingsManager /* = nullptr */)
-  : CSetting(id, settingsManager, "CSettingList"), m_definition(std::move(settingDefinition))
+  : CSettingList(id, std::move(settingDefinition), settingsManager)
 {
   SetLabel(label);
 }
@@ -371,7 +396,7 @@ void CSettingList::MergeDetails(const CSetting& other)
 
 bool CSettingList::Deserialize(const TiXmlNode *node, bool update /* = false */)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (m_definition == nullptr)
     return false;
@@ -430,7 +455,7 @@ bool CSettingList::Deserialize(const TiXmlNode *node, bool update /* = false */)
 
 SettingType CSettingList::GetElementType() const
 {
-  CSharedLock lock(m_critical);
+  std::shared_lock<CSharedSection> lock(m_critical);
 
   if (m_definition == nullptr)
     return SettingType::Unknown;
@@ -479,7 +504,7 @@ bool CSettingList::CheckValidity(const std::string &value) const
 
 void CSettingList::Reset()
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
   SettingList values;
   for (const auto& it : m_defaults)
     values.push_back(it->Clone(it->GetId()));
@@ -498,7 +523,7 @@ bool CSettingList::FromString(const std::vector<std::string> &value)
 
 bool CSettingList::SetValue(const SettingList &values)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if ((int)values.size() < m_minimumItems ||
      (m_maximumItems > 0 && (int)values.size() > m_maximumItems))
@@ -541,7 +566,7 @@ bool CSettingList::SetValue(const SettingList &values)
 
 void CSettingList::SetDefault(const SettingList &values)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   m_defaults.clear();
   m_defaults.insert(m_defaults.begin(), values.begin(), values.end());
@@ -634,12 +659,15 @@ std::string CSettingList::toString(const SettingList &values) const
   return StringUtils::Join(strValues, m_delimiter);
 }
 
+Logger CSettingBool::s_logger;
+
 CSettingBool::CSettingBool(const std::string& id, CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingBool")
-{ }
+  : CSettingBool(id, DefaultLabel, DefaultValue, settingsManager)
+{
+}
 
 CSettingBool::CSettingBool(const std::string& id, const CSettingBool& setting)
-  : CTraitedSetting(id, setting, "CSettingBool")
+  : CSettingBool(id, setting.m_settingsManager)
 {
   copy(setting);
 }
@@ -648,9 +676,12 @@ CSettingBool::CSettingBool(const std::string& id,
                            int label,
                            bool value,
                            CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingBool"), m_value(value), m_default(value)
+  : CTraitedSetting(id, settingsManager), m_value(value), m_default(value)
 {
   SetLabel(label);
+
+  if (s_logger == nullptr)
+    s_logger = CServiceBroker::GetLogging().GetLogger("CSettingBool");
 }
 
 SettingPtr CSettingBool::Clone(const std::string &id) const
@@ -672,7 +703,7 @@ void CSettingBool::MergeDetails(const CSetting& other)
 
 bool CSettingBool::Deserialize(const TiXmlNode *node, bool update /* = false */)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (!CSetting::Deserialize(node, update))
     return false;
@@ -718,7 +749,7 @@ bool CSettingBool::CheckValidity(const std::string &value) const
 
 bool CSettingBool::SetValue(bool value)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (value == m_value)
     return true;
@@ -745,7 +776,7 @@ bool CSettingBool::SetValue(bool value)
 
 void CSettingBool::SetDefault(bool value)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   m_default = value;
   if (!m_changed)
@@ -776,12 +807,14 @@ bool CSettingBool::fromString(const std::string &strValue, bool &value) const
   return false;
 }
 
+Logger CSettingInt::s_logger;
+
 CSettingInt::CSettingInt(const std::string& id, CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingInt")
+  : CSettingInt(id, DefaultLabel, DefaultValue, settingsManager)
 { }
 
 CSettingInt::CSettingInt(const std::string& id, const CSettingInt& setting)
-  : CTraitedSetting(id, setting, "CSettingInt")
+  : CSettingInt(id, setting.m_settingsManager)
 {
   copy(setting);
 }
@@ -790,7 +823,7 @@ CSettingInt::CSettingInt(const std::string& id,
                          int label,
                          int value,
                          CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingInt"), m_value(value), m_default(value)
+  : CSettingInt(id, label, value, DefaultMin, DefaultStep, DefaultMax, settingsManager)
 {
   SetLabel(label);
 }
@@ -802,7 +835,7 @@ CSettingInt::CSettingInt(const std::string& id,
                          int step,
                          int maximum,
                          CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingInt"),
+  : CTraitedSetting(id, settingsManager),
     m_value(value),
     m_default(value),
     m_min(minimum),
@@ -810,6 +843,9 @@ CSettingInt::CSettingInt(const std::string& id,
     m_max(maximum)
 {
   SetLabel(label);
+
+  if (s_logger == nullptr)
+    s_logger = CServiceBroker::GetLogging().GetLogger("CSettingInt");
 }
 
 CSettingInt::CSettingInt(const std::string& id,
@@ -817,12 +853,9 @@ CSettingInt::CSettingInt(const std::string& id,
                          int value,
                          const TranslatableIntegerSettingOptions& options,
                          CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingInt"),
-    m_value(value),
-    m_default(value),
-    m_translatableOptions(options)
+  : CSettingInt(id, label, value, settingsManager)
 {
-  SetLabel(label);
+  SetTranslatableOptions(options);
 }
 
 SettingPtr CSettingInt::Clone(const std::string &id) const
@@ -865,7 +898,7 @@ void CSettingInt::MergeDetails(const CSetting& other)
 
 bool CSettingInt::Deserialize(const TiXmlNode *node, bool update /* = false */)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (!CSetting::Deserialize(node, update))
     return false;
@@ -993,7 +1026,7 @@ bool CSettingInt::CheckValidity(int value) const
 
 bool CSettingInt::SetValue(int value)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (value == m_value)
     return true;
@@ -1023,7 +1056,7 @@ bool CSettingInt::SetValue(int value)
 
 void CSettingInt::SetDefault(int value)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   m_default = value;
   if (!m_changed)
@@ -1032,7 +1065,7 @@ void CSettingInt::SetDefault(int value)
 
 SettingOptionsType CSettingInt::GetOptionsType() const
 {
-  CSharedLock lock(m_critical);
+  std::shared_lock<CSharedSection> lock(m_critical);
   if (!m_translatableOptions.empty())
     return SettingOptionsType::StaticTranslatable;
   if (!m_options.empty())
@@ -1045,7 +1078,7 @@ SettingOptionsType CSettingInt::GetOptionsType() const
 
 IntegerSettingOptions CSettingInt::UpdateDynamicOptions()
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
   IntegerSettingOptions options;
   if (m_optionsFiller == nullptr &&
      (m_optionsFillerName.empty() || m_settingsManager == nullptr))
@@ -1094,7 +1127,7 @@ void CSettingInt::copy(const CSettingInt &setting)
 {
   CSetting::Copy(setting);
 
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   m_value = setting.m_value;
   m_default = setting.m_default;
@@ -1122,13 +1155,15 @@ bool CSettingInt::fromString(const std::string &strValue, int &value)
   return true;
 }
 
+Logger CSettingNumber::s_logger;
+
 CSettingNumber::CSettingNumber(const std::string& id,
                                CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingNumber")
+  : CSettingNumber(id, DefaultLabel, DefaultValue, settingsManager)
 { }
 
 CSettingNumber::CSettingNumber(const std::string& id, const CSettingNumber& setting)
-  : CTraitedSetting(id, setting, "CSettingNumber")
+  : CSettingNumber(id, setting.m_settingsManager)
 {
   copy(setting);
 }
@@ -1137,9 +1172,8 @@ CSettingNumber::CSettingNumber(const std::string& id,
                                int label,
                                float value,
                                CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingNumber"), m_value(value), m_default(value)
+  : CSettingNumber(id, label, value, DefaultMin, DefaultStep, DefaultMax, settingsManager)
 {
-  SetLabel(label);
 }
 
 CSettingNumber::CSettingNumber(const std::string& id,
@@ -1149,14 +1183,17 @@ CSettingNumber::CSettingNumber(const std::string& id,
                                float step,
                                float maximum,
                                CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingNumber"),
-    m_value(value),
-    m_default(value),
-    m_min(minimum),
-    m_step(step),
-    m_max(maximum)
+  : CTraitedSetting(id, settingsManager),
+    m_value(static_cast<double>(value)),
+    m_default(static_cast<double>(value)),
+    m_min(static_cast<double>(minimum)),
+    m_step(static_cast<double>(step)),
+    m_max(static_cast<double>(maximum))
 {
   SetLabel(label);
+
+  if (s_logger == nullptr)
+    s_logger = CServiceBroker::GetLogging().GetLogger("CSettingNumber");
 }
 
 SettingPtr CSettingNumber::Clone(const std::string &id) const
@@ -1184,7 +1221,7 @@ void CSettingNumber::MergeDetails(const CSetting& other)
 
 bool CSettingNumber::Deserialize(const TiXmlNode *node, bool update /* = false */)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (!CSetting::Deserialize(node, update))
     return false;
@@ -1233,7 +1270,7 @@ std::string CSettingNumber::ToString() const
 bool CSettingNumber::Equals(const std::string &value) const
 {
   double dValue;
-  CSharedLock lock(m_critical);
+  std::shared_lock<CSharedSection> lock(m_critical);
   return (fromString(value, dValue) && m_value == dValue);
 }
 
@@ -1248,7 +1285,7 @@ bool CSettingNumber::CheckValidity(const std::string &value) const
 
 bool CSettingNumber::CheckValidity(double value) const
 {
-  CSharedLock lock(m_critical);
+  std::shared_lock<CSharedSection> lock(m_critical);
   if (m_min != m_max &&
      (value < m_min || value > m_max))
     return false;
@@ -1258,7 +1295,7 @@ bool CSettingNumber::CheckValidity(double value) const
 
 bool CSettingNumber::SetValue(double value)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (value == m_value)
     return true;
@@ -1288,7 +1325,7 @@ bool CSettingNumber::SetValue(double value)
 
 void CSettingNumber::SetDefault(double value)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   m_default = value;
   if (!m_changed)
@@ -1298,7 +1335,7 @@ void CSettingNumber::SetDefault(double value)
 void CSettingNumber::copy(const CSettingNumber &setting)
 {
   CSetting::Copy(setting);
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   m_value = setting.m_value;
   m_default = setting.m_default;
@@ -1320,13 +1357,16 @@ bool CSettingNumber::fromString(const std::string &strValue, double &value)
   return true;
 }
 
+const CSettingString::Value CSettingString::DefaultValue;
+Logger CSettingString::s_logger;
+
 CSettingString::CSettingString(const std::string& id,
                                CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingString")
+  : CSettingString(id, DefaultLabel, DefaultValue, settingsManager)
 { }
 
 CSettingString::CSettingString(const std::string& id, const CSettingString& setting)
-  : CTraitedSetting(id, setting, "CSettingString")
+  : CSettingString(id, setting.m_settingsManager)
 {
   copy(setting);
 }
@@ -1335,9 +1375,12 @@ CSettingString::CSettingString(const std::string& id,
                                int label,
                                const std::string& value,
                                CSettingsManager* settingsManager /* = nullptr */)
-  : CTraitedSetting(id, settingsManager, "CSettingString"), m_value(value), m_default(value)
+  : CTraitedSetting(id, settingsManager), m_value(value), m_default(value)
 {
   SetLabel(label);
+
+  if (s_logger == nullptr)
+    s_logger = CServiceBroker::GetLogging().GetLogger("CSettingString");
 }
 
 SettingPtr CSettingString::Clone(const std::string &id) const
@@ -1378,7 +1421,7 @@ void CSettingString::MergeDetails(const CSetting& other)
 
 bool CSettingString::Deserialize(const TiXmlNode *node, bool update /* = false */)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (!CSetting::Deserialize(node, update))
     return false;
@@ -1389,7 +1432,7 @@ bool CSettingString::Deserialize(const TiXmlNode *node, bool update /* = false *
     // get allowempty (needs to be parsed before parsing the default value)
     XMLUtils::GetBoolean(constraints, SETTING_XML_ELM_ALLOWEMPTY, m_allowEmpty);
 
-    // Values other than those in options contraints allowed to be added
+    // Values other than those in options constraints allowed to be added
     XMLUtils::GetBoolean(constraints, SETTING_XML_ELM_ALLOWNEWOPTION, m_allowNewOption);
 
     // get the entries
@@ -1452,7 +1495,7 @@ bool CSettingString::Deserialize(const TiXmlNode *node, bool update /* = false *
 
 bool CSettingString::CheckValidity(const std::string &value) const
 {
-  CSharedLock lock(m_critical);
+  std::shared_lock<CSharedSection> lock(m_critical);
   if (!m_allowEmpty && value.empty())
     return false;
 
@@ -1472,7 +1515,7 @@ bool CSettingString::CheckValidity(const std::string &value) const
 
 bool CSettingString::SetValue(const std::string &value)
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
 
   if (value == m_value)
     return true;
@@ -1502,7 +1545,7 @@ bool CSettingString::SetValue(const std::string &value)
 
 void CSettingString::SetDefault(const std::string &value)
 {
-  CSharedLock lock(m_critical);
+  std::shared_lock<CSharedSection> lock(m_critical);
 
   m_default = value;
   if (!m_changed)
@@ -1511,7 +1554,7 @@ void CSettingString::SetDefault(const std::string &value)
 
 SettingOptionsType CSettingString::GetOptionsType() const
 {
-  CSharedLock lock(m_critical);
+  std::shared_lock<CSharedSection> lock(m_critical);
   if (!m_translatableOptions.empty())
     return SettingOptionsType::StaticTranslatable;
   if (!m_options.empty())
@@ -1524,7 +1567,7 @@ SettingOptionsType CSettingString::GetOptionsType() const
 
 StringSettingOptions CSettingString::UpdateDynamicOptions()
 {
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
   StringSettingOptions options;
   if (m_optionsFiller == nullptr &&
      (m_optionsFillerName.empty() || m_settingsManager == nullptr))
@@ -1574,7 +1617,7 @@ void CSettingString::copy(const CSettingString &setting)
 {
   CSetting::Copy(setting);
 
-  CExclusiveLock lock(m_critical);
+  std::unique_lock<CSharedSection> lock(m_critical);
   m_value = setting.m_value;
   m_default = setting.m_default;
   m_allowEmpty = setting.m_allowEmpty;
@@ -1587,22 +1630,29 @@ void CSettingString::copy(const CSettingString &setting)
   m_dynamicOptions = setting.m_dynamicOptions;
 }
 
+Logger CSettingAction::s_logger;
+
 CSettingAction::CSettingAction(const std::string& id,
                                CSettingsManager* settingsManager /* = nullptr */)
-  : CSetting(id, settingsManager, "CSettingAction")
+  : CSettingAction(id, DefaultLabel, settingsManager)
 { }
 
 CSettingAction::CSettingAction(const std::string& id,
                                int label,
                                CSettingsManager* settingsManager /* = nullptr */)
-  : CSetting(id, settingsManager, "CSettingAction")
+  : CSetting(id, settingsManager)
 {
   SetLabel(label);
+
+  if (s_logger == nullptr)
+    s_logger = CServiceBroker::GetLogging().GetLogger("CSettingAction");
 }
 
 CSettingAction::CSettingAction(const std::string& id, const CSettingAction& setting)
-  : CSetting(id, setting, "CSettingAction"), m_data(setting.m_data)
-{ }
+  : CSettingAction(id, setting.m_settingsManager)
+{
+  copy(setting);
+}
 
 SettingPtr CSettingAction::Clone(const std::string &id) const
 {
@@ -1621,7 +1671,7 @@ void CSettingAction::MergeDetails(const CSetting& other)
 
 bool CSettingAction::Deserialize(const TiXmlNode *node, bool update /* = false */)
 {
-  CSharedLock lock(m_critical);
+  std::shared_lock<CSharedSection> lock(m_critical);
 
   if (!CSetting::Deserialize(node, update))
     return false;
@@ -1629,4 +1679,12 @@ bool CSettingAction::Deserialize(const TiXmlNode *node, bool update /* = false *
   m_data = XMLUtils::GetString(node, SETTING_XML_ELM_DATA);
 
   return true;
+}
+
+void CSettingAction::copy(const CSettingAction& setting)
+{
+  CSetting::Copy(setting);
+
+  std::unique_lock<CSharedSection> lock(m_critical);
+  m_data = setting.m_data;
 }

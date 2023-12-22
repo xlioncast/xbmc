@@ -92,6 +92,7 @@ public:
   std::string GetFileName() override;
 
   DemuxPacket* Read() override;
+  DemuxPacket* ReadInternal(bool keep);
 
   bool SeekTime(double time, bool backwards = false, double* startpts = NULL) override;
   bool SeekByte(int64_t pos);
@@ -130,7 +131,6 @@ protected:
   void ResetVideoStreams();
   AVDictionary* GetFFMpegOptionsFromInput();
   double ConvertTimestamp(int64_t pts, int den, int num);
-  void UpdateCurrentPTS();
   bool IsProgramChange();
   unsigned int HLSSelectProgram();
 
@@ -139,6 +139,8 @@ protected:
 
   void GetL16Parameters(int& channels, int& samplerate);
   double SelectAspect(AVStream* st, bool& forced);
+
+  StreamHdrType DetermineHdrType(AVStream* pStream);
 
   CCriticalSection m_critSection;
   std::map<int, CDemuxStream*> m_streams;
@@ -157,7 +159,7 @@ protected:
   unsigned int m_initialProgramNumber;
   int m_seekStream;
 
-  XbmcThreads::EndTime  m_timeout;
+  XbmcThreads::EndTime<> m_timeout;
 
   // Due to limitations of ffmpeg, we only can detect a program change
   // with a packet. This struct saves the packet for the next read and

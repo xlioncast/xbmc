@@ -32,24 +32,24 @@ public:
   virtual size_t GetMaxWriteSize(const size_t& iRequestSize) = 0;
   virtual int WriteToCache(const char *pBuffer, size_t iSize) = 0;
   virtual int ReadFromCache(char *pBuffer, size_t iMaxSize) = 0;
-  virtual int64_t WaitForData(unsigned int iMinAvail, unsigned int iMillis) = 0;
+  virtual int64_t WaitForData(uint32_t iMinAvail, std::chrono::milliseconds timeout) = 0;
 
   virtual int64_t Seek(int64_t iFilePosition) = 0;
 
   /*!
    \brief Reset cache position
    \param iSourcePosition position to reset to
-   \param clearAnyway whether to perform a full reset regardless of in cached range already
    \return Whether a full reset was performed, or not (e.g. only cache swap)
    \sa CCacheStrategy
    */
-  virtual bool Reset(int64_t iSourcePosition, bool clearAnyway=true) = 0;
+  virtual bool Reset(int64_t iSourcePosition) = 0;
 
   virtual void EndOfInput(); // mark the end of the input stream so that Read will know when to return EOF
   virtual bool IsEndOfInput();
   virtual void ClearEndOfInput();
 
   virtual int64_t CachedDataEndPosIfSeekTo(int64_t iFilePosition) = 0;
+  virtual int64_t CachedDataStartPos() = 0;
   virtual int64_t CachedDataEndPos() = 0;
   virtual bool IsCachedPosition(int64_t iFilePosition) = 0;
 
@@ -73,13 +73,14 @@ public:
   size_t GetMaxWriteSize(const size_t& iRequestSize) override;
   int WriteToCache(const char *pBuffer, size_t iSize) override;
   int ReadFromCache(char *pBuffer, size_t iMaxSize) override;
-  int64_t WaitForData(unsigned int iMinAvail, unsigned int iMillis) override;
+  int64_t WaitForData(uint32_t iMinAvail, std::chrono::milliseconds timeout) override;
 
   int64_t Seek(int64_t iFilePosition) override;
-  bool Reset(int64_t iSourcePosition, bool clearAnyway=true) override;
+  bool Reset(int64_t iSourcePosition) override;
   void EndOfInput() override;
 
   int64_t CachedDataEndPosIfSeekTo(int64_t iFilePosition) override;
+  int64_t CachedDataStartPos() override;
   int64_t CachedDataEndPos() override;
   bool IsCachedPosition(int64_t iFilePosition) override;
 
@@ -108,15 +109,16 @@ public:
   size_t GetMaxWriteSize(const size_t& iRequestSize) override;
   int WriteToCache(const char *pBuffer, size_t iSize) override;
   int ReadFromCache(char *pBuffer, size_t iMaxSize) override;
-  int64_t WaitForData(unsigned int iMinAvail, unsigned int iMillis) override;
+  int64_t WaitForData(uint32_t iMinAvail, std::chrono::milliseconds timeout) override;
 
   int64_t Seek(int64_t iFilePosition) override;
-  bool Reset(int64_t iSourcePosition, bool clearAnyway=true) override;
+  bool Reset(int64_t iSourcePosition) override;
   void EndOfInput() override;
   bool IsEndOfInput() override;
   void ClearEndOfInput() override;
 
   int64_t CachedDataEndPosIfSeekTo(int64_t iFilePosition) override;
+  int64_t CachedDataStartPos() override;
   int64_t CachedDataEndPos() override;
   bool IsCachedPosition(int64_t iFilePosition) override;
 

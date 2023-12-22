@@ -8,7 +8,14 @@
 
 #include "AddonExtensions.h"
 
+#include "utils/StringUtils.h"
+
 using namespace ADDON;
+
+bool SExtValue::asBoolean() const
+{
+  return StringUtils::EqualsNoCase(str, "true");
+}
 
 const SExtValue CAddonExtensions::GetValue(const std::string& id) const
 {
@@ -48,7 +55,7 @@ const EXT_ELEMENTS CAddonExtensions::GetElements(const std::string& id) const
   for (const auto& child : m_children)
   {
     if (child.first == id)
-      children.push_back(std::make_pair(child.first, child.second));
+      children.emplace_back(child.first, child.second);
   }
   return children;
 }
@@ -56,6 +63,6 @@ const EXT_ELEMENTS CAddonExtensions::GetElements(const std::string& id) const
 void CAddonExtensions::Insert(const std::string& id, const std::string& value)
 {
   EXT_VALUE extension;
-  extension.push_back(std::make_pair(id, SExtValue(value)));
-  m_values.push_back(std::make_pair(id, extension));
+  extension.emplace_back(id, SExtValue(value));
+  m_values.emplace_back(id, extension);
 }

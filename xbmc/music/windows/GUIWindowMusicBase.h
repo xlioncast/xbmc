@@ -13,7 +13,6 @@
 \brief
 */
 
-#include "PlayListPlayer.h"
 #include "music/MusicDatabase.h"
 #include "music/MusicInfoLoader.h"
 #include "music/MusicThumbLoader.h"
@@ -49,7 +48,7 @@ public:
 
   /*! \brief Once a music source is added, store source in library, and prompt
   the user to scan this folder into the library
-  \param oldName the original music source name 
+  \param oldName the original music source name
   \param source details of the music source (just added or edited)
   */
   static void OnAssignContent(const std::string& oldName, const CMediaSource& source);
@@ -71,8 +70,7 @@ protected:
 
   bool GetDirectory(const std::string &strDirectory, CFileItemList &items) override;
   virtual void OnRetrieveMusicInfo(CFileItemList& items);
-  void OnPrepareFileItems(CFileItemList &items) override;
-  void AddItemToPlayList(const CFileItemPtr &pItem, CFileItemList &queuedItems);
+  void OnPrepareFileItems(CFileItemList& items) override;
   void OnRipCD();
   std::string GetStartFolder(const std::string &dir) override;
   void OnItemLoaded(CFileItem* pItem) override {}

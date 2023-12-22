@@ -8,9 +8,10 @@
 
 #include "GUILabelControl.h"
 
+#include "GUIFont.h"
 #include "GUIMessage.h"
 #include "utils/CharsetConverter.h"
-#include "utils/Color.h"
+#include "utils/ColorUtils.h"
 #include "utils/StringUtils.h"
 
 using namespace KODI::GUILIB;
@@ -56,9 +57,9 @@ void CGUILabelControl::SetInfo(const GUIINFO::CGUIInfoLabel &infoLabel)
   m_infoLabel = infoLabel;
 }
 
-bool CGUILabelControl::UpdateColors()
+bool CGUILabelControl::UpdateColors(const CGUIListItem* item)
 {
-  bool changed = CGUIControl::UpdateColors();
+  bool changed = CGUIControl::UpdateColors(nullptr);
   changed |= m_label.UpdateColors();
 
   return changed;
@@ -74,17 +75,21 @@ void CGUILabelControl::UpdateInfo(const CGUIListItem *item)
     std::wstring utf16;
     g_charsetConverter.utf8ToW(label, utf16);
     vecText text; text.reserve(utf16.size()+1);
-    std::vector<UTILS::Color> colors;
+    std::vector<UTILS::COLOR::Color> colors;
     colors.push_back(m_label.GetLabelInfo().textColor);
     colors.push_back(m_label.GetLabelInfo().disabledColor);
-    UTILS::Color select = m_label.GetLabelInfo().selectedColor;
+    UTILS::COLOR::Color select = m_label.GetLabelInfo().selectedColor;
     if (!select)
       select = 0xFFFF0000;
     colors.push_back(select);
     colors.push_back(0xFF000000);
+
+    CGUIFont* font = m_label.GetLabelInfo().font;
+    uint32_t style = (font ? font->GetStyle() : (FONT_STYLE_NORMAL & FONT_STYLE_MASK)) << 24;
+
     for (unsigned int i = 0; i < utf16.size(); i++)
     {
-      unsigned int ch = utf16[i];
+      uint32_t ch = utf16[i] | style;
       if ((m_startSelection < m_endSelection) && (m_startSelection <= i && i < m_endSelection))
         ch |= (2 << 16);
       else if ((m_startHighlight < m_endHighlight) && (i < m_startHighlight || i >= m_endHighlight))
@@ -93,7 +98,7 @@ void CGUILabelControl::UpdateInfo(const CGUIListItem *item)
     }
     if (m_bShowCursor && m_iCursorPos >= 0 && (unsigned int)m_iCursorPos <= utf16.size())
     {
-      unsigned int ch = L'|';
+      uint32_t ch = L'|' | style;
       if ((++m_dwCounter % 50) <= 25)
         ch |= (3 << 16);
       text.insert(text.begin() + m_iCursorPos, ch);
@@ -203,7 +208,13 @@ bool CGUILabelControl::OnMessage(CGUIMessage& message)
     }
   }
   if (message.GetMessage() == GUI_MSG_REFRESH_TIMER && IsVisible())
+  {
     UpdateInfo();
+  }
+  else if (message.GetMessage() == GUI_MSG_WINDOW_RESIZE && IsVisible())
+  {
+    m_label.SetInvalid();
+  }
 
   return CGUIControl::OnMessage(message);
 }

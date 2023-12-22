@@ -33,7 +33,7 @@ public:
               const CLabelInfo* labelInfoMono = nullptr);
   CGUITextBox(const CGUITextBox &from);
   ~CGUITextBox(void) override;
-  CGUITextBox *Clone() const override { return new CGUITextBox(*this); };
+  CGUITextBox* Clone() const override { return new CGUITextBox(*this); }
 
   void DoProcess(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
   void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
@@ -58,7 +58,7 @@ public:
 
 protected:
   void UpdateVisibility(const CGUIListItem *item = NULL) override;
-  bool UpdateColors() override;
+  bool UpdateColors(const CGUIListItem* item) override;
   void UpdateInfo(const CGUIListItem *item = NULL) override;
   void UpdatePageControl();
   void ScrollToOffset(int offset, bool autoScroll = false);

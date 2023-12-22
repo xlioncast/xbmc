@@ -37,10 +37,12 @@ public:
 #else
 
 #include "PeripheralHID.h"
+#include "XBDateTime.h"
 #include "interfaces/AnnouncementManager.h"
 #include "threads/CriticalSection.h"
 #include "threads/Thread.h"
 
+#include <chrono>
 #include <queue>
 #include <vector>
 
@@ -169,7 +171,7 @@ private:
   std::vector<CecButtonPress> m_buttonQueue;
   CecButtonPress m_currentButton;
   std::queue<CecVolumeChange> m_volumeChangeQueue;
-  unsigned int m_lastKeypress;
+  std::chrono::time_point<std::chrono::steady_clock> m_lastKeypress;
   CecVolumeChange m_lastChange;
   int m_iExitCode;
   bool m_bIsMuted;
@@ -216,8 +218,8 @@ protected:
   CCriticalSection m_critSection;
   CEC::libcec_configuration m_configuration;
   CEC::libcec_configuration m_nextConfiguration;
-  bool m_bNextConfigurationScheduled;
-  bool m_bIsUpdating;
+  bool m_bNextConfigurationScheduled = false;
+  bool m_bIsUpdating = true;
 };
 } // namespace PERIPHERALS
 

@@ -37,8 +37,8 @@
 // because cmake uses this area in this form to perform its addon dependency
 // check.
 // clang-format off
-#define ADDON_GLOBAL_VERSION_MAIN                     "1.3.0"
-#define ADDON_GLOBAL_VERSION_MAIN_MIN                 "1.2.0"
+#define ADDON_GLOBAL_VERSION_MAIN                     "2.0.2"
+#define ADDON_GLOBAL_VERSION_MAIN_MIN                 "2.0.0"
 #define ADDON_GLOBAL_VERSION_MAIN_XML_ID              "kodi.binary.global.main"
 #define ADDON_GLOBAL_VERSION_MAIN_DEPENDS             "AddonBase.h" \
                                                       "addon-instance/" \
@@ -62,8 +62,8 @@
 #define ADDON_GLOBAL_VERSION_AUDIOENGINE_DEPENDS      "AudioEngine.h" \
                                                       "c-api/audio_engine.h"
 
-#define ADDON_GLOBAL_VERSION_FILESYSTEM               "1.1.6"
-#define ADDON_GLOBAL_VERSION_FILESYSTEM_MIN           "1.1.0"
+#define ADDON_GLOBAL_VERSION_FILESYSTEM               "1.1.8"
+#define ADDON_GLOBAL_VERSION_FILESYSTEM_MIN           "1.1.7"
 #define ADDON_GLOBAL_VERSION_FILESYSTEM_XML_ID        "kodi.binary.global.filesystem"
 #define ADDON_GLOBAL_VERSION_FILESYSTEM_DEPENDS       "Filesystem.h" \
                                                       "c-api/filesystem.h" \
@@ -85,30 +85,31 @@
                                                       "tools/Thread.h" \
                                                       "tools/Timer.h"
 
-#define ADDON_INSTANCE_VERSION_AUDIODECODER           "3.0.0"
-#define ADDON_INSTANCE_VERSION_AUDIODECODER_MIN       "3.0.0"
+#define ADDON_INSTANCE_VERSION_AUDIODECODER           "4.0.0"
+#define ADDON_INSTANCE_VERSION_AUDIODECODER_MIN       "4.0.0"
 #define ADDON_INSTANCE_VERSION_AUDIODECODER_XML_ID    "kodi.binary.instance.audiodecoder"
-#define ADDON_INSTANCE_VERSION_AUDIODECODER_DEPENDS   "c-api/addon-instance/audio_decoder.h" \
+#define ADDON_INSTANCE_VERSION_AUDIODECODER_DEPENDS   "c-api/addon-instance/audiodecoder.h" \
                                                       "addon-instance/AudioDecoder.h"
 
-#define ADDON_INSTANCE_VERSION_AUDIOENCODER           "2.1.0"
-#define ADDON_INSTANCE_VERSION_AUDIOENCODER_MIN       "2.1.0"
+#define ADDON_INSTANCE_VERSION_AUDIOENCODER           "3.0.0"
+#define ADDON_INSTANCE_VERSION_AUDIOENCODER_MIN       "3.0.0"
 #define ADDON_INSTANCE_VERSION_AUDIOENCODER_XML_ID    "kodi.binary.instance.audioencoder"
-#define ADDON_INSTANCE_VERSION_AUDIOENCODER_DEPENDS   "c-api/addon-instance/audio_encoder.h" \
+#define ADDON_INSTANCE_VERSION_AUDIOENCODER_DEPENDS   "c-api/addon-instance/audioencoder.h" \
                                                       "addon-instance/AudioEncoder.h"
 
-#define ADDON_INSTANCE_VERSION_GAME                   "2.1.0"
-#define ADDON_INSTANCE_VERSION_GAME_MIN               "2.1.0"
+#define ADDON_INSTANCE_VERSION_GAME                   "3.0.0"
+#define ADDON_INSTANCE_VERSION_GAME_MIN               "3.0.0"
 #define ADDON_INSTANCE_VERSION_GAME_XML_ID            "kodi.binary.instance.game"
 #define ADDON_INSTANCE_VERSION_GAME_DEPENDS           "addon-instance/Game.h"
 
-#define ADDON_INSTANCE_VERSION_IMAGEDECODER           "2.1.1"
-#define ADDON_INSTANCE_VERSION_IMAGEDECODER_MIN       "2.1.0"
+#define ADDON_INSTANCE_VERSION_IMAGEDECODER           "3.0.1"
+#define ADDON_INSTANCE_VERSION_IMAGEDECODER_MIN       "3.0.0"
 #define ADDON_INSTANCE_VERSION_IMAGEDECODER_XML_ID    "kodi.binary.instance.imagedecoder"
-#define ADDON_INSTANCE_VERSION_IMAGEDECODER_DEPENDS   "addon-instance/ImageDecoder.h"
+#define ADDON_INSTANCE_VERSION_IMAGEDECODER_DEPENDS   "c-api/addon-instance/imagedecoder.h" \
+                                                      "addon-instance/ImageDecoder.h"
 
-#define ADDON_INSTANCE_VERSION_INPUTSTREAM            "3.0.1"
-#define ADDON_INSTANCE_VERSION_INPUTSTREAM_MIN        "3.0.1"
+#define ADDON_INSTANCE_VERSION_INPUTSTREAM            "3.3.0"
+#define ADDON_INSTANCE_VERSION_INPUTSTREAM_MIN        "3.3.0"
 #define ADDON_INSTANCE_VERSION_INPUTSTREAM_XML_ID     "kodi.binary.instance.inputstream"
 #define ADDON_INSTANCE_VERSION_INPUTSTREAM_DEPENDS    "c-api/addon-instance/inputstream.h" \
                                                       "c-api/addon-instance/inputstream/demux_packet.h" \
@@ -123,16 +124,17 @@
                                                       "addon-instance/inputstream/StreamCrypto.h" \
                                                       "addon-instance/inputstream/TimingConstants.h"
 
-#define ADDON_INSTANCE_VERSION_PERIPHERAL             "2.0.0"
-#define ADDON_INSTANCE_VERSION_PERIPHERAL_MIN         "2.0.0"
+#define ADDON_INSTANCE_VERSION_PERIPHERAL             "3.0.1"
+#define ADDON_INSTANCE_VERSION_PERIPHERAL_MIN         "3.0.0"
 #define ADDON_INSTANCE_VERSION_PERIPHERAL_XML_ID      "kodi.binary.instance.peripheral"
 #define ADDON_INSTANCE_VERSION_PERIPHERAL_DEPENDS     "addon-instance/Peripheral.h" \
                                                       "addon-instance/PeripheralUtils.h"
 
-#define ADDON_INSTANCE_VERSION_PVR                    "7.1.0"
-#define ADDON_INSTANCE_VERSION_PVR_MIN                "7.1.0"
+#define ADDON_INSTANCE_VERSION_PVR                    "8.3.0"
+#define ADDON_INSTANCE_VERSION_PVR_MIN                "8.2.0"
 #define ADDON_INSTANCE_VERSION_PVR_XML_ID             "kodi.binary.instance.pvr"
 #define ADDON_INSTANCE_VERSION_PVR_DEPENDS            "c-api/addon-instance/pvr.h" \
+                                                      "c-api/addon-instance/pvr/pvr_providers.h" \
                                                       "c-api/addon-instance/pvr/pvr_channel_groups.h" \
                                                       "c-api/addon-instance/pvr/pvr_channels.h" \
                                                       "c-api/addon-instance/pvr/pvr_defines.h" \
@@ -154,26 +156,26 @@
                                                       "addon-instance/pvr/Stream.h" \
                                                       "addon-instance/pvr/Timers.h"
 
-#define ADDON_INSTANCE_VERSION_SCREENSAVER            "2.1.0"
-#define ADDON_INSTANCE_VERSION_SCREENSAVER_MIN        "2.1.0"
+#define ADDON_INSTANCE_VERSION_SCREENSAVER            "2.2.0"
+#define ADDON_INSTANCE_VERSION_SCREENSAVER_MIN        "2.2.0"
 #define ADDON_INSTANCE_VERSION_SCREENSAVER_XML_ID     "kodi.binary.instance.screensaver"
 #define ADDON_INSTANCE_VERSION_SCREENSAVER_DEPENDS    "c-api/addon-instance/screensaver.h" \
                                                       "addon-instance/Screensaver.h"
 
-#define ADDON_INSTANCE_VERSION_VFS                    "3.0.0"
-#define ADDON_INSTANCE_VERSION_VFS_MIN                "3.0.0"
+#define ADDON_INSTANCE_VERSION_VFS                    "3.0.1"
+#define ADDON_INSTANCE_VERSION_VFS_MIN                "3.0.1"
 #define ADDON_INSTANCE_VERSION_VFS_XML_ID             "kodi.binary.instance.vfs"
 #define ADDON_INSTANCE_VERSION_VFS_DEPENDS            "c-api/addon-instance/vfs.h" \
                                                       "addon-instance/VFS.h"
 
-#define ADDON_INSTANCE_VERSION_VISUALIZATION          "3.0.0"
-#define ADDON_INSTANCE_VERSION_VISUALIZATION_MIN      "3.0.0"
+#define ADDON_INSTANCE_VERSION_VISUALIZATION          "4.0.0"
+#define ADDON_INSTANCE_VERSION_VISUALIZATION_MIN      "4.0.0"
 #define ADDON_INSTANCE_VERSION_VISUALIZATION_XML_ID   "kodi.binary.instance.visualization"
 #define ADDON_INSTANCE_VERSION_VISUALIZATION_DEPENDS  "addon-instance/Visualization.h" \
                                                       "c-api/addon-instance/visualization.h"
 
-#define ADDON_INSTANCE_VERSION_VIDEOCODEC             "2.0.2"
-#define ADDON_INSTANCE_VERSION_VIDEOCODEC_MIN         "2.0.1"
+#define ADDON_INSTANCE_VERSION_VIDEOCODEC             "2.1.0"
+#define ADDON_INSTANCE_VERSION_VIDEOCODEC_MIN         "2.1.0"
 #define ADDON_INSTANCE_VERSION_VIDEOCODEC_XML_ID      "kodi.binary.instance.videocodec"
 #define ADDON_INSTANCE_VERSION_VIDEOCODEC_DEPENDS     "c-api/addon-instance/video_codec.h" \
                                                       "c-api/addon-instance/inputstream/stream_codec.h" \
@@ -210,7 +212,7 @@ typedef enum ADDON_TYPE
   // Need to change if new global type becomes added!
   ADDON_GLOBAL_MAX = 6,
 
-  /* addon type instances */
+  /* addon instance types */
 
   /// Audio decoder instance, see @ref cpp_kodi_addon_audiodecoder "kodi::addon::CInstanceAudioDecoder"
   ADDON_INSTANCE_AUDIODECODER = 102,
@@ -227,10 +229,10 @@ typedef enum ADDON_TYPE
   /// Peripheral instance, see @ref cpp_kodi_addon_peripheral "kodi::addon::CInstancePeripheral"
   ADDON_INSTANCE_PERIPHERAL = 106,
 
-  /// Game instance, see @ref cpp_kodi_addon_pvr "kodi::addon::CInstancePVRClient"
+  /// PVR client instance, see @ref cpp_kodi_addon_pvr "kodi::addon::CInstancePVRClient"
   ADDON_INSTANCE_PVR = 107,
 
-  /// PVR client instance, see @ref cpp_kodi_addon_screensaver "kodi::addon::CInstanceScreensaver"
+  /// Screen saver instance, see @ref cpp_kodi_addon_screensaver "kodi::addon::CInstanceScreensaver"
   ADDON_INSTANCE_SCREENSAVER = 108,
 
   /// Music visualization instance, see @ref cpp_kodi_addon_visualization "kodi::addon::CInstanceVisualization"
@@ -239,10 +241,10 @@ typedef enum ADDON_TYPE
   /// Virtual Filesystem (VFS) instance, see @ref cpp_kodi_addon_vfs "kodi::addon::CInstanceVFS"
   ADDON_INSTANCE_VFS = 110,
 
-  /// Image Decoder instance, see @ref cpp_kodi_addon_imagedecoder "kodi::addon::CInstanceImageDecoder"
+  /// Image decoder instance, see @ref cpp_kodi_addon_imagedecoder "kodi::addon::CInstanceImageDecoder"
   ADDON_INSTANCE_IMAGEDECODER = 111,
 
-  /// Video Decoder instance, see @ref cpp_kodi_addon_videocodec "kodi::addon::CInstanceVideoCodec"
+  /// Video codec instance, see @ref cpp_kodi_addon_videocodec "kodi::addon::CInstanceVideoCodec"
   ADDON_INSTANCE_VIDEOCODEC = 112,
 } ADDON_TYPE;
 ///@}

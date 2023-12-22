@@ -8,11 +8,14 @@
 
 #import "platform/darwin/tvos/XBMCController.h"
 
-#include "AppParamParser.h"
-#include "Application.h"
 #include "CompileInfo.h"
 #include "FileItem.h"
 #include "ServiceBroker.h"
+#include "application/AppEnvironment.h"
+#include "application/AppParams.h"
+#include "application/Application.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationPowerHandling.h"
 #include "cores/AudioEngine/Interfaces/AE.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
@@ -22,7 +25,6 @@
 #include "network/NetworkServices.h"
 #include "platform/xbmc.h"
 #include "powermanagement/PowerManager.h"
-#include "pvr/PVRManager.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/log.h"
@@ -42,10 +44,7 @@
 
 #import <AVKit/AVDisplayManager.h>
 #import <AVKit/UIWindow.h>
-
-#import "system.h"
-
-using namespace KODI::MESSAGING;
+#include <unistd.h>
 
 XBMCController* g_xbmcController;
 
@@ -73,7 +72,7 @@ XBMCController* g_xbmcController;
   [self becomeFirstResponder];
 }
 
-- (void)nativeKeyboardActive:(bool)active;
+- (void)nativeKeyboardActive:(bool)active
 {
   // Not used on tvOS
 }
@@ -174,18 +173,18 @@ XBMCController* g_xbmcController;
 
 #pragma mark - BackgroundTask
 
-- (void)beginEnterBackgroundTask;
+- (void)beginEnterBackgroundTask
 {
-  CLog::Log(LOGDEBUG, "%s", __PRETTY_FUNCTION__);
+  CLog::Log(LOGDEBUG, "{}", __PRETTY_FUNCTION__);
   // we have to alloc the background task for keep network working after screen lock and dark.
   if (m_enterBackgroundTaskId == UIBackgroundTaskInvalid)
     m_enterBackgroundTaskId =
         [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
 }
 
-- (void)endEnterBackgroundTask;
+- (void)endEnterBackgroundTask
 {
-  CLog::Log(LOGDEBUG, "%s", __PRETTY_FUNCTION__);
+  CLog::Log(LOGDEBUG, "{}", __PRETTY_FUNCTION__);
   if (m_enterBackgroundTaskId != UIBackgroundTaskInvalid)
   {
     [[UIApplication sharedApplication] endBackgroundTask:m_enterBackgroundTaskId];
@@ -197,7 +196,7 @@ XBMCController* g_xbmcController;
 
 - (void)enterBackground
 {
-  CLog::Log(LOGDEBUG, "%s", __PRETTY_FUNCTION__);
+  CLog::Log(LOGDEBUG, "{}", __PRETTY_FUNCTION__);
   [self beginEnterBackgroundTask];
 
   // We need this hack, without it we stay stuck forever in
@@ -225,12 +224,12 @@ XBMCController* g_xbmcController;
 
 - (void)enterForeground
 {
-  CLog::Log(LOGDEBUG, "%s", __PRETTY_FUNCTION__);
+  CLog::Log(LOGDEBUG, "{}", __PRETTY_FUNCTION__);
 
   // If enterBackground task is still running, wait
   while (m_enterBackgroundTaskId != UIBackgroundTaskInvalid)
   {
-    CLog::Log(LOGDEBUG, "%s: enterBackground task still running, wait", __PRETTY_FUNCTION__);
+    CLog::Log(LOGDEBUG, "{}: enterBackground task still running, wait", __PRETTY_FUNCTION__);
     usleep(50 * 1000);
   }
 
@@ -291,13 +290,17 @@ XBMCController* g_xbmcController;
 - (void)pauseAnimation
 {
   m_pause = YES;
-  g_application.SetRenderGUI(false);
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appPower = components.GetComponent<CApplicationPowerHandling>();
+  appPower->SetRenderGUI(false);
 }
 
 - (void)resumeAnimation
 {
   m_pause = NO;
-  g_application.SetRenderGUI(true);
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appPower = components.GetComponent<CApplicationPowerHandling>();
+  appPower->SetRenderGUI(true);
 }
 
 - (void)startAnimation
@@ -322,7 +325,7 @@ XBMCController* g_xbmcController;
     m_animating = NO;
     if (!g_application.m_bStop)
     {
-      CApplicationMessenger::GetInstance().PostMsg(TMSG_QUIT);
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_QUIT);
     }
 
     CAnnounceReceiver::GetInstance()->DeInitialize();
@@ -362,12 +365,14 @@ XBMCController* g_xbmcController;
       // start up with gui enabled
       status = KODI_Run(true);
       // we exited or died.
-      g_application.SetRenderGUI(false);
+      auto& components = CServiceBroker::GetAppComponents();
+      const auto appPower = components.GetComponent<CApplicationPowerHandling>();
+      appPower->SetRenderGUI(false);
     }
     catch (...)
     {
       m_appAlive = FALSE;
-      CLog::Log(LOGERROR, "%sException caught on main loop status=%d. Exiting", __PRETTY_FUNCTION__,
+      CLog::Log(LOGERROR, "{}Exception caught on main loop status={}. Exiting", __PRETTY_FUNCTION__,
                 status);
     }
 
@@ -385,8 +390,9 @@ int KODI_Run(bool renderGUI)
 {
   int status = -1;
 
-  CAppParamParser appParamParser; //! @todo : proper params
-  if (!g_application.Create(appParamParser))
+  CAppEnvironment::SetUp(std::make_shared<CAppParams>()); //! @todo : proper params
+
+  if (!g_application.Create())
   {
     CLog::Log(LOGERROR, "ERROR: Unable to create application. Exiting");
     return status;
@@ -427,13 +433,15 @@ int KODI_Run(bool renderGUI)
 
   try
   {
-    status = g_application.Run(appParamParser);
+    status = g_application.Run();
   }
   catch (...)
   {
     CLog::Log(LOGERROR, "ERROR: Exception caught on main loop. Exiting");
     status = -1;
   }
+
+  CAppEnvironment::TearDown();
 
   return status;
 }

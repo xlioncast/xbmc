@@ -11,15 +11,17 @@
 #include "input/touch/generic/GenericTouchPinchDetector.h"
 #include "input/touch/generic/GenericTouchRotateDetector.h"
 #include "input/touch/generic/GenericTouchSwipeDetector.h"
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
+
+using namespace std::chrono_literals;
 
 namespace
 {
-constexpr int TOUCH_HOLD_TIMEOUT = 500;
+constexpr auto TOUCH_HOLD_TIMEOUT = 500ms;
 }
 
 CGenericTouchInputHandler::CGenericTouchInputHandler() : m_holdTimer(new CTimer(this))
@@ -44,7 +46,6 @@ float CGenericTouchInputHandler::AdjustPointerSize(float size)
     return m_dpi / 8.0f;
 }
 
-
 bool CGenericTouchInputHandler::HandleTouchInput(TouchInput event,
                                                  float x,
                                                  float y,
@@ -55,7 +56,7 @@ bool CGenericTouchInputHandler::HandleTouchInput(TouchInput event,
   if (time < 0 || pointer < 0 || pointer >= MAX_POINTERS)
     return false;
 
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
 
   bool result = true;
 
@@ -290,7 +291,7 @@ bool CGenericTouchInputHandler::UpdateTouchPointer(
   if (pointer < 0 || pointer >= MAX_POINTERS)
     return false;
 
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
 
   m_pointers[pointer].last.copy(m_pointers[pointer].current);
 
@@ -324,7 +325,7 @@ void CGenericTouchInputHandler::saveLastTouch()
 
 void CGenericTouchInputHandler::OnTimeout()
 {
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
 
   switch (m_gestureState)
   {

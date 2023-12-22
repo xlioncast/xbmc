@@ -24,14 +24,14 @@ struct SDirState
 
 void CBlurayCallback::bluray_logger(const char* msg)
 {
-  CLog::Log(LOGDEBUG, "CBlurayCallback::Logger - %s", msg);
+  CLog::Log(LOGDEBUG, "CBlurayCallback::Logger - {}", msg);
 }
 
 void CBlurayCallback::dir_close(BD_DIR_H *dir)
 {
   if (dir)
   {
-    CLog::Log(LOGDEBUG, "CBlurayCallback - Closed dir (%p)", static_cast<void*>(dir));
+    CLog::Log(LOGDEBUG, "CBlurayCallback - Closed dir ({})", fmt::ptr(dir));
     delete static_cast<SDirState*>(dir->internal);
     delete dir;
   }
@@ -51,14 +51,14 @@ BD_DIR_H* CBlurayCallback::dir_open(void *handle, const char* rel_path)
   if (URIUtils::HasSlashAtEnd(strDirname))
     URIUtils::RemoveSlashAtEnd(strDirname);
 
-  CLog::Log(LOGDEBUG, "CBlurayCallback - Opening dir %s", CURL::GetRedacted(strDirname).c_str());
+  CLog::Log(LOGDEBUG, "CBlurayCallback - Opening dir {}", CURL::GetRedacted(strDirname));
 
   SDirState *st = new SDirState();
   if (!CDirectory::GetDirectory(strDirname, st->list, "", DIR_FLAG_DEFAULTS))
   {
     if (!CFile::Exists(strDirname))
-      CLog::Log(LOGDEBUG, "CBlurayCallback - Error opening dir! (%s)",
-                CURL::GetRedacted(strDirname).c_str());
+      CLog::Log(LOGDEBUG, "CBlurayCallback - Error opening dir! ({})",
+                CURL::GetRedacted(strDirname));
     delete st;
     return nullptr;
   }
@@ -78,7 +78,7 @@ int CBlurayCallback::dir_read(BD_DIR_H *dir, BD_DIRENT *entry)
   if (state->curr >= state->list.Size())
     return 1;
 
-  strncpy(entry->d_name, state->list[state->curr]->GetLabel().c_str(), sizeof(entry->d_name));
+  strncpy(entry->d_name, state->list[state->curr]->GetLabel().c_str(), sizeof(entry->d_name) - 1);
   entry->d_name[sizeof(entry->d_name) - 1] = 0;
   state->curr++;
 
@@ -130,7 +130,7 @@ BD_FILE_H * CBlurayCallback::file_open(void *handle, const char *rel_path)
     return file;
   }
 
-  CLog::Log(LOGDEBUG, "CBlurayCallback - Error opening file! (%s)", CURL::GetRedacted(strFilename).c_str());
+  CLog::Log(LOGDEBUG, "CBlurayCallback - Error opening file! ({})", CURL::GetRedacted(strFilename));
 
   delete fp;
   delete file;

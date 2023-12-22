@@ -18,18 +18,15 @@ class CDVDOverlayCodecSSA : public CDVDOverlayCodec
 {
 public:
   CDVDOverlayCodecSSA();
-  ~CDVDOverlayCodecSSA() override;
-  bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options) override;
-  void Dispose() override;
-  int Decode(DemuxPacket *pPacket) override;
+  ~CDVDOverlayCodecSSA() override = default;
+  bool Open(CDVDStreamInfo& hints, CDVDCodecOptions& options) override;
+  OverlayMessage Decode(DemuxPacket* pPacket) override;
   void Reset() override;
   void Flush() override;
-  CDVDOverlay* GetOverlay() override;
+  std::shared_ptr<CDVDOverlay> GetOverlay() override;
 
 private:
-  CDVDSubtitlesLibass* m_libass;
-  CDVDOverlaySSA*      m_pOverlay;
-  bool                 m_output;
-  CDVDStreamInfo       m_hints;
-  int                  m_order;
+  std::shared_ptr<CDVDSubtitlesLibass> m_libass;
+  std::shared_ptr<CDVDOverlaySSA> m_pOverlay;
+  int m_order;
 };

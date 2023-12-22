@@ -8,14 +8,15 @@
 
 #include "GUIWindowVisualisation.h"
 
-#include "Application.h"
 #include "GUIInfoManager.h"
 #include "GUIUserMessages.h"
 #include "ServiceBroker.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationPlayer.h"
 #include "guilib/GUIComponent.h"
+#include "guilib/GUIDialog.h"
 #include "guilib/GUIWindowManager.h"
 #include "input/Key.h"
-#include "music/dialogs/GUIDialogMusicOSD.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -27,8 +28,7 @@ using namespace MUSIC_INFO;
 #define CONTROL_VIS          2
 
 CGUIWindowVisualisation::CGUIWindowVisualisation(void)
-    : CGUIWindow(WINDOW_VISUALISATION, "MusicVisualisation.xml"),
-      m_initTimer(true), m_lockedTimer(true)
+  : CGUIWindow(WINDOW_VISUALISATION, "MusicVisualisation.xml")
 {
   m_bShowPreset = false;
   m_loadType = KEEP_IN_MEMORY;
@@ -151,7 +151,9 @@ bool CGUIWindowVisualisation::OnMessage(CGUIMessage& message)
     {
       // check whether we've come back here from a window during which time we've actually
       // stopped playing music
-      if (message.GetParam1() == WINDOW_INVALID && !g_application.GetAppPlayer().IsPlayingAudio())
+      const auto& components = CServiceBroker::GetAppComponents();
+      const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+      if (message.GetParam1() == WINDOW_INVALID && !appPlayer->IsPlayingAudio())
       { // why are we here if nothing is playing???
         CServiceBroker::GetGUI()->GetWindowManager().PreviousWindow();
         return true;

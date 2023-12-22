@@ -9,10 +9,8 @@
 #include "DynamicDll.h"
 
 #include "SectionLoader.h"
-#include "filesystem/File.h"
+#include "utils/FileUtils.h"
 #include "utils/log.h"
-
-using namespace XFILE;
 
 DllDynamic::DllDynamic()
 {
@@ -42,7 +40,7 @@ bool DllDynamic::Load()
 
   if (!ResolveExports())
   {
-    CLog::Log(LOGERROR, "Unable to resolve exports from dll %s", m_strDllName.c_str());
+    CLog::Log(LOGERROR, "Unable to resolve exports from dll {}", m_strDllName);
     Unload();
     return false;
   }
@@ -59,7 +57,7 @@ void DllDynamic::Unload()
 
 bool DllDynamic::CanLoad()
 {
-  return CFile::Exists(m_strDllName);
+  return CFileUtils::Exists(m_strDllName);
 }
 
 bool DllDynamic::EnableDelayedUnload(bool bOnOff)

@@ -27,6 +27,8 @@ namespace XCURL
 class DllLibCurl
 {
 public:
+  virtual ~DllLibCurl() = default;
+
   CURLcode global_init(long flags);
   void global_cleanup();
   CURL_HANDLE* easy_init();
@@ -73,7 +75,10 @@ public:
                     CURL_HANDLE** easy_handle,
                     CURLM** multi_handle);
   void easy_release(CURL_HANDLE** easy_handle, CURLM** multi_handle);
-  void easy_duplicate(CURL_HANDLE* easy, CURLM* multi, CURL_HANDLE** easy_out, CURLM** multi_out);
+  void easy_duplicate(CURL_HANDLE* easy,
+                      const CURLM* multi,
+                      CURL_HANDLE** easy_out,
+                      CURLM** multi_out);
   CURL_HANDLE* easy_duphandle(CURL_HANDLE* easy_handle) override;
   void CheckIdle();
 
@@ -82,7 +87,8 @@ public:
   /* structure holding a session info */
   typedef struct SSession
   {
-    unsigned int m_idletimestamp; // timestamp of when this object when idle
+    std::chrono::time_point<std::chrono::steady_clock>
+        m_idletimestamp; // timestamp of when this object when idle
     std::string m_protocol;
     std::string m_hostname;
     bool m_busy;

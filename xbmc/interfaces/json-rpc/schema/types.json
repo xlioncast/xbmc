@@ -109,7 +109,7 @@
                   "album", "albumtype", "genre", "country", "year", "rating", "userrating", "votes", "top250", "programcount",
                   "playlist", "episode", "season", "totalepisodes", "watchedepisodes", "tvshowstatus", "tvshowtitle",
                   "sorttitle", "productioncode", "mpaa", "studio", "dateadded", "lastplayed", "playcount", "listeners",
-                  "bitrate", "random", "totaldiscs", "originaldate", "bpm" ]
+                  "bitrate", "random", "totaldiscs", "originaldate", "bpm", "originaltitle" ]
       },
       "order": { "type": "string", "default": "ascending", "enum": [ "ascending", "descending" ] },
       "ignorearticle": { "type": "boolean", "default": false },
@@ -161,7 +161,8 @@
       { "type": "object", "properties": { "artistid": { "$ref": "Library.Id", "required": true } }, "additionalProperties": false },
       { "type": "object", "properties": { "albumid": { "$ref": "Library.Id", "required": true } }, "additionalProperties": false },
       { "type": "object", "properties": { "songid": { "$ref": "Library.Id", "required": true } }, "additionalProperties": false },
-      { "type": "object", "properties": { "genreid": { "$ref": "Library.Id", "required": true, "description": "Identification of a genre from the AudioLibrary" } }, "additionalProperties": false }
+      { "type": "object", "properties": { "genreid": { "$ref": "Library.Id", "required": true, "description": "Identification of a genre from the AudioLibrary" } }, "additionalProperties": false },
+      { "type": "object", "properties": { "recordingid": { "$ref": "Library.Id", "required": true, "description": "Identification of a PVR recording" } }, "additionalProperties": false }
     ]
   },
   "Player.Id": {
@@ -544,7 +545,8 @@
                 "votes", "userrating", "mood", "contributors",
                 "displaycomposer", "displayconductor", "displayorchestra", "displaylyricist",
                 "sortartist", "art", "sourceid", "disctitle", "releasedate", "originaldate",
-                "bpm", "samplerate", "bitrate", "channels", "datemodified", "datenew" ]
+                "bpm", "samplerate", "bitrate", "channels", "datemodified", "datenew",
+                "songvideourl" ]
     }
   },
   "Audio.Album.ReleaseType": {
@@ -691,7 +693,8 @@
       "bpm": { "type": "Integer" },
       "samplerate": { "type": "Integer" },
       "bitrate": { "type": "Integer"},
-      "channels": { "type": "Integer"}
+      "channels": { "type": "Integer"},
+      "songvideourl": { "type": "string" }
     }
   },
   "Audio.Property.Name": {
@@ -765,18 +768,18 @@
                 "showtitle", "cast", "streamdetails", "lastplayed", "fanart",
                 "thumbnail", "file", "resume", "tvshowid", "dateadded",
                 "uniqueid", "art", "specialsortseason", "specialsortepisode", "userrating",
-                "seasonid", "ratings" ]
+                "seasonid", "ratings", "genre", "studio" ]
     }
   },
   "Video.Fields.MusicVideo": {
     "extends": "Item.Fields.Base",
     "items": { "type": "string",
-      "description": "Requesting the streamdetails and/or tag field will result in increased response times",
+      "description": "Requesting the streamdetails, uniqueid and/or tag field will result in increased response times",
       "enum": [ "title", "playcount", "runtime", "director",
                 "studio", "year", "plot", "album", "artist",
                 "genre", "track", "streamdetails", "lastplayed",
                 "fanart", "thumbnail", "file", "resume", "dateadded",
-                "tag", "art", "rating", "userrating", "premiered" ]
+                "tag", "art", "rating", "userrating", "premiered", "uniqueid" ]
     }
   },
   "Video.Cast": {
@@ -811,7 +814,8 @@
             "aspect": { "type": "number" },
             "width": { "type": "integer" },
             "height": { "type": "integer" },
-            "duration": { "type": "integer" }
+            "duration": { "type": "integer" },
+            "hdrtype": { "type": "string"}
           },
           "additionalProperties": false
         }
@@ -972,7 +976,9 @@
       "specialsortepisode": { "type": "integer" },
       "userrating": { "type": "integer" },
       "seasonid": { "$ref": "Library.Id" },
-      "ratings": { "type": "Video.Ratings" }
+      "ratings": { "type": "Video.Ratings" },
+      "studio": { "$ref": "Array.String" },
+      "genre": { "$ref": "Array.String" }
     }
   },
   "Video.Details.MusicVideo": {
@@ -988,7 +994,8 @@
       "tag": { "$ref": "Array.String" },
       "rating": { "type": "number" },
       "userrating": { "type": "integer" },
-      "premiered": { "type": "string" }
+      "premiered": { "type": "string" },
+      "uniqueid": { "$ref": "Media.UniqueID" }
     }
   },
   "PVR.Property.Name": {
@@ -1018,7 +1025,8 @@
                 "firstaired", "hastimer", "isactive", "parentalrating",
                 "wasactive", "thumbnail", "rating", "originaltitle", "cast",
                 "director", "writer", "year", "imdbnumber", "hastimerrule",
-                "hasrecording", "recording", "isseries", "isplayable", "clientid" ]
+                "hasrecording", "recording", "isseries", "isplayable", "clientid",
+                "hasreminder", "seasonnum" ]
     }
   },
   "PVR.Details.Broadcast": {
@@ -1055,7 +1063,9 @@
       "recording": { "type": "string" },
       "isseries": { "type": "boolean" },
       "isplayable": { "type": "boolean", "description": "Deprecated - Use GetBroadcastIsPlayable instead" },
-      "clientid": { "$ref": "Library.Id" }
+      "clientid": { "$ref": "Library.Id" },
+      "hasreminder": { "type": "boolean" },
+      "seasonnum": { "type": "integer" }
     }
   },
   "PVR.Fields.Channel": {
@@ -1498,7 +1508,7 @@
     "extends": [ "Video.Details.File", "Audio.Details.Media" ],
     "properties": {
       "id": { "$ref": "Library.Id" },
-      "type": { "type": "string", "enum": [ "unknown", "movie", "episode", "musicvideo", "song", "picture", "channel" ] },
+      "type": { "type": "string", "enum": [ "unknown", "movie", "episode", "musicvideo", "song", "picture", "channel", "recording" ] },
       "albumartist": { "$ref": "Array.String" },
       "album": { "type": "string" },
       "track": { "type": "integer" },
@@ -1564,7 +1574,8 @@
       "samplerate": { "type": "integer" },
       "channels": { "type": "integer"},
       "albumstatus": { "type": "string" },
-      "customproperties": { "$ref": "Item.CustomProperties" }
+      "customproperties": { "$ref": "Item.CustomProperties" },
+      "songvideourl": { "type": "string" }
     }
   },
   "List.Fields.All": {
@@ -1589,7 +1600,7 @@
                 "musicbrainzreleasegroupid", "mediapath", "dynpath", "isboxset", "totaldiscs",
                 "disctitle", "releasedate", "originaldate", "bpm", "bitrate", "samplerate",
                 "channels", "albumstatus", "datemodified", "datenew", "customproperties",
-                "albumduration"]
+                "albumduration", "songvideourl"]
     }
   },
   "List.Item.All": {
@@ -1623,7 +1634,7 @@
                 "specialsortseason", "specialsortepisode", "sortartist", "musicbrainzreleasegroupid",
                 "isboxset", "totaldiscs", "disctitle", "releasedate", "originaldate", "bpm",
                 "bitrate", "samplerate", "channels", "datemodified", "datenew", "customproperties",
-                "albumduration"]
+                "albumduration", "userrating", "songvideourl" ]
     }
   },
   "List.Item.File": {

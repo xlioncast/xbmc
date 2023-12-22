@@ -13,6 +13,7 @@
 
 #include "platform/linux/SysfsPath.h"
 
+#include <exception>
 #include <fstream>
 #include <regex>
 #include <sstream>
@@ -71,26 +72,35 @@ CCPUInfoLinux::CCPUInfoLinux()
 {
   CSysfsPath machinePath{"/sys/bus/soc/devices/soc0/machine"};
   if (machinePath.Exists())
-    m_cpuHardware = machinePath.Get<std::string>();
+    m_cpuHardware = machinePath.Get<std::string>().value_or("");
 
   CSysfsPath familyPath{"/sys/bus/soc/devices/soc0/family"};
   if (familyPath.Exists())
-    m_cpuSoC = familyPath.Get<std::string>();
+    m_cpuSoC = familyPath.Get<std::string>().value_or("");
 
   CSysfsPath socPath{"/sys/bus/soc/devices/soc0/soc_id"};
   if (socPath.Exists())
-    m_cpuSoC += " " + socPath.Get<std::string>();
+    m_cpuSoC += " " + socPath.Get<std::string>().value_or("");
+
+  CSysfsPath revisionPath{"/sys/bus/soc/devices/soc0/revision"};
+  if (revisionPath.Exists())
+    m_cpuRevision = revisionPath.Get<std::string>().value_or("");
+
+  CSysfsPath serialPath{"/sys/bus/soc/devices/soc0/serial_number"};
+  if (serialPath.Exists())
+    m_cpuSerial = serialPath.Get<std::string>().value_or("");
 
   const std::string freqStr{"/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"};
   CSysfsPath freqPath{freqStr};
   if (freqPath.Exists())
     m_freqPath = freqStr;
 
-  const std::array<std::string, 4> modules = {
+  const std::array<std::string, 5> modules = {
       "coretemp",
       "k10temp",
       "scpi_sensors",
       "imx_thermal_zone",
+      "cpu_thermal",
   };
 
   for (int i = 0; i < 20; i++)
@@ -101,7 +111,7 @@ CCPUInfoLinux::CCPUInfoLinux()
 
     auto name = path.Get<std::string>();
 
-    if (name.empty())
+    if (!name.has_value())
       continue;
 
     for (const auto& module : modules)
@@ -234,23 +244,40 @@ CCPUInfoLinux::CCPUInfoLinux()
         std::ssub_match value = match[1];
 
         if (line.find("model name") != std::string::npos)
-          m_cpuModel = value.str();
+        {
+          if (m_cpuModel.empty())
+            m_cpuModel = value.str();
+        }
 
         if (line.find("BogoMIPS") != std::string::npos)
-          m_cpuBogoMips = value.str();
+        {
+          if (m_cpuBogoMips.empty())
+            m_cpuBogoMips = value.str();
+        }
 
         if (line.find("Hardware") != std::string::npos)
-          m_cpuHardware = value.str();
+        {
+          if (m_cpuHardware.empty())
+            m_cpuHardware = value.str();
+        }
 
         if (line.find("Serial") != std::string::npos)
-          m_cpuSerial = value.str();
+        {
+          if (m_cpuSerial.empty())
+            m_cpuSerial = value.str();
+        }
 
         if (line.find("Revision") != std::string::npos)
-          m_cpuRevision = value.str();
+        {
+          if (m_cpuRevision.empty())
+            m_cpuRevision = value.str();
+        }
       }
     }
   }
 #endif
+
+  m_cpuModel = m_cpuModel.substr(0, m_cpuModel.find(char(0))); // remove extra null terminations
 
 #if defined(HAS_NEON) && defined(__arm__)
   if (getauxval(AT_HWCAP) & HWCAP_NEON)
@@ -275,7 +302,7 @@ int CCPUInfoLinux::GetUsedPercentage()
   std::vector<CpuData> cpuData;
 
   std::ifstream infile("/proc/stat");
-  std::string line;
+
   for (std::string line; std::getline(infile, line);)
   {
     if (line.find("cpu") != std::string::npos)
@@ -313,7 +340,7 @@ int CCPUInfoLinux::GetUsedPercentage()
     auto idleTime = cpuData[core].GetIdleTime() - m_cores[core].m_idleTime;
     auto totalTime = cpuData[core].GetTotalTime() - m_cores[core].m_totalTime;
 
-    m_cores[core].m_usagePercent = activeTime * 100.0f / totalTime;
+    m_cores[core].m_usagePercent = activeTime * 100.0 / totalTime;
 
     m_cores[core].m_activeTime += activeTime;
     m_cores[core].m_idleTime += idleTime;
@@ -326,19 +353,25 @@ int CCPUInfoLinux::GetUsedPercentage()
 float CCPUInfoLinux::GetCPUFrequency()
 {
   if (m_freqPath.empty())
-    return -1;
+    return 0;
 
-  CSysfsPath path{m_freqPath};
-  return path.Get<float>() / 1000.0;
+  auto freq = CSysfsPath(m_freqPath).Get<float>();
+  return freq.has_value() ? *freq / 1000.0f : 0.0f;
 }
 
 bool CCPUInfoLinux::GetTemperature(CTemperature& temperature)
 {
-  if (m_tempPath.empty())
-    return CCPUInfoPosix::GetTemperature(temperature);
+  if (CheckUserTemperatureCommand(temperature))
+    return true;
 
-  CSysfsPath path{m_tempPath};
-  double value = path.Get<double>() / 1000.0;
+  if (m_tempPath.empty())
+    return false;
+
+  auto temp = CSysfsPath(m_tempPath).Get<double>();
+  if (!temp.has_value())
+    return false;
+
+  double value = *temp / 1000.0;
 
   temperature = CTemperature::CreateFromCelsius(value);
   temperature.SetValid(true);

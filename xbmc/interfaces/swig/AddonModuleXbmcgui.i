@@ -36,7 +36,7 @@ using namespace xbmcgui;
 // not part of what swig parses.
 %feature("knownbasetypes") XBMCAddon::xbmcgui "AddonClass,AddonCallback"
 
-%feature("knownapitypes") XBMCAddon::xbmcgui "XBMCAddon::xbmc::InfoTagVideo,xbmc::InfoTagMusic"
+%feature("knownapitypes") XBMCAddon::xbmcgui "XBMCAddon::xbmc::InfoTagVideo,xbmc::InfoTagMusic,xbmc::InfoTagPicture,xbmc::InfoTagGame"
 
 %include "interfaces/legacy/swighelper.h"
 %include "interfaces/legacy/AddonString.h"
@@ -91,7 +91,7 @@ using namespace xbmcgui;
       }
       else
       {
-        // for backwards compatability in python scripts
+        // for backwards compatibility in python scripts
         PyObject* o1 = PyLong_FromLong(a1->id);
         return PyObject_RichCompare(o1, obj2, method);
       }

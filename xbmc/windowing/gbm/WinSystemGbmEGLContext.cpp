@@ -23,7 +23,7 @@ bool CWinSystemGbmEGLContext::InitWindowSystemEGL(EGLint renderableType, EGLint 
     return false;
   }
 
-  if (!m_eglContext.CreatePlatformDisplay(m_GBM->GetDevice()->Get(), m_GBM->GetDevice()->Get()))
+  if (!m_eglContext.CreatePlatformDisplay(m_GBM->GetDevice().Get(), m_GBM->GetDevice().Get()))
   {
     return false;
   }
@@ -34,16 +34,39 @@ bool CWinSystemGbmEGLContext::InitWindowSystemEGL(EGLint renderableType, EGLint 
   }
 
   auto plane = m_DRM->GetGuiPlane();
-  uint32_t visualId = plane != nullptr ? plane->GetFormat() : DRM_FORMAT_XRGB8888;
+  uint32_t visualId = plane != nullptr ? plane->GetFormat() : DRM_FORMAT_XRGB2101010;
 
   // prefer alpha visual id, fallback to non-alpha visual id
   if (!m_eglContext.ChooseConfig(renderableType, CDRMUtils::FourCCWithAlpha(visualId)) &&
       !m_eglContext.ChooseConfig(renderableType, CDRMUtils::FourCCWithoutAlpha(visualId)))
-    return false;
+  {
+    // fallback to 8bit format if no EGL config was found for 10bit
+    if (plane)
+      plane->SetFormat(DRM_FORMAT_XRGB8888);
+
+    visualId = plane != nullptr ? plane->GetFormat() : DRM_FORMAT_XRGB8888;
+
+    if (!m_eglContext.ChooseConfig(renderableType, CDRMUtils::FourCCWithAlpha(visualId)) &&
+        !m_eglContext.ChooseConfig(renderableType, CDRMUtils::FourCCWithoutAlpha(visualId)))
+    {
+      return false;
+    }
+  }
 
   if (!CreateContext())
   {
     return false;
+  }
+
+  if (CEGLUtils::HasExtension(m_eglContext.GetEGLDisplay(), "EGL_ANDROID_native_fence_sync") &&
+      CEGLUtils::HasExtension(m_eglContext.GetEGLDisplay(), "EGL_KHR_fence_sync"))
+  {
+    m_eglFence = std::make_unique<KODI::UTILS::EGL::CEGLFence>(m_eglContext.GetEGLDisplay());
+  }
+  else
+  {
+    CLog::Log(LOGWARNING, "[GBM] missing support for EGL_KHR_fence_sync and "
+                          "EGL_ANDROID_native_fence_sync - performance may be impacted");
   }
 
   return true;
@@ -75,8 +98,8 @@ bool CWinSystemGbmEGLContext::CreateNewWindow(const std::string& name,
   if (plane)
     modifiers = plane->GetModifiersForFormat(format);
 
-  if (!m_GBM->GetDevice()->CreateSurface(res.iWidth, res.iHeight, format, modifiers.data(),
-                                         modifiers.size()))
+  if (!m_GBM->GetDevice().CreateSurface(res.iWidth, res.iHeight, format, modifiers.data(),
+                                        modifiers.size()))
   {
     CLog::Log(LOGERROR, "CWinSystemGbmEGLContext::{} - failed to initialize GBM", __FUNCTION__);
     return false;
@@ -86,8 +109,8 @@ bool CWinSystemGbmEGLContext::CreateNewWindow(const std::string& name,
   static_assert(sizeof(EGLNativeWindowType) == sizeof(gbm_surface*), "Declaration specifier differs in size");
 
   if (!m_eglContext.CreatePlatformSurface(
-          m_GBM->GetDevice()->GetSurface()->Get(),
-          reinterpret_cast<khronos_uintptr_t>(m_GBM->GetDevice()->GetSurface()->Get())))
+          m_GBM->GetDevice().GetSurface().Get(),
+          reinterpret_cast<khronos_uintptr_t>(m_GBM->GetDevice().GetSurface().Get())))
   {
     return false;
   }

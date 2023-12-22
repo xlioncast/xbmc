@@ -1,6 +1,6 @@
 -include ../../Makefile.include
-include DVDCSS-VERSION
-DEPS= DVDCSS-VERSION Makefile
+include LIBDVDCSS-VERSION
+DEPS = LIBDVDCSS-VERSION Makefile ../../download-files.include
 
 ifeq ($(CROSS_COMPILING), yes)
   DEPS += ../../Makefile.include
@@ -12,33 +12,22 @@ else
   ifeq ($(PLATFORM),)
     PLATFORM = native
     TARBALLS_LOCATION = $(ROOT_DIR)
+    RETRIEVE_TOOL := curl
+    RETRIEVE_TOOL_FLAGS := -LsS --create-dirs --retry 10 --retry-connrefused -o
+    ARCHIVE_TOOL := tar
+    ARCHIVE_TOOL_FLAGS := --strip-components=1 -xf
   endif
 endif
-
-RETRIEVE_TOOL := curl -Ls --create-dirs --retry 10 --retry-delay 3
-ARCHIVE_TOOL := tar --strip-components=1 -xf
 
 # configuration settings
 config = --prefix=$(PREFIX) --disable-shared --enable-static --with-pic
 
-GITREV=$(shell git ls-remote $(BASE_URL) $(VERSION) | awk '{print $$1}')
-ifeq ($(GITREV),)
-  ARCHIVE=$(LIBNAME)-$(VERSION).tar.gz
-else
-  ARCHIVE=$(LIBNAME)-$(GITREV).tar.gz
-endif
-
-
+include ../../download-files.include
 all: .installed-$(PLATFORM)
 
-download: $(TARBALLS_LOCATION)/$(ARCHIVE)
-
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) -o $(TARBALLS_LOCATION)/$(ARCHIVE) $(BASE_URL)/archive/$(VERSION).tar.gz
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM); mkdir -p $(PLATFORM)
-	cd $(PLATFORM); $(ARCHIVE_TOOL) $(TARBALLS_LOCATION)/$(ARCHIVE)
+	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); $(AUTORECONF) -vif && ac_cv_path_GIT= ./configure $(config)
 
 $(PLATFORM)/.libs/$(LIBNAME).a: $(PLATFORM)

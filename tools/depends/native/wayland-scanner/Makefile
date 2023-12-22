@@ -1,34 +1,37 @@
-include ../../Makefile.include
+include ../../Makefile.include WAYLAND-SCANNER-VERSION ../../download-files.include
 PREFIX=$(NATIVEPREFIX)
 PLATFORM=$(NATIVEPLATFORM)
-DEPS=../../Makefile.include Makefile
-
-APPNAME=wayland-scanner
-PROJECTNAME=wayland
-VERSION=1.17.0
-SOURCE=$(PROJECTNAME)-$(VERSION)
-ARCHIVE=$(SOURCE).tar.xz
+DEPS =../../Makefile.include Makefile WAYLAND-SCANNER-VERSION ../../download-files.include
 
 # configuration settings
-CONFIGURE=./configure --prefix=$(PREFIX) --disable-libraries --disable-documentation --disable-dtd-validation
+CONFIGURE = $(NATIVEPREFIX)/bin/python3 $(NATIVEPREFIX)/bin/meson setup \
+	--prefix $(PREFIX) \
+	--libdir $(PREFIX)/lib \
+	--buildtype=release \
+	-Dlibraries=false \
+	-Dtests=false \
+	-Ddocumentation=false \
+	-Ddtd_validation=false
 
-APP=$(PLATFORM)/wayland-scanner
+export CC=$(CC_BINARY_FOR_BUILD)
+export CXX=$(CXX_BINARY_FOR_BUILD)
+export CFLAGS=$(NATIVE_CFLAGS)
+export CXXFLAGS=$(NATIVE_CXXFLAGS)
+export LDFLAGS=$(NATIVE_LDFLAGS)
+
+export PKG_CONFIG_LIBDIR=$(PREFIX)/lib/pkgconfig
 
 all: .installed-$(PLATFORM)
 
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
-	cd $(PLATFORM); $(CONFIGURE)
+	cd $(PLATFORM); rm -rf build; mkdir -p build
+	cd $(PLATFORM); $(CONFIGURE) . build
 
-$(APP): $(PLATFORM)
-	$(MAKE) -C $(PLATFORM)
-
-.installed-$(PLATFORM): $(APP)
-	$(MAKE) -C $(PLATFORM) install
+.installed-$(PLATFORM): $(PLATFORM)
+	cd $(PLATFORM)/build; $(NATIVEPREFIX)/bin/ninja -v
+	cd $(PLATFORM)/build; $(NATIVEPREFIX)/bin/ninja -v install
 	touch $@
 
 clean:

@@ -22,6 +22,7 @@
 #include "utils/log.h"
 
 #include <map>
+#include <memory>
 
 using namespace KODI::GUILIB::GUIINFO;
 
@@ -99,7 +100,7 @@ void CPicturesGUIInfo::SetCurrentSlide(CFileItem *item)
       if (!tag->Loaded()) // If picture metadata has not been loaded yet, load it now
         tag->Load(item->GetPath());
     }
-    m_currentSlide.reset(new CFileItem(*item));
+    m_currentSlide = std::make_unique<CFileItem>(*item);
   }
   else if (m_currentSlide)
   {
@@ -135,7 +136,9 @@ bool CPicturesGUIInfo::GetLabel(std::string& value, const CFileItem *item, int c
     }
     else
     {
-      CLog::Log(LOGERROR, "CPicturesGUIInfo::GetLabel - cannot map LISTITEM (%d) to SLIDESHOW label!", info.m_info);
+      CLog::Log(LOGERROR,
+                "CPicturesGUIInfo::GetLabel - cannot map LISTITEM ({}) to SLIDESHOW label!",
+                info.m_info);
       return false;
     }
   }
@@ -180,7 +183,7 @@ bool CPicturesGUIInfo::GetLabel(std::string& value, const CFileItem *item, int c
         CGUIWindowSlideShow *slideshow = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIWindowSlideShow>(WINDOW_SLIDESHOW);
         if (slideshow && slideshow->NumSlides())
         {
-          value = StringUtils::Format("%d/%d", slideshow->CurrentSlide(), slideshow->NumSlides());
+          value = StringUtils::Format("{}/{}", slideshow->CurrentSlide(), slideshow->NumSlides());
           return true;
         }
         break;

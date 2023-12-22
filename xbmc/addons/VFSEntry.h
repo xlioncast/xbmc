@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "FileItem.h"
+#include "addons/binary-addons/AddonDll.h"
 #include "addons/binary-addons/AddonInstanceHandler.h"
 #include "addons/kodi-dev-kit/include/kodi/addon-instance/VFS.h"
 #include "filesystem/IDirectory.h"
@@ -17,27 +19,28 @@
 
 namespace ADDON
 {
+struct AddonEvent;
 
-  class CVFSEntry;
-  typedef std::shared_ptr<CVFSEntry> VFSEntryPtr;
+class CVFSEntry;
+typedef std::shared_ptr<CVFSEntry> VFSEntryPtr;
 
-  class CVFSAddonCache : public CAddonDllInformer
-  {
-  public:
-    virtual ~CVFSAddonCache();
-    void Init();
-    void Deinit();
-    const std::vector<VFSEntryPtr> GetAddonInstances();
-    VFSEntryPtr GetAddonInstance(const std::string& strId);
+class CVFSAddonCache : public CAddonDllInformer
+{
+public:
+  virtual ~CVFSAddonCache();
+  void Init();
+  void Deinit();
+  const std::vector<VFSEntryPtr> GetAddonInstances();
+  VFSEntryPtr GetAddonInstance(const std::string& strId);
 
-  protected:
-    void Update(const std::string& id);
-    void OnEvent(const AddonEvent& event);
-    bool IsInUse(const std::string& id) override;
+protected:
+  void Update(const std::string& id);
+  void OnEvent(const AddonEvent& event);
+  bool IsInUse(const std::string& id) override;
 
-    CCriticalSection m_critSection;
-    std::vector<VFSEntryPtr> m_addonsInstances;
-  };
+  CCriticalSection m_critSection;
+  std::vector<VFSEntryPtr> m_addonsInstances;
+};
 
   //! \brief A virtual filesystem entry add-on.
   class CVFSEntry : public IAddonInstanceHandler
@@ -106,7 +109,6 @@ namespace ADDON
     bool m_directories;       //!< VFS entry can list directories.
     bool m_filedirectories;   //!< VFS entry contains file directories.
     ProtocolInfo m_protocolInfo; //!< Info about protocol for network dialog.
-    AddonInstance_VFSEntry m_struct; //!< VFS callback table
   };
 
   //! \brief Wrapper equipping a CVFSEntry with an IFile interface.
@@ -189,7 +191,7 @@ namespace ADDON
     //! \param[in] url2 New URL of file.
     bool Rename(const CURL& url, const CURL& url2) override;
   protected:
-    void* m_context; //!< Opaque add-on specific context for opened file.
+    void* m_context = nullptr; //!< Opaque add-on specific context for opened file.
     VFSEntryPtr m_addon; //!< Pointer to wrapped CVFSEntry.
   };
 

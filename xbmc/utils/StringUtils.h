@@ -31,14 +31,13 @@
 #undef FMT_DEPRECATED
 #define FMT_DEPRECATED
 #endif
-#include <fmt/format.h>
-
-#if FMT_VERSION >= 40000
-#include <fmt/printf.h>
-#endif
-
-#include "XBDateTime.h"
+#include "utils/TimeFormat.h"
 #include "utils/params_check_macros.h"
+
+#include <fmt/format.h>
+#if FMT_VERSION >= 80000
+#include <fmt/xchar.h>
+#endif
 
 /*! \brief  C-processor Token stringification
 
@@ -72,11 +71,6 @@ class StringUtils
 public:
   /*! \brief Get a formatted string similar to sprintf
 
-  Beware that this does not support directly passing in
-  std::string objects. You need to call c_str() to pass
-  the const char* buffer representing the value of the
-  std::string object.
-
   \param fmt Format of the resulting string
   \param ... variable number of value type arguments
   \return Formatted string
@@ -85,27 +79,23 @@ public:
   static std::string Format(const std::string& fmt, Args&&... args)
   {
     // coverity[fun_call_w_exception : FALSE]
-    auto result = ::fmt::format(fmt, EnumToInt(std::forward<Args>(args))...);
-    if (result == fmt)
-      result = ::fmt::sprintf(fmt, EnumToInt(std::forward<Args>(args))...);
-
-    return result;
+    return ::fmt::format(fmt, EnumToInt(std::forward<Args>(args))...);
   }
   template<typename... Args>
   static std::wstring Format(const std::wstring& fmt, Args&&... args)
   {
     // coverity[fun_call_w_exception : FALSE]
-    auto result = ::fmt::format(fmt, EnumToInt(std::forward<Args>(args))...);
-    if (result == fmt)
-      result = ::fmt::sprintf(fmt, EnumToInt(std::forward<Args>(args))...);
-
-    return result;
+    return ::fmt::format(fmt, EnumToInt(std::forward<Args>(args))...);
   }
 
   static std::string FormatV(PRINTF_FORMAT_STRING const char *fmt, va_list args);
   static std::wstring FormatV(PRINTF_FORMAT_STRING const wchar_t *fmt, va_list args);
+  static std::string ToUpper(const std::string& str);
+  static std::wstring ToUpper(const std::wstring& str);
   static void ToUpper(std::string &str);
   static void ToUpper(std::wstring &str);
+  static std::string ToLower(const std::string& str);
+  static std::wstring ToLower(const std::wstring& str);
   static void ToLower(std::string &str);
   static void ToLower(std::wstring &str);
   static void ToCapitalize(std::string &str);
@@ -126,6 +116,16 @@ public:
   static std::string& TrimRight(std::string &str);
   static std::string& TrimRight(std::string &str, const char* const chars);
   static std::string& RemoveDuplicatedSpacesAndTabs(std::string& str);
+
+  /*! \brief Check if the character is a special character.
+
+   A special character is not an alphanumeric character, and is not useful to provide information
+
+   \param c Input character to be checked
+   */
+  static bool IsSpecialCharacter(char c);
+
+  static std::string ReplaceSpecialCharactersWithSpace(const std::string& str);
   static int Replace(std::string &str, char oldChar, char newChar);
   static int Replace(std::string &str, const std::string &oldStr, const std::string &newStr);
   static int Replace(std::wstring &str, const std::wstring &oldStr, const std::wstring &newStr);
@@ -365,6 +365,15 @@ public:
    */
   static std::string Paramify(const std::string &param);
 
+  /*! \brief Unescapes the given string.
+
+   Unescapes backslashes and double-quotes and removes double-quotes around the whole string.
+
+   \param param String to unescape/deparamify
+   \return Unescaped/Deparamified string
+   */
+  static std::string DeParamify(const std::string& param);
+
   /*! \brief Split a string by the specified delimiters.
    Splits a string using one or more delimiting characters, ignoring empty tokens.
    Differs from Split() in two ways:
@@ -376,7 +385,30 @@ public:
   static void Tokenize(const std::string& input, std::vector<std::string>& tokens, const std::string& delimiters);
   static std::vector<std::string> Tokenize(const std::string& input, const char delimiter);
   static void Tokenize(const std::string& input, std::vector<std::string>& tokens, const char delimiter);
-  static uint64_t ToUint64(const std::string& str, uint64_t fallback) noexcept;
+
+  /*!
+   * \brief Converts a string to a unsigned int number.
+   * \param str The string to convert
+   * \param fallback [OPT] The number to return when the conversion fails
+   * \return The converted number, otherwise fallback if conversion fails
+   */
+  static uint32_t ToUint32(std::string_view str, uint32_t fallback = 0) noexcept;
+
+  /*!
+   * \brief Converts a string to a unsigned long long number.
+   * \param str The string to convert
+   * \param fallback [OPT] The number to return when the conversion fails
+   * \return The converted number, otherwise fallback if conversion fails
+   */
+  static uint64_t ToUint64(std::string_view str, uint64_t fallback = 0) noexcept;
+
+  /*!
+   * \brief Converts a string to a float number.
+   * \param str The string to convert
+   * \param fallback [OPT] The number to return when the conversion fails
+   * \return The converted number, otherwise fallback if conversion fails
+   */
+  static float ToFloat(std::string_view str, float fallback = 0.0f) noexcept;
 
   /*!
    * Returns bytes in a human readable format using the smallest unit that will fit `bytes` in at
@@ -388,6 +420,23 @@ public:
    */
   static std::string FormatFileSize(uint64_t bytes);
 
+  /*! \brief Converts a cstring pointer (const char*) to a std::string.
+             In case nullptr is passed the result is an empty string.
+      \param cstr the const pointer to char
+      \return the resulting std::string or ""
+   */
+  static std::string CreateFromCString(const char* cstr);
+
+  /*!
+   * \brief Check if a keyword string is contained on another string.
+   * \param str The string in which to search for the keyword
+   * \param keyword The string to search for
+   * \return True if the keyword if found.
+   */
+  static bool Contains(std::string_view str,
+                       std::string_view keyword,
+                       bool isCaseInsensitive = true);
+
 private:
   /*!
    * Wrapper for CLangInfo::GetOriginalLocale() which allows us to
@@ -398,7 +447,7 @@ private:
 
 struct sortstringbyname
 {
-  bool operator()(const std::string& strItem1, const std::string& strItem2)
+  bool operator()(const std::string& strItem1, const std::string& strItem2) const
   {
     return StringUtils::CompareNoCase(strItem1, strItem2) < 0;
   }

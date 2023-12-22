@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+// clang-format off
 #define TMSG_MASK_MESSAGE                 0xFFFF0000 // only keep the high bits to route messages
 #define TMSG_MASK_APPLICATION             (1<<30) //Don't use bit 31 as it'll fail to build, using unsigned variable to hold the message.
 #define TMSG_MASK_PLAYLISTPLAYER          (1<<29)
@@ -57,7 +58,7 @@
 #define TMSG_RESTARTAPP                   TMSG_MASK_APPLICATION + 7
 #define TMSG_ACTIVATESCREENSAVER          TMSG_MASK_APPLICATION + 8
 #define TMSG_NETWORKMESSAGE               TMSG_MASK_APPLICATION + 9
-// unused: TMSG_MASK_APPLICATION + 10
+#define TMSG_RESETSCREENSAVER TMSG_MASK_APPLICATION + 10
 #define TMSG_VOLUME_SHOW                  TMSG_MASK_APPLICATION + 11
 #define TMSG_DISPLAY_SETUP                TMSG_MASK_APPLICATION + 12
 #define TMSG_DISPLAY_DESTROY              TMSG_MASK_APPLICATION + 13
@@ -82,6 +83,10 @@
 #define TMSG_RENDERER_PREINIT             TMSG_MASK_APPLICATION + 31
 #define TMSG_RENDERER_UNINIT              TMSG_MASK_APPLICATION + 32
 #define TMSG_EVENT                        TMSG_MASK_APPLICATION + 33
+#define TMSG_MOVETOSCREEN                 TMSG_MASK_APPLICATION + 34
+
+/// @brief Called from the player when its current item is updated
+#define TMSG_UPDATE_PLAYER_ITEM TMSG_MASK_APPLICATION + 35
 
 #define TMSG_GUI_INFOLABEL                TMSG_MASK_GUIINFOMANAGER + 0
 #define TMSG_GUI_INFOBOOL                 TMSG_MASK_GUIINFOMANAGER + 1
@@ -133,8 +138,7 @@
 
 
 #define TMSG_CALLBACK                     800
-
-
+// clang-format on
 
 class CGUIMessage;
 
@@ -226,11 +230,8 @@ struct ThreadMessageCallback
 class CApplicationMessenger
 {
 public:
-  /*!
-   \brief The only way through which the global instance of the CApplicationMessenger should be accessed.
-   \return the global instance.
-   */
-  static CApplicationMessenger& GetInstance();
+  CApplicationMessenger();
+  ~CApplicationMessenger();
 
   void Cleanup();
   // if a message has to be send to the gui, use MSG_TYPE_WINDOW instead
@@ -300,7 +301,7 @@ public:
    * \param [in,out] payload this is a void pointer that is meant to send larger objects to the receiver
    *             what to send depends on the message
    * \param [in] strParam value depends on the message being sent, remains for backward compat
-   * \param [in] params value depends on the message being sent, kept for backward compatiblity
+   * \param [in] params value depends on the message being sent, kept for backward compatibility
    * \return meaning of the return varies based on the message
    */
   int SendMsg(uint32_t messageId, int param1, int param2, void* payload, std::string strParam, std::vector<std::string> params);
@@ -366,7 +367,7 @@ public:
    * \param [in,out] payload this is a void pointer that is meant to send larger objects to the receiver
    *             what to send depends on the message
    * \param [in] strParam value depends on the message being sent, remains for backward compat
-   * \param [in] params value depends on the message being sent, kept for backward compatiblity
+   * \param [in] params value depends on the message being sent, kept for backward compatibility
    */
   void PostMsg(uint32_t messageId, int param1, int param2, void* payload, std::string strParam, std::vector<std::string> params);
 
@@ -404,17 +405,24 @@ public:
    */
   void SetGUIThread(const std::thread::id thread) { m_guiThreadId = thread; }
 
+  /*!
+   * \brief Set the processing thread id to avoid messenger being dependent on
+   * CApplication to determine if marshaling is required
+   * \param thread The processing thread ID
+   */
+  void SetProcessThread(const std::thread::id thread) { m_processThreadId = thread; }
+
   /*
    * \brief Signals the shutdown of the application and message processing
    */
   void Stop() { m_bStop = true; }
 
+  //! \brief Returns true if this is the process / app loop thread.
+  bool IsProcessThread() const;
+
 private:
-  // private construction, and no assignments; use the provided singleton methods
-  CApplicationMessenger();
   CApplicationMessenger(const CApplicationMessenger&) = delete;
   CApplicationMessenger const& operator=(CApplicationMessenger const&) = delete;
-  ~CApplicationMessenger();
 
   int SendMsg(ThreadMessage&& msg, bool wait);
   void ProcessMessage(ThreadMessage *pMsg);
@@ -424,6 +432,7 @@ private:
   std::map<int, IMessageTarget*> m_mapTargets; /*!< a map of registered receivers indexed on the message mask*/
   CCriticalSection m_critSection;
   std::thread::id m_guiThreadId;
+  std::thread::id m_processThreadId;
   bool m_bStop{ false };
 };
 }

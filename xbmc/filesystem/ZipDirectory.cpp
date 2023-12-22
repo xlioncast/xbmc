@@ -10,7 +10,6 @@
 
 #include "FileItem.h"
 #include "URL.h"
-#include "Util.h"
 #include "ZipManager.h"
 #include "filesystem/Directorization.h"
 #include "utils/CharsetConverter.h"
@@ -54,7 +53,7 @@ namespace XFILE
     DirectorizeEntries<SZipEntry> entries;
     entries.reserve(zipEntries.size());
     for (const auto& zipEntry : zipEntries)
-      entries.push_back(DirectorizeEntry<SZipEntry>(zipEntry.name, zipEntry));
+      entries.emplace_back(zipEntry.name, zipEntry);
 
     // directorize the ZIP entries into files and directories
     Directorize(urlZip, entries, ZipEntryToFileItem, items);

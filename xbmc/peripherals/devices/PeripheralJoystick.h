@@ -9,11 +9,15 @@
 #pragma once
 
 #include "Peripheral.h"
+#include "XBDateTime.h"
+#include "games/controllers/ControllerTypes.h"
 #include "input/joysticks/JoystickTypes.h"
 #include "input/joysticks/interfaces/IDriverReceiver.h"
 #include "threads/CriticalSection.h"
 
+#include <future>
 #include <memory>
+#include <queue>
 #include <string>
 #include <vector>
 
@@ -56,11 +60,13 @@ public:
   KODI::JOYSTICK::IDriverReceiver* GetDriverReceiver() override { return this; }
   IKeymap* GetKeymap(const std::string& controllerId) override;
   CDateTime LastActive() override { return m_lastActive; }
+  KODI::GAME::ControllerPtr ControllerProfile() const override;
+  void SetControllerProfile(const KODI::GAME::ControllerPtr& controller) override;
 
   bool OnButtonMotion(unsigned int buttonIndex, bool bPressed);
   bool OnHatMotion(unsigned int hatIndex, KODI::JOYSTICK::HAT_STATE state);
   bool OnAxisMotion(unsigned int axisIndex, float position);
-  void ProcessAxisMotions(void);
+  void OnInputFrame(void);
 
   // implementation of IDriverReceiver
   bool SetMotorState(unsigned int motorIndex, float magnitude) override;
@@ -102,9 +108,14 @@ public:
   void SetSupportsPowerOff(bool bSupportsPowerOff); // specialized to update m_features
 
 protected:
-  void InitializeDeadzoneFiltering();
+  void InitializeDeadzoneFiltering(KODI::JOYSTICK::IButtonMap& buttonMap);
+  void InitializeControllerProfile(KODI::JOYSTICK::IButtonMap& buttonMap);
 
   void PowerOff();
+
+  // Helper functions
+  KODI::GAME::ControllerPtr InstallAsync(const std::string& controllerId);
+  static bool InstallSync(const std::string& controllerId);
 
   struct DriverHandler
   {
@@ -114,13 +125,15 @@ protected:
 
   // State parameters
   std::string m_strProvider;
-  int m_requestedPort;
-  unsigned int m_buttonCount;
-  unsigned int m_hatCount;
-  unsigned int m_axisCount;
-  unsigned int m_motorCount;
-  bool m_supportsPowerOff;
+  int m_requestedPort = JOYSTICK_PORT_UNKNOWN;
+  unsigned int m_buttonCount = 0;
+  unsigned int m_hatCount = 0;
+  unsigned int m_axisCount = 0;
+  unsigned int m_motorCount = 0;
+  bool m_supportsPowerOff = false;
   CDateTime m_lastActive;
+  std::queue<std::string> m_controllersToInstall;
+  std::vector<std::future<void>> m_installTasks;
 
   // Input clients
   std::unique_ptr<KODI::JOYSTICK::CKeymapHandling> m_appInput;
@@ -132,5 +145,6 @@ protected:
 
   // Synchronization parameters
   CCriticalSection m_handlerMutex;
+  CCriticalSection m_controllerInstallMutex;
 };
 } // namespace PERIPHERALS

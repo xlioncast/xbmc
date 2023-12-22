@@ -23,6 +23,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -67,21 +68,93 @@ public:
   int processCmd;
   bool isVpp;
 
-  void IncDecoded() { CSingleLock l(m_sec); decodedPics++;}
-  void DecDecoded() { CSingleLock l(m_sec); decodedPics--;}
-  void IncProcessed() { CSingleLock l(m_sec); processedPics++;}
-  void DecProcessed() { CSingleLock l(m_sec); processedPics--;}
-  void IncRender() { CSingleLock l(m_sec); renderPics++;}
-  void DecRender() { CSingleLock l(m_sec); renderPics--;}
-  void Reset() { CSingleLock l(m_sec); decodedPics=0; processedPics=0;renderPics=0;latency=0;isVpp=false;}
-  void Get(uint16_t &decoded, uint16_t &processed, uint16_t &render, bool &vpp) {CSingleLock l(m_sec); decoded = decodedPics, processed=processedPics, render=renderPics; vpp=isVpp;}
-  void SetParams(uint64_t time, int flags) { CSingleLock l(m_sec); latency = time; codecFlags = flags; }
-  void GetParams(uint64_t &lat, int &flags) { CSingleLock l(m_sec); lat = latency; flags = codecFlags; }
-  void SetCmd(int cmd) { CSingleLock l(m_sec); processCmd = cmd; }
-  void GetCmd(int &cmd) { CSingleLock l(m_sec); cmd = processCmd; processCmd = 0; }
-  void SetCanSkipDeint(bool canSkip) { CSingleLock l(m_sec); canSkipDeint = canSkip; }
-  bool CanSkipDeint() { CSingleLock l(m_sec); if (canSkipDeint) return true; else return false;}
-  void SetVpp(bool vpp) {CSingleLock l(m_sec); isVpp = vpp;}
+  void IncDecoded()
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    decodedPics++;
+  }
+  void DecDecoded()
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    decodedPics--;
+  }
+  void IncProcessed()
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    processedPics++;
+  }
+  void DecProcessed()
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    processedPics--;
+  }
+  void IncRender()
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    renderPics++;
+  }
+  void DecRender()
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    renderPics--;
+  }
+  void Reset()
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    decodedPics = 0;
+    processedPics = 0;
+    renderPics = 0;
+    latency = 0;
+    isVpp = false;
+  }
+  void Get(uint16_t& decoded, uint16_t& processed, uint16_t& render, bool& vpp)
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    decoded = decodedPics, processed = processedPics, render = renderPics;
+    vpp = isVpp;
+  }
+  void SetParams(uint64_t time, int flags)
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    latency = time;
+    codecFlags = flags;
+  }
+  void GetParams(uint64_t& lat, int& flags)
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    lat = latency;
+    flags = codecFlags;
+  }
+  void SetCmd(int cmd)
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    processCmd = cmd;
+  }
+  void GetCmd(int& cmd)
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    cmd = processCmd;
+    processCmd = 0;
+  }
+  void SetCanSkipDeint(bool canSkip)
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    canSkipDeint = canSkip;
+  }
+  bool CanSkipDeint()
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    if (canSkipDeint)
+      return true;
+    else
+      return false;
+  }
+  void SetVpp(bool vpp)
+  {
+    std::unique_lock<CCriticalSection> l(m_sec);
+    isVpp = vpp;
+  }
+
 private:
   CCriticalSection m_sec;
 };
@@ -115,6 +188,7 @@ struct CVaapiConfig
   VAConfigAttrib attrib;
   CProcessInfo *processInfo;
   bool driverIsMesa;
+  int bitDepth;
 };
 
 /**
@@ -167,7 +241,7 @@ struct CVaapiProcessedPicture
   AVFrame *frame;
   int id;
   CPostproc *source = nullptr;
-  bool crop;
+  bool crop = false;
 };
 
 class CVaapiRenderPicture : public CVideoBuffer
@@ -192,7 +266,9 @@ class COutputControlProtocol : public Protocol
 {
 public:
   COutputControlProtocol(std::string name, CEvent* inEvent, CEvent* outEvent)
-    : Protocol(std::move(name), inEvent, outEvent){};
+    : Protocol(std::move(name), inEvent, outEvent)
+  {
+  }
   enum OutSignal
   {
     INIT,
@@ -212,7 +288,9 @@ class COutputDataProtocol : public Protocol
 {
 public:
   COutputDataProtocol(std::string name, CEvent* inEvent, CEvent* outEvent)
-    : Protocol(std::move(name), inEvent, outEvent){};
+    : Protocol(std::move(name), inEvent, outEvent)
+  {
+  }
   enum OutSignal
   {
     NEWFRAME = 0,
@@ -278,7 +356,7 @@ protected:
   CDecoder &m_vaapi;
 
   // extended state variables for state machine
-  int m_extTimeout;
+  std::chrono::milliseconds m_extTimeout = std::chrono::milliseconds::zero();
   /// \brief Whether at least one interlaced frame was encountered in the video stream (indicating that more interlaced frames could potentially follow)
   bool m_seenInterlaced;
   CVaapiConfig m_config;
@@ -341,7 +419,7 @@ private:
   void SetValidDRMVaDisplayFromRenderNode();
   static CVAAPIContext *m_context;
   static CCriticalSection m_section;
-  VADisplay m_display;
+  VADisplay m_display = NULL;
   int m_refCount;
   int m_profileCount;
   VAProfile *m_profiles;
@@ -356,8 +434,10 @@ private:
 class IVaapiWinSystem
 {
 public:
+  virtual ~IVaapiWinSystem() = default;
+
   virtual VADisplay GetVADisplay() = 0;
-  virtual void *GetEGLDisplay() { return nullptr; };
+  virtual void* GetEGLDisplay() { return nullptr; }
 };
 
 //-----------------------------------------------------------------------------
@@ -417,7 +497,6 @@ protected:
   bool m_vaapiConfigured;
   CVaapiConfig  m_vaapiConfig;
   CVideoSurfaces m_videoSurfaces;
-  AVCodecContext* m_avctx;
   int m_getBufferError;
 
   COutput m_vaapiOutput;
@@ -430,6 +509,14 @@ protected:
 
   static bool m_capGeneral;
   static bool m_capDeepColor;
+
+private:
+  struct AVBufferRefDeleter
+  {
+    void operator()(AVBufferRef* p) const;
+  };
+
+  std::unique_ptr<AVBufferRef, AVBufferRefDeleter> m_deviceRef;
 };
 
 //-----------------------------------------------------------------------------
@@ -454,7 +541,8 @@ public:
   virtual bool DoesSync() = 0;
   virtual bool WantsPic() {return true;}
   virtual bool UseVideoSurface() = 0;
-  virtual void Discard(COutput *output, ReadyToDispose cb) { (output->*cb)(this); };
+  virtual void Discard(COutput* output, ReadyToDispose cb) { (output->*cb)(this); }
+
 protected:
   CVaapiConfig m_config;
   int m_step;
@@ -506,11 +594,11 @@ protected:
   bool CheckSuccess(VAStatus status, const std::string& function);
   void Dispose();
   void Advance();
-  VAConfigID m_configId;
-  VAContextID m_contextId;
+  VAConfigID m_configId = VA_INVALID_ID;
+  VAContextID m_contextId = VA_INVALID_ID;
   CVideoSurfaces m_videoSurfaces;
   std::deque<CVaapiDecodedPicture> m_decodedPics;
-  VABufferID m_filter;
+  VABufferID m_filter = VA_INVALID_ID;
   int m_forwardRefs, m_backwardRefs;
   int m_currentIdx;
   int m_frameCount;

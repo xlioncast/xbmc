@@ -1,6 +1,6 @@
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1184,15 +1184,6 @@
+@@ -1625,15 +1625,6 @@
          ARFLAGS="rcs"
  fi
  
@@ -18,26 +18,9 @@
  case $MACHDEP in
 --- a/Makefile.pre.in
 +++ b/Makefile.pre.in
-@@ -38,7 +38,6 @@
- MAINCC=		@MAINCC@
- LINKCC=		@LINKCC@
- AR=		@AR@
--READELF=	@READELF@
- SOABI=		@SOABI@
- LDVERSION=	@LDVERSION@
- LIBPYTHON=	@LIBPYTHON@
-@@ -608,7 +607,7 @@
- 		$(PYTHON_FOR_BUILD) $(srcdir)/setup.py $$quiet build"; \
- 	$(RUNSHARED) CC='$(CC)' LDSHARED='$(BLDSHARED)' OPT='$(OPT)' \
- 		_TCLTK_INCLUDES='$(TCLTK_INCLUDES)' _TCLTK_LIBS='$(TCLTK_LIBS)' \
--		$(PYTHON_FOR_BUILD) $(srcdir)/setup.py $$quiet build
-+		PYTHONXCPREFIX='$(DESTDIR)$(prefix)' $(PYTHON_FOR_BUILD) $(srcdir)/setup.py $$quiet build
- 
- 
- # Build static library
-@@ -1600,10 +1599,11 @@
+@@ -2233,10 +2233,11 @@
  # This goes into $(exec_prefix)
- sharedinstall: sharedmods
+ sharedinstall: all
  	$(RUNSHARED) $(PYTHON_FOR_BUILD) $(srcdir)/setup.py install \
 + 	    --skip-build \
  	   	--prefix=$(prefix) \
@@ -52,16 +35,7 @@
  
 --- a/setup.py
 +++ b/setup.py
-@@ -21,7 +21,7 @@
- 
- 
- # Compile extensions used to test Python?
--TEST_EXTENSIONS = True
-+TEST_EXTENSIONS = False
- 
- # This global variable is used to hold the list of modules to be disabled.
- DISABLED_MODULE_LIST = []
-@@ -38,7 +38,7 @@
+@@ -77,7 +77,7 @@
      return sys.platform
  
  
@@ -70,11 +44,21 @@
  HOST_PLATFORM = get_platform()
  MS_WINDOWS = (HOST_PLATFORM == 'win32')
  CYGWIN = (HOST_PLATFORM == 'cygwin')
-@@ -310,6 +310,7 @@
-         self.extensions.append(ext)
+@@ -488,6 +488,7 @@
+         self.compiler.set_executables(**args)
  
      def build_extensions(self):
 +        return
-         self.srcdir = sysconfig.get_config_var('srcdir')
-         if not self.srcdir:
-             # Maybe running on Windows but not using CYGWIN?
+         self.set_srcdir()
+         self.set_compiler_executables()
+         self.configure_compiler()
+@@ -1343,7 +1343,7 @@
+         # These are extensions are required to bootstrap the interpreter or
+         # build process.
+         self.detect_simple_extensions()
+-        self.detect_test_extensions()
++        #self.detect_test_extensions()
+         self.detect_readline_curses()
+         self.detect_crypt()
+         self.detect_openssl_hashlib()
+

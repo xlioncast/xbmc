@@ -4,18 +4,49 @@ ifneq ($(shell test -f $(PREFIX)/share/config.site && echo 1),1)
   $(error Error: $(PREFIX)/share/config.site  is missing. Please reconfigure depends to generate it)
 endif
 
+# Keep in alphabetical order
 DEPENDS = \
-	pcre expat gettext sqlite3 libgpg-error \
-	libgcrypt bzip2 libfstrcmp liblzo2 freetype2 fontconfig \
-	openssl gmp nettle gnutls googletest curl nghttp2 \
-	libjpeg-turbo libpng fribidi libass \
-	libxml2 rapidjson libmicrohttpd mariadb libffi \
-	python3 libshairplay libfmt libspdlog \
-	libplist libcec libbluray tinyxml \
-	taglib libusb libnfs \
-	pythonmodule-pil pythonmodule-pycryptodome pythonmodule-setuptools \
-	libxslt ffmpeg crossguid libudfread \
-	libdvdread libdvdnav libdvdcss p8-platform flatbuffers dav1d
+  bzip2 \
+  curl \
+  dav1d \
+  expat \
+  ffmpeg \
+  fontconfig \
+  freetype2 \
+  freetype2-noharfbuzz \
+  fribidi \
+  fstrcmp \
+  gettext \
+  gmp \
+  gnutls \
+  gtest \
+  harfbuzz \
+  libass \
+  libbluray \
+  libffi \
+  libgcrypt \
+  libgpg-error \
+  libjpeg-turbo \
+  liblzo2 \
+  libmicrohttpd \
+  libplist \
+  libpng \
+  libshairplay \
+  libusb \
+  libxml2 \
+  libxslt \
+  mariadb \
+  nettle \
+  nghttp2 \
+  openssl \
+  python3 \
+  pythonmodule-pil \
+  pythonmodule-pycryptodome \
+  pythonmodule-setuptools \
+  sqlite3 \
+  tinyxml \
+  udfread \
+  xz
 
 ifeq ($(ENABLE_GPLV3),yes)
   DEPENDS+=samba-gplv3 libcdio-gplv3
@@ -24,27 +55,24 @@ else
 endif
 
 ifeq ($(OS),darwin_embedded)
-  EXCLUDED_DEPENDS = libcec libusb
+  EXCLUDED_DEPENDS = libusb gtest
   ifeq ($(TARGET_PLATFORM),appletvos)
-    DEPENDS += boblight
     EXCLUDED_DEPENDS += libshairplay libplist
   endif
   DEPENDS += darwin-embedded-entitlements
 endif
 
 ifeq ($(OS),osx)
-  DEPENDS += libsdl
   EXCLUDED_DEPENDS = libusb
+  DEPENDS += smctemp
 endif
 
 ifeq ($(OS),android)
-  EXCLUDED_DEPENDS = libcec libusb
-  DEPENDS += dummy-libxbmc libuuid libandroidjni libzip
+  EXCLUDED_DEPENDS = libusb gtest
+  DEPENDS += dummy-libxbmc libdovi libuuid
   PYMODULE_DEPS = dummy-libxbmc
   LIBUUID = libuuid
 endif
-
-DEPENDS := $(filter-out $(EXCLUDED_DEPENDS),$(DEPENDS))
 
 ZLIB=
 ifneq ($(HAS_ZLIB),1)
@@ -60,71 +88,104 @@ endif
 
 ALSA_LIB=
 ifeq ($(OS),linux)
-  DEPENDS += dbus libuuid alsa-lib libdrm libxkbcommon libinput libudev libevdev mtdev wayland waylandpp wayland-protocols linux-system-x11-libs
+  DEPENDS += dbus libuuid alsa-lib libdrm libxkbcommon libinput libudev libevdev mtdev pipewire
   ALSA_LIB = alsa-lib
   LIBUUID = libuuid
 
-  ifeq ($(RENDER_SYSTEM),gl)
-    WAYLANDPP_DEPS += linux-system-gl-libs
-    DEPENDS += linux-system-gl-libs
-  else
-    WAYLANDPP_DEPS += mesa
-    DEPENDS += mesa
-  endif
-
-  MESA_DEPS += wayland-protocols wayland linux-system-x11-libs
-
   ifeq ($(CPU),x86_64)
-    LIBVA_DEPS += wayland linux-system-x11-libs
-
     DEPENDS += libva
     LIBVA = libva
   endif
-endif
 
-.PHONY: $(DEPENDS)
+  ifneq (,$(findstring wayland,$(TARGET_PLATFORM)))
+    DEPENDS += wayland waylandpp wayland-protocols
+    MESA_DEPS += wayland-protocols wayland
+    ifeq ($(CPU),x86_64)
+      LIBVA_DEPS += wayland
+    endif
+
+    ifeq ($(RENDER_SYSTEM),gl)
+      WAYLANDPP_DEPS += linux-system-gl-libs
+    else
+      WAYLANDPP_DEPS += mesa
+    endif
+  endif
+
+  ifneq (,$(findstring x11,$(TARGET_PLATFORM)))
+    DEPENDS += linux-system-x11-libs
+    MESA_DEPS += linux-system-x11-libs
+    ifeq ($(CPU),x86_64)
+      LIBVA_DEPS += linux-system-x11-libs
+    endif
+  endif
+
+  ifeq ($(RENDER_SYSTEM),gl)
+    DEPENDS += linux-system-gl-libs
+  else
+    DEPENDS += mesa
+  endif
+
+  ifeq ($(TARGET_PLATFORM),webos)
+    DEPENDS += wayland waylandpp wayland-protocols webos-wayland-extensions webos-userland
+    EXCLUDED_DEPENDS += dbus libcec linux-system-x11-libs pipewire mesa
+  endif
+
+  ifneq (,$(findstring gbm,$(TARGET_PLATFORM)))
+    DEPENDS += hwdata libdisplay-info
+  endif
+endif
+DEPENDS := $(filter-out $(EXCLUDED_DEPENDS),$(DEPENDS))
+
+.PHONY: $(DEPENDS) download $(DOWNLOAD_TARGETS)
 
 all: .installed-$(PLATFORM)
 
-gettext: $(ICONV)
-libgcrypt: libgpg-error
-fontconfig: freetype2 expat $(ICONV) $(LIBUUID)
-curl: openssl nghttp2
-libass: fontconfig fribidi libpng freetype2 expat $(ICONV)
-libmicrohttpd: gnutls libgcrypt libgpg-error
-python3: expat gettext libxml2 sqlite3 openssl libffi bzip2
-libcdio: $(ICONV)
-libcdio-gplv3: $(ICONV)
-libplist: $(ZLIB)
-libbluray: fontconfig freetype2 $(ICONV) libxml2
-mariadb: openssl $(ICONV) $(ZLIB)
-libzip: bzip2 gnutls $(ZLIB)
-libpng: $(ZLIB)
-openssl: $(ZLIB)
-gnutls: nettle $(ZLIB)
-nettle: gmp
-pythonmodule-pycryptodome: $(PYMODULE_DEPS) python3 pythonmodule-setuptools
-pythonmodule-pil: bzip2 $(PYMODULE_DEPS) $(ZLIB) libjpeg-turbo libpng freetype2 python3 pythonmodule-setuptools
-pythonmodule-setuptools: $(PYMODULE_DEPS) python3
-libxslt: libgcrypt libxml2
-ffmpeg: $(ICONV) $(ZLIB) bzip2 gnutls dav1d $(LIBVA)
-libcec: p8-platform
+EXCLUDE := linux-system-gl-libs linux-system-x11-libs
+DOWNLOAD_DEPS := $(filter-out $(EXCLUDE:%=%), $(DEPENDS))
+DOWNLOAD_TARGETS := $(addprefix download/, $(DOWNLOAD_DEPS))
+
+$(DOWNLOAD_TARGETS):
+	$(MAKE) -C $(notdir $@) download
+
+download: $(DOWNLOAD_TARGETS)
+
 crossguid: $(LIBUUID)
-libdvdnav: libdvdread
-libdvdread: libdvdcss
+curl: openssl nghttp2 $(ZLIB)
+dbus: expat
+ffmpeg: $(ICONV) $(ZLIB) bzip2 gnutls dav1d $(LIBVA)
+fontconfig: freetype2 expat $(ICONV) $(LIBUUID)
+freetype2: bzip2 harfbuzz $(ZLIB)
+gettext: $(ICONV)
+gnutls: nettle $(ZLIB)
+harfbuzz: freetype2-noharfbuzz $(ICONV)
+libass: fontconfig fribidi harfbuzz libpng freetype2 expat $(ICONV)
+libbluray: fontconfig freetype2 $(ICONV) udfread libxml2
+libcdio-gplv3: $(ICONV)
+libcdio: $(ICONV)
+libdisplay-info: hwdata
+libevdev: libudev
+libgcrypt: libgpg-error
+libinput: mtdev libevdev
+libmicrohttpd: gnutls libgcrypt libgpg-error
+libplist: $(ZLIB)
+libpng: $(ZLIB)
+libva: libdrm $(LIBVA_DEPS)
+libxml2: $(ZLIB)
+libxslt: libgcrypt libxml2
+libzip: bzip2 gnutls $(ZLIB)
+mariadb: openssl $(ICONV) $(ZLIB)
+mesa: libdrm $(MESA_DEPS) $(ZLIB)
+nettle: gmp
+openssl: $(ZLIB)
+python3: expat gettext libxml2 sqlite3 openssl libffi bzip2 xz $(ICONV)
+pythonmodule-pil: bzip2 $(PYMODULE_DEPS) $(ZLIB) libjpeg-turbo libpng freetype2 python3 pythonmodule-setuptools
+pythonmodule-pycryptodome: $(PYMODULE_DEPS) python3 pythonmodule-setuptools
+pythonmodule-setuptools: $(PYMODULE_DEPS) python3
+samba-gplv3: gnutls $(ZLIB)
+taglib: $(ZLIB)
 wayland: expat libffi
 waylandpp: wayland $(WAYLANDPP_DEPS)
-dbus: expat
-libinput: mtdev libevdev meson-cross-file
-libevdev: libudev
-samba-gplv3: gnutls
-taglib: $(ZLIB)
-dav1d: meson-cross-file
-fribidi: meson-cross-file
-libspdlog: libfmt
-libdrm: meson-cross-file
-mesa: libdrm meson-cross-file $(MESA_DEPS)
-libva: libdrm $(LIBVA_DEPS)
+xz: gettext
 
 .installed-$(PLATFORM): $(DEPENDS)
 	touch $@
@@ -152,6 +213,7 @@ distclean::
 HOST_LIB_PKGCONFIG := $(firstword $(wildcard /usr/lib64/pkgconfig /usr/lib/$(HOST)/pkgconfig))
 
 linux-system-x11-libs:
+	mkdir -p $(PREFIX)/lib/pkgconfig
 	[ -f $(PREFIX)/lib/pkgconfig/damageproto.pc ] || ln -sf  /usr/share/pkgconfig/damageproto.pc $(PREFIX)/lib/pkgconfig/damageproto.pc
 	[ -f $(PREFIX)/lib/pkgconfig/fixesproto.pc ] || ln -sf  /usr/share/pkgconfig/fixesproto.pc $(PREFIX)/lib/pkgconfig/fixesproto.pc
 	[ -f $(PREFIX)/lib/pkgconfig/x11-xcb.pc ] || ln -sf  $(HOST_LIB_PKGCONFIG)/x11-xcb.pc $(PREFIX)/lib/pkgconfig/x11-xcb.pc
@@ -188,25 +250,8 @@ linux-system-x11-libs:
 	[ -f $(PREFIX)/lib/pkgconfig/xmu.pc ] || ln -sf $(HOST_LIB_PKGCONFIG)/xmu.pc $(PREFIX)/lib/pkgconfig/xmu.pc
 
 linux-system-gl-libs:
+	mkdir -p $(PREFIX)/lib/pkgconfig
 	[ -f $(PREFIX)/lib/pkgconfig/egl.pc ] || ln -sf $(HOST_LIB_PKGCONFIG)/egl.pc $(PREFIX)/lib/pkgconfig/egl.pc
 	[ -f $(PREFIX)/lib/pkgconfig/wayland-egl.pc ] || ln -sf $(HOST_LIB_PKGCONFIG)/wayland-egl.pc $(PREFIX)/lib/pkgconfig/wayland-egl.pc
 	[ -f $(PREFIX)/lib/pkgconfig/gl.pc ] || ln -sf $(HOST_LIB_PKGCONFIG)/gl.pc $(PREFIX)/lib/pkgconfig/gl.pc
 	[ -f $(PREFIX)/lib/pkgconfig/glu.pc ] || ln -sf $(HOST_LIB_PKGCONFIG)/glu.pc $(PREFIX)/lib/pkgconfig/glu.pc
-
-$(PREFIX)/share/cross-file.meson:
-	PREFIX="$(PREFIX)" \
-	NATIVEPREFIX="$(NATIVEPREFIX)" \
-	CC="$(CC)" \
-	CXX="$(CXX)" \
-	AR="$(AR)" \
-	STRIP="$(STRIP)" \
-	MESON_SYSTEM="$(MESON_SYSTEM)" \
-	MESON_CPU="$(MESON_CPU)" \
-	CPU="$(CPU)" \
-	CFLAGS="$(CFLAGS)" \
-	CXXFLAGS="$(CXXFLAGS)" \
-	LDFLAGS="$(LDFLAGS)" \
-	./meson-cross-setup.sh $@
-
-.PHONY: meson-cross-file
-meson-cross-file: $(PREFIX)/share/cross-file.meson

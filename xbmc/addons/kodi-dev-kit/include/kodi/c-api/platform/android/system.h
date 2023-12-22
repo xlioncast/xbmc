@@ -6,6 +6,8 @@
  *  See LICENSES/README.md for more information.
  */
 
+/*---AUTO_GEN_PARSE<$$CORE_SYSTEM_NAME:android>---*/
+
 #ifndef C_API_PLATFORM_ANDROID_H
 #define C_API_PLATFORM_ANDROID_H
 
@@ -22,7 +24,7 @@ extern "C"
   {
     void* (*get_jni_env)();
     int (*get_sdk_version)();
-    const char *(*get_class_name)();
+    const char* (*get_class_name)();
   };
 
 #ifdef __cplusplus

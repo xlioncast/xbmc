@@ -13,13 +13,11 @@
 #ifdef TARGET_WINDOWS
 #include "Win32DllLoader.h"
 #endif
-#include "DllLoader.h"
-#include "dll_tracker.h" // for python unload hack
-#include "filesystem/File.h"
-#include "utils/URIUtils.h"
-#include "utils/StringUtils.h"
-#include "utils/log.h"
 #include "URL.h"
+#include "filesystem/File.h"
+#include "utils/StringUtils.h"
+#include "utils/URIUtils.h"
+#include "utils/log.h"
 
 #if defined(TARGET_WINDOWS)
 #define ENV_PARTIAL_PATH \
@@ -49,24 +47,14 @@
 #define ENV_PATH ENV_PARTIAL_PATH
 #endif
 
-//Define this to get loggin on all calls to load/unload of dlls
+//Define this to get logging on all calls to load/unload of dlls
 //#define LOGALL
 
 
 using namespace XFILE;
 
 LibraryLoader* DllLoaderContainer::m_dlls[64] = {};
-int        DllLoaderContainer::m_iNrOfDlls = 0;
-bool       DllLoaderContainer::m_bTrack = true;
-
-void DllLoaderContainer::Clear()
-{
-}
-
-HMODULE DllLoaderContainer::GetModuleAddress(const char* sName)
-{
-  return (HMODULE)GetModule(sName);
-}
+int DllLoaderContainer::m_iNrOfDlls = 0;
 
 LibraryLoader* DllLoaderContainer::GetModule(const char* sName)
 {
@@ -82,7 +70,7 @@ LibraryLoader* DllLoaderContainer::GetModule(const char* sName)
   return NULL;
 }
 
-LibraryLoader* DllLoaderContainer::GetModule(HMODULE hModule)
+LibraryLoader* DllLoaderContainer::GetModule(const HMODULE hModule)
 {
   for (int i = 0; i < m_iNrOfDlls && m_dlls[i] != NULL; i++)
   {
@@ -120,7 +108,7 @@ LibraryLoader* DllLoaderContainer::LoadModule(const char* sName, const char* sCu
     pDll->IncrRef();
 
 #ifdef LOGALL
-    CLog::Log(LOGDEBUG, "Already loaded Dll %s at 0x%x", pDll->GetFileName(), pDll);
+    CLog::Log(LOGDEBUG, "Already loaded Dll {} at 0x{:x}", pDll->GetFileName(), pDll);
 #endif
 
   }
@@ -175,7 +163,7 @@ LibraryLoader* DllLoaderContainer::FindModule(const char* sName, const char* sCu
     URIUtils::AddSlashAtEnd(strPath);
 
 #ifdef LOGALL
-    CLog::Log(LOGDEBUG, "Searching for the dll %s in directory %s", sName, strPath.c_str());
+    CLog::Log(LOGDEBUG, "Searching for the dll {} in directory {}", sName, strPath);
 #endif
 
     strPath+=sName;
@@ -192,7 +180,7 @@ LibraryLoader* DllLoaderContainer::FindModule(const char* sName, const char* sCu
   if ((pDll = LoadDll(sName, bLoadSymbols)) != NULL)
     return pDll;
 
-  CLog::Log(LOGDEBUG, "Dll %s was not found in path", sName);
+  CLog::Log(LOGDEBUG, "Dll {} was not found in path", sName);
   return NULL;
 }
 
@@ -202,7 +190,7 @@ void DllLoaderContainer::ReleaseModule(LibraryLoader*& pDll)
     return;
   if (pDll->IsSystemDll())
   {
-    CLog::Log(LOGFATAL, "%s is a system dll and should never be released", pDll->GetName());
+    CLog::Log(LOGFATAL, "{} is a system dll and should never be released", pDll->GetName());
     return;
   }
 
@@ -211,7 +199,7 @@ void DllLoaderContainer::ReleaseModule(LibraryLoader*& pDll)
   {
 
 #ifdef LOGALL
-    CLog::Log(LOGDEBUG, "Releasing Dll %s", pDll->GetFileName());
+    CLog::Log(LOGDEBUG, "Releasing Dll {}", pDll->GetFileName());
 #endif
 
     if (!pDll->HasSymbols())
@@ -221,12 +209,13 @@ void DllLoaderContainer::ReleaseModule(LibraryLoader*& pDll)
       pDll=NULL;
     }
     else
-      CLog::Log(LOGINFO, "%s has symbols loaded and can never be unloaded", pDll->GetName());
+      CLog::Log(LOGINFO, "{} has symbols loaded and can never be unloaded", pDll->GetName());
   }
 #ifdef LOGALL
   else
   {
-    CLog::Log(LOGDEBUG, "Dll %s is still referenced with a count of %d", pDll->GetFileName(), iRefCount);
+    CLog::Log(LOGDEBUG, "Dll {} is still referenced with a count of {}", pDll->GetFileName(),
+              iRefCount);
   }
 #endif
 }
@@ -235,7 +224,7 @@ LibraryLoader* DllLoaderContainer::LoadDll(const char* sName, bool bLoadSymbols)
 {
 
 #ifdef LOGALL
-  CLog::Log(LOGDEBUG, "Loading dll %s", sName);
+  CLog::Log(LOGDEBUG, "Loading dll {}", sName);
 #endif
 
   LibraryLoader* pLoader;
@@ -243,13 +232,11 @@ LibraryLoader* DllLoaderContainer::LoadDll(const char* sName, bool bLoadSymbols)
   pLoader = new SoLoader(sName, bLoadSymbols);
 #elif defined(TARGET_WINDOWS)
   pLoader = new Win32DllLoader(sName, false);
-#else
-  pLoader = new DllLoader(sName, m_bTrack, false, bLoadSymbols);
 #endif
 
   if (!pLoader)
   {
-    CLog::Log(LOGERROR, "Unable to create dll %s", sName);
+    CLog::Log(LOGERROR, "Unable to create dll {}", sName);
     return NULL;
   }
 
@@ -273,17 +260,6 @@ bool DllLoaderContainer::IsSystemDll(const char* sName)
   return false;
 }
 
-int DllLoaderContainer::GetNrOfModules()
-{
-  return m_iNrOfDlls;
-}
-
-LibraryLoader* DllLoaderContainer::GetModule(int iPos)
-{
-  if (iPos < m_iNrOfDlls) return m_dlls[iPos];
-  return NULL;
-}
-
 void DllLoaderContainer::RegisterDll(LibraryLoader* pDll)
 {
   for (LibraryLoader*& dll : m_dlls)
@@ -303,7 +279,7 @@ void DllLoaderContainer::UnRegisterDll(LibraryLoader* pDll)
   {
     if (pDll->IsSystemDll())
     {
-      CLog::Log(LOGFATAL, "%s is a system dll and should never be removed", pDll->GetName());
+      CLog::Log(LOGFATAL, "{} is a system dll and should never be removed", pDll->GetName());
     }
     else
     {
@@ -324,20 +300,4 @@ void DllLoaderContainer::UnRegisterDll(LibraryLoader* pDll)
       }
     }
   }
-}
-
-void DllLoaderContainer::UnloadPythonDlls()
-{
-  // unload all dlls that python could have loaded
-  for (int i = 0; i < m_iNrOfDlls && m_dlls[i] != NULL; i++)
-  {
-    const char* name = m_dlls[i]->GetName();
-    if (strstr(name, ".pyd") != NULL)
-    {
-      LibraryLoader* pDll = m_dlls[i];
-      ReleaseModule(pDll);
-      i = 0;
-    }
-  }
-
 }

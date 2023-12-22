@@ -14,6 +14,7 @@
 #include "Util.h"
 #include "dialogs/GUIDialogGamepad.h"
 #include "dialogs/GUIDialogNumeric.h"
+#include "favourites/FavouritesService.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIKeyboardFactory.h"
 #include "guilib/GUIWindowManager.h"
@@ -28,7 +29,9 @@
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/StringUtils.h"
+#include "utils/URIUtils.h"
 #include "utils/Variant.h"
+#include "utils/log.h"
 #include "view/ViewStateSettings.h"
 
 #include <utility>
@@ -87,6 +90,10 @@ bool CGUIPassword::IsItemUnlocked(T pItem,
         CMediaSourceSettings::GetInstance().UpdateSource(strType, strLabel, "badpwdcount",
                                                          std::to_string(pItem->m_iBadPwdCount));
         CMediaSourceSettings::GetInstance().Save();
+
+        // a mediasource has been unlocked successfully
+        // => refresh favourites due to possible visibility changes
+        CServiceBroker::GetFavouritesService().RefreshFavourites();
         break;
       }
     case 1:
@@ -160,7 +167,7 @@ bool CGUIPassword::CheckStartUpLock()
         std::string strLabel1;
         strLabel1 = g_localizeStrings.Get(12343); // "retries left"
         int iLeft = g_passwordManager.iMasterLockRetriesLeft-i;
-        std::string strLabel = StringUtils::Format("%i %s", iLeft, strLabel1.c_str());
+        std::string strLabel = StringUtils::Format("{} {}", iLeft, strLabel1);
 
         // PopUp OK and Display: MasterLock mode has changed but no new Mastercode has been set!
         HELPERS::ShowOKDialogLines(CVariant{12360}, CVariant{12367}, CVariant{strLabel}, CVariant{""});
@@ -177,7 +184,7 @@ bool CGUIPassword::CheckStartUpLock()
   }
   else
   {
-    CApplicationMessenger::GetInstance().PostMsg(TMSG_SHUTDOWN); // Turn off the box
+    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_SHUTDOWN); // Turn off the box
     return false;
   }
 }
@@ -323,8 +330,8 @@ void CGUIPassword::UpdateMasterLockRetryCount(bool bResetCount)
     }
     std::string dlgLine1 = "";
     if (0 < g_passwordManager.iMasterLockRetriesLeft)
-      dlgLine1 = StringUtils::Format("%d %s", g_passwordManager.iMasterLockRetriesLeft,
-                                     g_localizeStrings.Get(12343).c_str()); // "retries left"
+      dlgLine1 = StringUtils::Format("{} {}", g_passwordManager.iMasterLockRetriesLeft,
+                                     g_localizeStrings.Get(12343)); // "retries left"
     // prompt user for master lock code
     HELPERS::ShowOKDialogLines(CVariant{20075}, CVariant{12345}, CVariant{std::move(dlgLine1)}, CVariant{0});
   }
@@ -549,7 +556,7 @@ bool CGUIPassword::IsDatabasePathUnlocked(const std::string& strPath, VECSOURCES
 }
 
 bool CGUIPassword::IsMediaPathUnlocked(const std::shared_ptr<CProfileManager>& profileManager,
-                                       const std::string& strType)
+                                       const std::string& strType) const
 {
   if (!StringUtils::StartsWithNoCase(m_strMediaSourcePath, "root") &&
       !StringUtils::StartsWithNoCase(m_strMediaSourcePath, "library://"))
@@ -566,6 +573,31 @@ bool CGUIPassword::IsMediaPathUnlocked(const std::shared_ptr<CProfileManager>& p
       }
     }
   }
+
+  return true;
+}
+
+bool CGUIPassword::IsMediaFileUnlocked(const std::string& type, const std::string& file) const
+{
+  std::vector<CMediaSource>* vecSources = CMediaSourceSettings::GetInstance().GetSources(type);
+
+  if (!vecSources)
+  {
+    CLog::Log(LOGERROR,
+              "{}: CMediaSourceSettings::GetInstance().GetSources(\"{}\") returned nullptr.",
+              __func__, type);
+    return true;
+  }
+
+  // try to find the best matching source for this file
+
+  bool isSourceName{false};
+  const std::string fileBasePath = URIUtils::GetBasePath(file);
+
+  int iIndex = CUtil::GetMatchingSource(fileBasePath, *vecSources, isSourceName);
+
+  if (iIndex > -1 && iIndex < static_cast<int>(vecSources->size()))
+    return (*vecSources)[iIndex].m_iHasLock < LOCK_STATE_LOCKED;
 
   return true;
 }

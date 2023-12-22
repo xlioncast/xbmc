@@ -6,19 +6,22 @@
  *  See LICENSES/README.md for more information.
  */
 
-#include "threads/SystemClock.h"
 #include "UdpClient.h"
+
+#include <mutex>
 #ifdef TARGET_POSIX
 #include <sys/ioctl.h>
 #endif
 #include "Network.h"
-#include "windowing/GraphicContext.h"
-#include "utils/log.h"
 #include "utils/TimeUtils.h"
+#include "utils/log.h"
+#include "windowing/GraphicContext.h"
 
-#include "threads/SingleLock.h"
+#include <chrono>
 
 #include <arpa/inet.h>
+
+using namespace std::chrono_literals;
 
 #define UDPCLIENT_DEBUG_LEVEL LOGDEBUG
 
@@ -71,12 +74,12 @@ void CUdpClient::Destroy()
 
 void CUdpClient::OnStartup()
 {
-  SetPriority( GetMinPriority() );
+  SetPriority(ThreadPriority::LOWEST);
 }
 
 bool CUdpClient::Broadcast(int aPort, const std::string& aMessage)
 {
-  CSingleLock lock(critical_section);
+  std::unique_lock<CCriticalSection> lock(critical_section);
 
   struct sockaddr_in addr;
   addr.sin_family = AF_INET;
@@ -93,7 +96,7 @@ bool CUdpClient::Broadcast(int aPort, const std::string& aMessage)
 
 bool CUdpClient::Send(const std::string& aIpAddress, int aPort, const std::string& aMessage)
 {
-  CSingleLock lock(critical_section);
+  std::unique_lock<CCriticalSection> lock(critical_section);
 
   struct sockaddr_in addr;
   addr.sin_family = AF_INET;
@@ -109,7 +112,7 @@ bool CUdpClient::Send(const std::string& aIpAddress, int aPort, const std::strin
 
 bool CUdpClient::Send(struct sockaddr_in aAddress, const std::string& aMessage)
 {
-  CSingleLock lock(critical_section);
+  std::unique_lock<CCriticalSection> lock(critical_section);
 
   UdpCommand transmit = {aAddress, aMessage, NULL, 0};
   commands.push_back(transmit);
@@ -119,7 +122,7 @@ bool CUdpClient::Send(struct sockaddr_in aAddress, const std::string& aMessage)
 
 bool CUdpClient::Send(struct sockaddr_in aAddress, unsigned char* pMessage, DWORD dwSize)
 {
-  CSingleLock lock(critical_section);
+  std::unique_lock<CCriticalSection> lock(critical_section);
 
   UdpCommand transmit = {aAddress, "", pMessage, dwSize};
   commands.push_back(transmit);
@@ -130,7 +133,7 @@ bool CUdpClient::Send(struct sockaddr_in aAddress, unsigned char* pMessage, DWOR
 
 void CUdpClient::Process()
 {
-  CThread::Sleep(2000);
+  CThread::Sleep(2000ms);
 
   CLog::Log(UDPCLIENT_DEBUG_LEVEL, "UDPCLIENT: Listening.");
 
@@ -177,14 +180,17 @@ void CUdpClient::Process()
 
         std::string message = messageBuffer;
 
-        CLog::Log(UDPCLIENT_DEBUG_LEVEL, "UDPCLIENT RX: %u\t\t<- '%s'",
-                  XbmcThreads::SystemClockMillis(), message.c_str() );
+        auto now = std::chrono::steady_clock::now();
+        auto timestamp =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+
+        CLog::Log(UDPCLIENT_DEBUG_LEVEL, "UDPCLIENT RX: {}\t\t<- '{}'", timestamp.count(), message);
 
         OnMessage(remoteAddress, message, reinterpret_cast<unsigned char*>(messageBuffer), messageLength);
       }
       else
       {
-        CLog::Log(UDPCLIENT_DEBUG_LEVEL, "UDPCLIENT: Socket error %u", WSAGetLastError());
+        CLog::Log(UDPCLIENT_DEBUG_LEVEL, "UDPCLIENT: Socket error {}", WSAGetLastError());
       }
 
       // is there any more data to read?
@@ -206,7 +212,7 @@ bool CUdpClient::DispatchNextCommand()
 {
   UdpCommand command;
   {
-    CSingleLock lock(critical_section);
+    std::unique_lock<CCriticalSection> lock(critical_section);
 
     if (commands.size() <= 0)
       return false;
@@ -220,9 +226,14 @@ bool CUdpClient::DispatchNextCommand()
   if (command.binarySize > 0)
   {
     // only perform the following if logging level at debug
-    CLog::Log(UDPCLIENT_DEBUG_LEVEL, "UDPCLIENT TX: %u\t\t-> "
-                                     "<binary payload %u bytes>",
-              XbmcThreads::SystemClockMillis(), command.binarySize );
+
+    auto now = std::chrono::steady_clock::now();
+    auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+
+    CLog::Log(UDPCLIENT_DEBUG_LEVEL,
+              "UDPCLIENT TX: {}\t\t-> "
+              "<binary payload {} bytes>",
+              timestamp.count(), command.binarySize);
 
     do
     {
@@ -235,8 +246,11 @@ bool CUdpClient::DispatchNextCommand()
   else
   {
     // only perform the following if logging level at debug
-    CLog::Log(UDPCLIENT_DEBUG_LEVEL, "UDPCLIENT TX: %u\t\t-> '%s'",
-              XbmcThreads::SystemClockMillis(), command.message.c_str() );
+    auto now = std::chrono::steady_clock::now();
+    auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+
+    CLog::Log(UDPCLIENT_DEBUG_LEVEL, "UDPCLIENT TX: {}\t\t-> '{}'", timestamp.count(),
+              command.message);
 
     do
     {

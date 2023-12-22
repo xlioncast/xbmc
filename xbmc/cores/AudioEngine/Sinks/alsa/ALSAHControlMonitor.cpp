@@ -85,13 +85,16 @@ void CALSAHControlMonitor::Start()
     }
   }
 
-  g_fdEventMonitor.AddFDs(monitoredFDs, m_fdMonitorIds);
+  const auto eventMonitor = CServiceBroker::GetPlatform().GetService<CFDEventMonitor>();
+  eventMonitor->AddFDs(monitoredFDs, m_fdMonitorIds);
 }
 
 
 void CALSAHControlMonitor::Stop()
 {
-  g_fdEventMonitor.RemoveFDs(m_fdMonitorIds);
+  const auto eventMonitor = CServiceBroker::GetPlatform().GetService<CFDEventMonitor>();
+  eventMonitor->RemoveFDs(m_fdMonitorIds);
+
   m_fdMonitorIds.clear();
 }
 
@@ -134,12 +137,14 @@ snd_hctl_t* CALSAHControlMonitor::GetHandle(const std::string& ctlHandleName)
 
     if (snd_hctl_open(&hctl, ctlHandleName.c_str(), 0) != 0)
     {
-        CLog::Log(LOGWARNING, "CALSAHControlMonitor::GetHandle - snd_hctl_open() failed for \"%s\"", ctlHandleName.c_str());
-        return NULL;
+      CLog::Log(LOGWARNING, "CALSAHControlMonitor::GetHandle - snd_hctl_open() failed for \"{}\"",
+                ctlHandleName);
+      return NULL;
     }
     if (snd_hctl_load(hctl) != 0)
     {
-      CLog::Log(LOGERROR, "CALSAHControlMonitor::GetHandle - snd_hctl_load() failed for \"%s\"", ctlHandleName.c_str());
+      CLog::Log(LOGERROR, "CALSAHControlMonitor::GetHandle - snd_hctl_load() failed for \"{}\"",
+                ctlHandleName);
       snd_hctl_close(hctl);
       return NULL;
     }

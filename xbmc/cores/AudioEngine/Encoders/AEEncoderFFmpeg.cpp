@@ -10,17 +10,26 @@
 #define DTS_ENCODE_BITRATE 1411200
 
 #include "cores/AudioEngine/Encoders/AEEncoderFFmpeg.h"
-#include "cores/AudioEngine/Utils/AEUtil.h"
+
 #include "ServiceBroker.h"
-#include "utils/log.h"
+#include "cores/AudioEngine/Utils/AEUtil.h"
+#include "cores/FFmpeg.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include <string.h>
-#include <cassert>
+#include "utils/log.h"
 
-CAEEncoderFFmpeg::CAEEncoderFFmpeg():
-  m_CodecCtx      (NULL ),
-  m_SwrCtx        (NULL )
+extern "C"
+{
+#include <libavutil/channel_layout.h>
+}
+
+#include <cassert>
+#include <string.h>
+
+using FFMPEG_HELP_TOOLS::FFMpegErrorToString;
+using FFMPEG_HELP_TOOLS::FFMpegException;
+
+CAEEncoderFFmpeg::CAEEncoderFFmpeg() : m_CodecCtx(NULL), m_SwrCtx(NULL)
 {
 }
 
@@ -28,6 +37,7 @@ CAEEncoderFFmpeg::~CAEEncoderFFmpeg()
 {
   Reset();
   swr_free(&m_SwrCtx);
+  av_channel_layout_uninit(&m_CodecCtx->ch_layout);
   avcodec_free_context(&m_CodecCtx);
 }
 
@@ -83,10 +93,10 @@ bool CAEEncoderFFmpeg::Initialize(AEAudioFormat &format, bool allow_planar_input
 
   bool ac3 = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_AUDIOOUTPUT_AC3PASSTHROUGH);
 
-  AVCodec *codec = NULL;
+  const AVCodec* codec = nullptr;
 
   /* fallback to ac3 if we support it, we might not have DTS support */
-  if (!codec && ac3)
+  if (ac3)
   {
     m_CodecName = "AC3";
     m_CodecID = AV_CODEC_ID_AC3;
@@ -104,7 +114,8 @@ bool CAEEncoderFFmpeg::Initialize(AEAudioFormat &format, bool allow_planar_input
 
   m_CodecCtx->bit_rate = m_BitRate;
   m_CodecCtx->sample_rate = format.m_sampleRate;
-  m_CodecCtx->channel_layout = AV_CH_LAYOUT_5POINT1_BACK;
+  av_channel_layout_uninit(&m_CodecCtx->ch_layout);
+  av_channel_layout_from_mask(&m_CodecCtx->ch_layout, AV_CH_LAYOUT_5POINT1_BACK);
 
   /* select a suitable data format */
   if (codec->sample_fmts)
@@ -177,23 +188,32 @@ bool CAEEncoderFFmpeg::Initialize(AEAudioFormat &format, bool allow_planar_input
     }
     else
     {
-      CLog::Log(LOGERROR, "CAEEncoderFFmpeg::Initialize - Unable to find a suitable data format for the codec (%s)", m_CodecName.c_str());
+      CLog::Log(
+          LOGERROR,
+          "CAEEncoderFFmpeg::Initialize - Unable to find a suitable data format for the codec ({})",
+          m_CodecName);
+      av_channel_layout_uninit(&m_CodecCtx->ch_layout);
       avcodec_free_context(&m_CodecCtx);
       return false;
     }
   }
 
-  m_CodecCtx->channels = BuildChannelLayout(m_CodecCtx->channel_layout, m_Layout);
+  uint64_t mask = m_CodecCtx->ch_layout.u.mask;
+  av_channel_layout_uninit(&m_CodecCtx->ch_layout);
+  av_channel_layout_from_mask(&m_CodecCtx->ch_layout, mask);
+  m_CodecCtx->ch_layout.nb_channels = BuildChannelLayout(mask, m_Layout);
 
   /* open the codec */
   if (avcodec_open2(m_CodecCtx, codec, NULL))
   {
+    av_channel_layout_uninit(&m_CodecCtx->ch_layout);
     avcodec_free_context(&m_CodecCtx);
     return false;
   }
 
   format.m_frames = m_CodecCtx->frame_size;
-  format.m_frameSize = m_CodecCtx->channels * (CAEUtil::DataFormatToBits(format.m_dataFormat) >> 3);
+  int channels = m_CodecCtx->ch_layout.nb_channels;
+  format.m_frameSize = channels * (CAEUtil::DataFormatToBits(format.m_dataFormat) >> 3);
   format.m_channelLayout = m_Layout;
 
   m_CurrentFormat = format;
@@ -203,19 +223,19 @@ bool CAEEncoderFFmpeg::Initialize(AEAudioFormat &format, bool allow_planar_input
 
   if (m_NeedConversion)
   {
-    m_SwrCtx = swr_alloc_set_opts(NULL,
-                      m_CodecCtx->channel_layout, m_CodecCtx->sample_fmt, m_CodecCtx->sample_rate,
-                      m_CodecCtx->channel_layout, AV_SAMPLE_FMT_FLT, m_CodecCtx->sample_rate,
-                      0, NULL);
-    if (!m_SwrCtx || swr_init(m_SwrCtx) < 0)
+    int ret = swr_alloc_set_opts2(&m_SwrCtx, &m_CodecCtx->ch_layout, m_CodecCtx->sample_fmt,
+                                  m_CodecCtx->sample_rate, &m_CodecCtx->ch_layout,
+                                  AV_SAMPLE_FMT_FLT, m_CodecCtx->sample_rate, 0, NULL);
+    if (ret || swr_init(m_SwrCtx) < 0)
     {
       CLog::Log(LOGERROR, "CAEEncoderFFmpeg::Initialize - Failed to initialise resampler.");
       swr_free(&m_SwrCtx);
+      av_channel_layout_uninit(&m_CodecCtx->ch_layout);
       avcodec_free_context(&m_CodecCtx);
       return false;
     }
   }
-  CLog::Log(LOGINFO, "CAEEncoderFFmpeg::Initialize - %s encoder ready", m_CodecName.c_str());
+  CLog::Log(LOGINFO, "CAEEncoderFFmpeg::Initialize - {} encoder ready", m_CodecName);
   return true;
 }
 
@@ -241,53 +261,83 @@ unsigned int CAEEncoderFFmpeg::GetFrames()
 
 int CAEEncoderFFmpeg::Encode(uint8_t *in, int in_size, uint8_t *out, int out_size)
 {
-  int got_output;
-  AVFrame *frame;
+  int size = 0;
+  int err = AVERROR_UNKNOWN;
+  AVFrame* frame = nullptr;
+  AVPacket* pkt = nullptr;
 
   if (!m_CodecCtx)
-    return 0;
+    return size;
 
-  /* allocate the input frame
-   * sadly, we have to alloc/dealloc it everytime since we have no guarantee the
-   * data argument will be constant over iterated calls and the frame needs to
-   * setup pointers inside data */
-  frame = av_frame_alloc();
-  if (!frame)
-    return 0;
+  try
+  {
+    /* allocate the input frame and output packet
+     * sadly, we have to alloc/dealloc it everytime since we have no guarantee the
+     * data argument will be constant over iterated calls and the frame needs to
+     * setup pointers inside data */
+    frame = av_frame_alloc();
+    pkt = av_packet_alloc();
+    if (!frame || !pkt)
+      throw FFMpegException(
+          "Failed to allocate \"AVFrame\" or \"AVPacket\" for encoding (error '{}')",
+          strerror(errno));
 
-  frame->nb_samples = m_CodecCtx->frame_size;
-  frame->format = m_CodecCtx->sample_fmt;
-  frame->channel_layout = m_CodecCtx->channel_layout;
+    frame->nb_samples = m_CodecCtx->frame_size;
+    frame->format = m_CodecCtx->sample_fmt;
+    av_channel_layout_uninit(&frame->ch_layout);
+    av_channel_layout_copy(&frame->ch_layout, &m_CodecCtx->ch_layout);
+    int channelNum = m_CodecCtx->ch_layout.nb_channels;
 
-  avcodec_fill_audio_frame(frame, m_CodecCtx->channels, m_CodecCtx->sample_fmt,
-                    in, in_size, 0);
+    avcodec_fill_audio_frame(frame, channelNum, m_CodecCtx->sample_fmt, in, in_size, 0);
 
-  /* initialize the output packet */
-  av_init_packet(&m_Pkt);
-  m_Pkt.size = out_size;
-  m_Pkt.data = out;
+    /* encode it */
+    err = avcodec_send_frame(m_CodecCtx, frame);
+    if (err < 0)
+      throw FFMpegException("Error sending a frame for encoding (error '{}')",
+                            FFMpegErrorToString(err));
 
-  /* encode it */
-  int ret = avcodec_encode_audio2(m_CodecCtx, &m_Pkt, frame, &got_output);
+    err = avcodec_receive_packet(m_CodecCtx, pkt);
+    //! @TODO: This is a workaround for our current design. The caller should be made
+    // aware of the potential error values to use the ffmpeg API in a proper way, which means
+    // copying with EAGAIN and multiple packet output.
+    // For the current situation there is a relationship implicitely assumed of:
+    // 1 frame in - 1 packet out. This holds true in practice but the API does not guarantee it.
+    if (err >= 0)
+    {
+      if (pkt->size <= out_size)
+      {
+        memset(out, 0, out_size);
+        memcpy(out, pkt->data, pkt->size);
+        size = pkt->size;
+      }
+      else
+      {
+        CLog::LogF(LOGERROR, "Encoded pkt size ({}) is bigger than buffer ({})", pkt->size,
+                   out_size);
+      }
+      av_packet_unref(pkt);
+    }
+    else
+    {
+      CLog::LogF(LOGERROR, "Error receiving encoded paket ({})", err);
+    }
+  }
+  catch (const FFMpegException& caught)
+  {
+    CLog::Log(LOGERROR, "CAEEncoderFFmpeg::{} - {}", __func__, caught.what());
+  }
+
+  av_channel_layout_uninit(&frame->ch_layout);
 
   /* free temporary data */
   av_frame_free(&frame);
 
-  if (ret < 0 || !got_output)
-  {
-    CLog::Log(LOGERROR, "CAEEncoderFFmpeg::Encode - Encoding failed");
-    return 0;
-  }
-
-  int size = m_Pkt.size;
-
   /* free the packet */
-  av_packet_unref(&m_Pkt);
+  av_packet_free(&pkt);
 
   /* return the number of frames used */
   return size;
 }
-
 
 int CAEEncoderFFmpeg::GetData(uint8_t **data)
 {

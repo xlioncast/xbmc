@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "cores/FFmpeg.h"
+
 #include <stdint.h>
 
 extern "C" {
@@ -75,7 +77,7 @@ public:
   CBitstreamParser();
   ~CBitstreamParser() = default;
 
-  static bool Open(){ return true; };
+  static bool Open() { return true; }
   static void Close();
   static bool CanStartDecode(const uint8_t *buf, int buf_size);
 };
@@ -88,14 +90,16 @@ public:
 
   bool              Open(enum AVCodecID codec, uint8_t *in_extradata, int in_extrasize, bool to_annexb);
   void              Close(void);
-  bool              NeedConvert(void) const { return m_convert_bitstream; };
+  bool NeedConvert(void) const { return m_convert_bitstream; }
   bool              Convert(uint8_t *pData, int iSize);
   uint8_t*          GetConvertBuffer(void) const;
   int               GetConvertSize() const;
-  uint8_t*          GetExtraData(void) const;
+  uint8_t* GetExtraData();
+  const uint8_t* GetExtraData() const;
   int               GetExtraSize() const;
   void              ResetStartDecode(void);
   bool              CanStartDecode() const;
+  void SetConvertDovi(bool value) { m_convert_dovi = value; }
 
   static bool       mpeg2_sequence_header(const uint8_t *data, const uint32_t size, mpeg2_sequence *sequence);
 
@@ -109,8 +113,13 @@ protected:
   bool              BitstreamConvertInitAVC(void *in_extradata, int in_extrasize);
   bool              BitstreamConvertInitHEVC(void *in_extradata, int in_extrasize);
   bool              BitstreamConvert(uint8_t* pData, int iSize, uint8_t **poutbuf, int *poutbuf_size);
-  static void       BitstreamAllocAndCopy(uint8_t **poutbuf, int *poutbuf_size,
-                      const uint8_t *sps_pps, uint32_t sps_pps_size, const uint8_t *in, uint32_t in_size);
+  static void BitstreamAllocAndCopy(uint8_t** poutbuf,
+                                    int* poutbuf_size,
+                                    const uint8_t* sps_pps,
+                                    uint32_t sps_pps_size,
+                                    const uint8_t* in,
+                                    uint32_t in_size,
+                                    uint8_t nal_type);
 
   typedef struct omx_bitstream_ctx {
       uint8_t  length_size;
@@ -130,10 +139,10 @@ protected:
   bool              m_convert_bitstream;
   bool              m_to_annexb;
 
-  uint8_t          *m_extradata;
-  int               m_extrasize;
+  FFmpegExtraData m_extraData;
   bool              m_convert_3byteTo4byteNALSize;
   bool              m_convert_bytestream;
   AVCodecID         m_codec;
   bool              m_start_decode;
+  bool m_convert_dovi;
 };

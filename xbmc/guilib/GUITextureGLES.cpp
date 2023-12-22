@@ -19,7 +19,12 @@
 
 #include <cstddef>
 
-CGUITexture* CGUITexture::CreateTexture(
+void CGUITextureGLES::Register()
+{
+  CGUITexture::Register(CGUITextureGLES::CreateTexture, CGUITextureGLES::DrawQuad);
+}
+
+CGUITexture* CGUITextureGLES::CreateTexture(
     float posX, float posY, float width, float height, const CTextureInfo& texture)
 {
   return new CGUITextureGLES(posX, posY, width, height, texture);
@@ -37,9 +42,9 @@ CGUITextureGLES* CGUITextureGLES::Clone() const
   return new CGUITextureGLES(*this);
 }
 
-void CGUITextureGLES::Begin(UTILS::Color color)
+void CGUITextureGLES::Begin(UTILS::COLOR::Color color)
 {
-  CTexture* texture = m_texture.m_textures[m_currentFrame];
+  CTexture* texture = m_texture.m_textures[m_currentFrame].get();
   texture->LoadToGPU();
   if (m_diffuse.size())
     m_diffuse.m_textures[0]->LoadToGPU();
@@ -47,10 +52,10 @@ void CGUITextureGLES::Begin(UTILS::Color color)
   texture->BindToUnit(0);
 
   // Setup Colors
-  m_col[0] = (GLubyte)GET_R(color);
-  m_col[1] = (GLubyte)GET_G(color);
-  m_col[2] = (GLubyte)GET_B(color);
-  m_col[3] = (GLubyte)GET_A(color);
+  m_col[0] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::R, color);
+  m_col[1] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::G, color);
+  m_col[2] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::B, color);
+  m_col[3] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::A, color);
 
   if (CServiceBroker::GetWinSystem()->UseLimitedColor())
   {
@@ -65,11 +70,11 @@ void CGUITextureGLES::Begin(UTILS::Color color)
   {
     if (m_col[0] == 255 && m_col[1] == 255 && m_col[2] == 255 && m_col[3] == 255 )
     {
-      m_renderSystem->EnableGUIShader(SM_MULTI);
+      m_renderSystem->EnableGUIShader(ShaderMethodGLES::SM_MULTI);
     }
     else
     {
-      m_renderSystem->EnableGUIShader(SM_MULTI_BLENDCOLOR);
+      m_renderSystem->EnableGUIShader(ShaderMethodGLES::SM_MULTI_BLENDCOLOR);
     }
 
     hasAlpha |= m_diffuse.m_textures[0]->HasAlpha();
@@ -81,11 +86,11 @@ void CGUITextureGLES::Begin(UTILS::Color color)
   {
     if (m_col[0] == 255 && m_col[1] == 255 && m_col[2] == 255 && m_col[3] == 255)
     {
-      m_renderSystem->EnableGUIShader(SM_TEXTURE_NOBLEND);
+      m_renderSystem->EnableGUIShader(ShaderMethodGLES::SM_TEXTURE_NOBLEND);
     }
     else
     {
-      m_renderSystem->EnableGUIShader(SM_TEXTURE);
+      m_renderSystem->EnableGUIShader(ShaderMethodGLES::SM_TEXTURE);
     }
   }
 
@@ -226,10 +231,10 @@ void CGUITextureGLES::Draw(float *x, float *y, float *z, const CRect &texture, c
   }
 }
 
-void CGUITexture::DrawQuad(const CRect& rect,
-                           UTILS::Color color,
-                           CTexture* texture,
-                           const CRect* texCoords)
+void CGUITextureGLES::DrawQuad(const CRect& rect,
+                               UTILS::COLOR::Color color,
+                               CTexture* texture,
+                               const CRect* texCoords)
 {
   CRenderSystemGLES *renderSystem = dynamic_cast<CRenderSystemGLES*>(CServiceBroker::GetRenderSystem());
   if (texture)
@@ -249,9 +254,9 @@ void CGUITexture::DrawQuad(const CRect& rect,
   GLubyte idx[4] = {0, 1, 3, 2};        //determines order of triangle strip
 
   if (texture)
-    renderSystem->EnableGUIShader(SM_TEXTURE);
+    renderSystem->EnableGUIShader(ShaderMethodGLES::SM_TEXTURE);
   else
-    renderSystem->EnableGUIShader(SM_DEFAULT);
+    renderSystem->EnableGUIShader(ShaderMethodGLES::SM_DEFAULT);
 
   GLint posLoc   = renderSystem->GUIShaderGetPos();
   GLint tex0Loc  = renderSystem->GUIShaderGetCoord0();
@@ -266,10 +271,10 @@ void CGUITexture::DrawQuad(const CRect& rect,
     glEnableVertexAttribArray(tex0Loc);
 
   // Setup Colors
-  col[0] = (GLubyte)GET_R(color);
-  col[1] = (GLubyte)GET_G(color);
-  col[2] = (GLubyte)GET_B(color);
-  col[3] = (GLubyte)GET_A(color);
+  col[0] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::R, color);
+  col[1] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::G, color);
+  col[2] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::B, color);
+  col[3] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::A, color);
 
   glUniform4f(uniColLoc, col[0] / 255.0f, col[1] / 255.0f, col[2] / 255.0f, col[3] / 255.0f);
 

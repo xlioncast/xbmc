@@ -14,6 +14,7 @@
 #include "swighelper.h"
 
 #include <limits.h>
+#include <mutex>
 #include <vector>
 
 namespace XBMCAddon
@@ -257,17 +258,37 @@ namespace XBMCAddon
       SWIGHIDDENVIRTUAL bool    OnBack(int actionId);
       SWIGHIDDENVIRTUAL void    OnDeinitWindow(int nextWindowID);
 
-      SWIGHIDDENVIRTUAL bool    IsDialogRunning() const { XBMC_TRACE; return false; };
-      SWIGHIDDENVIRTUAL bool    IsDialog() const { XBMC_TRACE; return false; };
-      SWIGHIDDENVIRTUAL bool    IsModalDialog() const { XBMC_TRACE; return false; };
-      SWIGHIDDENVIRTUAL bool    IsMediaWindow() const { XBMC_TRACE; return false; };
+      SWIGHIDDENVIRTUAL bool IsDialogRunning() const
+      {
+        XBMC_TRACE;
+        return false;
+      }
+      SWIGHIDDENVIRTUAL bool IsDialog() const
+      {
+        XBMC_TRACE;
+        return false;
+      }
+      SWIGHIDDENVIRTUAL bool IsModalDialog() const
+      {
+        XBMC_TRACE;
+        return false;
+      }
+      SWIGHIDDENVIRTUAL bool IsMediaWindow() const
+      {
+        XBMC_TRACE;
+        return false;
+      }
       SWIGHIDDENVIRTUAL void    dispose();
 
       /**
        * This is called from the InterceptorBase destructor to prevent further
        * use of the interceptor from the window.
        */
-      inline void interceptorClear() { CSingleLock lock(*this); window = NULL; }
+      inline void interceptorClear()
+      {
+        std::unique_lock<CCriticalSection> lock(*this);
+        window = NULL;
+      }
 #endif
 
       //

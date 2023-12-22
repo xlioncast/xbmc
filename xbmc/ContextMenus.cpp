@@ -12,8 +12,10 @@
 #include "favourites/FavouritesService.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/LocalizeStrings.h"
 #include "input/WindowTranslator.h"
 #include "storage/MediaManager.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
 
@@ -22,16 +24,16 @@ namespace CONTEXTMENU
 
   bool CEjectDisk::IsVisible(const CFileItem& item) const
   {
-#ifdef HAS_DVD_DRIVE
+#ifdef HAS_OPTICAL_DRIVE
     return item.IsRemovable() && (item.IsDVD() || item.IsCDDA());
 #else
     return false;
 #endif
   }
 
-  bool CEjectDisk::Execute(const CFileItemPtr& item) const
+  bool CEjectDisk::Execute(const std::shared_ptr<CFileItem>& item) const
   {
-#ifdef HAS_DVD_DRIVE
+#ifdef HAS_OPTICAL_DRIVE
     CServiceBroker::GetMediaManager().ToggleTray(
         CServiceBroker::GetMediaManager().TranslateDevicePath(item->GetPath())[0]);
 #endif
@@ -44,7 +46,7 @@ namespace CONTEXTMENU
     return item.IsRemovable() && !item.IsDVD() && !item.IsCDDA();
   }
 
-  bool CEjectDrive::Execute(const CFileItemPtr& item) const
+  bool CEjectDrive::Execute(const std::shared_ptr<CFileItem>& item) const
   {
     return CServiceBroker::GetMediaManager().Eject(item->GetPath());
   }
@@ -76,22 +78,29 @@ std::string CAddRemoveFavourite::GetLabel(const CFileItem& item) const
 
 bool CAddRemoveFavourite::IsVisible(const CFileItem& item) const
 {
+  if (item.GetProperty("hide_add_remove_favourite").asBoolean())
+    return false;
+
   return (!item.GetPath().empty() && !item.IsParentFolder() && !item.IsPath("add") &&
           !item.IsPath("newplaylist://") && !URIUtils::IsProtocol(item.GetPath(), "favourites") &&
           !URIUtils::IsProtocol(item.GetPath(), "newsmartplaylist") &&
           !URIUtils::IsProtocol(item.GetPath(), "newtag") &&
+          !URIUtils::IsProtocol(item.GetPath(), "newvideoversion") &&
           !URIUtils::IsProtocol(item.GetPath(), "musicsearch") &&
-          // hide this item for all PVR timers/EPG except timer/timer rules/EPG root folders
+          // Hide this item for all PVR EPG/timers/search except EPG/timer/timer rules/search root
+          // folders.
           !StringUtils::StartsWith(item.GetPath(), "pvr://guide/") &&
-          !StringUtils::StartsWith(item.GetPath(), "pvr://timers/")) ||
+          !StringUtils::StartsWith(item.GetPath(), "pvr://timers/") &&
+          !StringUtils::StartsWith(item.GetPath(), "pvr://search/")) ||
          item.GetPath() == "pvr://guide/tv/" || item.GetPath() == "pvr://guide/radio/" ||
          item.GetPath() == "pvr://timers/tv/timers/" ||
          item.GetPath() == "pvr://timers/radio/timers/" ||
          item.GetPath() == "pvr://timers/tv/rules/" ||
-         item.GetPath() == "pvr://timers/radio/rules/";
+         item.GetPath() == "pvr://timers/radio/rules/" || item.GetPath() == "pvr://search/tv/" ||
+         item.GetPath() == "pvr://search/radio/";
 }
 
-bool CAddRemoveFavourite::Execute(const CFileItemPtr& item) const
+bool CAddRemoveFavourite::Execute(const std::shared_ptr<CFileItem>& item) const
 {
   return CServiceBroker::GetFavouritesService().AddOrRemove(*item.get(), GetTargetWindowID(*item));
 }

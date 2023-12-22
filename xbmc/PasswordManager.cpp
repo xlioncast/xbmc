@@ -10,13 +10,17 @@
 
 #include "ServiceBroker.h"
 #include "URL.h"
-#include "filesystem/File.h"
 #include "profiles/ProfileManager.h"
 #include "profiles/dialogs/GUIDialogLockSettings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SingleLock.h"
+#include "utils/FileUtils.h"
+#include "utils/StringUtils.h"
+#include "utils/XBMCTinyXML2.h"
 #include "utils/XMLUtils.h"
 #include "utils/log.h"
+
+#include <cstring>
+#include <mutex>
 
 CPasswordManager &CPasswordManager::GetInstance()
 {
@@ -31,7 +35,7 @@ CPasswordManager::CPasswordManager()
 
 bool CPasswordManager::AuthenticateURL(CURL &url)
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   if (!m_loaded)
     Load();
@@ -54,7 +58,7 @@ bool CPasswordManager::AuthenticateURL(CURL &url)
 
 bool CPasswordManager::PromptToAuthenticateURL(CURL &url)
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   std::string passcode;
   std::string username = url.GetUserName();
@@ -95,7 +99,7 @@ void CPasswordManager::SaveAuthenticatedURL(const CURL &url, bool saveToProfile)
   if (url.GetUserName().empty())
     return;
 
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   std::string path = GetLookupPath(url);
   std::string authenticatedPath = url.Get();
@@ -118,7 +122,13 @@ bool CPasswordManager::IsURLSupported(const CURL &url)
 {
   return url.IsProtocol("smb")
     || url.IsProtocol("nfs")
-    || url.IsProtocol("sftp");
+    || url.IsProtocol("ftp")
+    || url.IsProtocol("ftps")
+    || url.IsProtocol("sftp")
+    || url.IsProtocol("http")
+    || url.IsProtocol("https")
+    || url.IsProtocol("dav")
+    || url.IsProtocol("davs");
 }
 
 void CPasswordManager::Clear()
@@ -135,21 +145,24 @@ void CPasswordManager::Load()
   const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
 
   std::string passwordsFile = profileManager->GetUserDataItem("passwords.xml");
-  if (XFILE::CFile::Exists(passwordsFile))
+  if (CFileUtils::Exists(passwordsFile))
   {
-    CXBMCTinyXML doc;
+    CXBMCTinyXML2 doc;
     if (!doc.LoadFile(passwordsFile))
     {
-      CLog::Log(LOGERROR, "%s - Unable to load: %s, Line %d\n%s",
-        __FUNCTION__, passwordsFile.c_str(), doc.ErrorRow(), doc.ErrorDesc());
+      CLog::LogF(LOGERROR, "Unable to load: {}, Line {}\n{}", passwordsFile, doc.ErrorLineNum(),
+                 doc.ErrorStr());
       return;
     }
-    const TiXmlElement *root = doc.RootElement();
-    if (root->ValueStr() != "passwords")
+    const auto* root = doc.RootElement();
+    if (root == nullptr)
+      return;
+
+    if (std::strcmp(root->Value(), "passwords") != 0)
       return;
     // read in our passwords
-    const TiXmlElement *path = root->FirstChildElement("path");
-    while (path)
+    const auto* path = root->FirstChildElement("path");
+    while (path != nullptr)
     {
       std::string from, to;
       if (XMLUtils::GetPath(path, "from", from) && XMLUtils::GetPath(path, "to", to))
@@ -169,16 +182,25 @@ void CPasswordManager::Save() const
   if (m_permanentCache.empty())
     return;
 
-  CXBMCTinyXML doc;
-  TiXmlElement rootElement("passwords");
-  TiXmlNode *root = doc.InsertEndChild(rootElement);
-  if (!root)
+  CXBMCTinyXML2 doc;
+  auto* rootElement = doc.NewElement("passwords");
+  if (rootElement == nullptr)
+    return;
+
+  auto* root = doc.InsertEndChild(rootElement);
+  if (root == nullptr)
     return;
 
   for (std::map<std::string, std::string>::const_iterator i = m_permanentCache.begin(); i != m_permanentCache.end(); ++i)
   {
-    TiXmlElement pathElement("path");
-    TiXmlNode *path = root->InsertEndChild(pathElement);
+    auto* pathElement = doc.NewElement("path");
+    if (pathElement == nullptr)
+      continue;
+
+    auto* path = root->InsertEndChild(pathElement);
+    if (path == nullptr)
+      continue;
+
     XMLUtils::SetPath(path, "from", i->first);
     XMLUtils::SetPath(path, "to", i->second);
   }

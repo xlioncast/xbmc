@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Galician (Spain) (http://www.transifex.com/projects/p/kodi-main/language/gl_ES/)\n"
+"PO-Revision-Date: 2022-07-01 08:26+0000\n"
+"Last-Translator: Christian Gade <gade@kodi.tv>\n"
+"Language-Team: Galician (Spain) <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/gl_es/>\n"
+"Language: gl_es\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: gl_ES\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 4.13\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "Pel para dispositivos táctiles"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "Pel deseñada para se empregar en dispositivos táctiles como tabletas e móbiles"
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -64,22 +73,27 @@ msgctxt "#31016"
 msgid "Albums"
 msgstr "Álbumes"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "Info. do PVR"
+msgid "PVR"
+msgstr "PVR"
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "Información do proceso do reprodutor"
+msgid "Player"
+msgstr "Reprodutor"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "Decodificador de vídeo"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "Formato de pixel"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
 msgstr "Memoria empregada"
@@ -134,11 +148,11 @@ msgstr "Tempo final"
 
 msgctxt "#31050"
 msgid "Sort: Ascending"
-msgstr "Ordenar: Ascendentemente"
+msgstr "Orde: Ascendente"
 
 msgctxt "#31051"
 msgid "Sort: Descending"
-msgstr "Ordenar: Descendentemente"
+msgstr "Orde: Descendente"
 
 msgctxt "#31055"
 msgid "Open playlist"
@@ -202,7 +216,7 @@ msgstr "Menú de vídeo"
 
 msgctxt "#31356"
 msgid "Download Subtitles"
-msgstr "Descargar subtítulos"
+msgstr "Descargar Subtítulos"
 
 msgctxt "#31358"
 msgid "Teletext"
@@ -225,7 +239,7 @@ msgid "Configure & manage media sharing services · Configure & manage the weath
 msgstr "Configurar e xestionar os servizos de compartición de medios · Configurar e xestionar o servizo metereolóxico"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+msgid "Configure display · Configure audio · Configure internet access · Configure power saving · Configure logging"
 msgstr "Configurar a pantalla · Configurar o son · Configurar internet · Configurar o aforro de enerxía · Configurar o rexistro de eventos"
 
 msgctxt "#31407"
@@ -242,7 +256,7 @@ msgstr "Axustes das fontes da biblioteca · Amosar o contido das listas de medio
 
 msgctxt "#31410"
 msgid "Configure skin · Configure region · Configure control · Configure screensaver · Configure master lock"
-msgstr "Configurar o tema · Configurar a rexión · Configurar o control · Configurar  o protector de pantalla · Configurar o bloqueo maestro"
+msgstr "Configurar o tema · Configurar a rexión · Configurar o control · Configurar o protector de pantalla · Configurar o bloqueo maestro"
 
 msgctxt "#31411"
 msgid "Configure your profiles · Set locking options · Enable login screen"
@@ -328,6 +342,67 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "Amosar eliminados"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Códec de vídeo"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Resolución de vídeo"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Aspecto do vídeo"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr ""
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Códec de son"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Canles de son"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr ""
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Resolución da pantalla"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr ""
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Uso da CPU"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Medios"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Sistema"
+
 msgctxt "#31900"
 msgid "First Run"
 msgstr "Primeira execución"
@@ -347,3 +422,15 @@ msgstr "Cando estás a reproducir audio ou vídeo, o título do item aparecerá 
 msgctxt "#31904"
 msgid "Now Playing Title..."
 msgstr "Reproducindo"
+
+#~ msgctxt "#31406"
+#~ msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+#~ msgstr "Configurar a pantalla · Configurar o son · Configurar internet · Configurar o aforro de enerxía · Configurar o rexistro de eventos"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "Info. do PVR"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "Información do proceso do reprodutor"

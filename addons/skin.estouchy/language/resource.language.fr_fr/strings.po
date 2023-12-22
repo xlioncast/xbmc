@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: French (France) (http://www.transifex.com/projects/p/kodi-main/language/fr_FR/)\n"
+"PO-Revision-Date: 2023-01-29 21:15+0000\n"
+"Last-Translator: skypichat <skypichat@hotmail.fr>\n"
+"Language-Team: French (France) <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/fr_fr/>\n"
+"Language: fr_fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: fr_FR\n"
-"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"Plural-Forms: nplurals=2; plural=n > 1;\n"
+"X-Generator: Weblate 4.15.2\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "Habillage pour les appareils à écran tactile"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "[CR]Habillage conçu pour les appareils à écran tactile comme les tablettes et [CR]les téléphonesHabillage conçu pour les appareils à écran tactile comme les tablettes et les téléphones"
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -62,27 +71,32 @@ msgstr "Infos du lecteur"
 
 msgctxt "#31016"
 msgid "Albums"
-msgstr "Albums "
+msgstr "Albums"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "Infos enregistreur vidéo"
+msgid "PVR"
+msgstr "PVR"
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "Infos processus de lecture"
+msgid "Player"
+msgstr "Lecteur"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "Décodeur vidéo"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "Format de pixel"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
-msgstr "Mémoire système utilisée "
+msgstr "Mémoire système utilisée"
 
 msgctxt "#31024"
 msgid "Page"
@@ -134,11 +148,11 @@ msgstr "Heure de fin"
 
 msgctxt "#31050"
 msgid "Sort: Ascending"
-msgstr "Tri : Croissant"
+msgstr "Tri : Ascendant"
 
 msgctxt "#31051"
 msgid "Sort: Descending"
-msgstr "Tri : Décroissant"
+msgstr "Tri : Descendant"
 
 msgctxt "#31055"
 msgid "Open playlist"
@@ -190,7 +204,7 @@ msgstr "Mémoire système utilisée :"
 
 msgctxt "#31320"
 msgid "Last Logged In"
-msgstr "Dernier connecté"
+msgstr "Dernière connexion"
 
 msgctxt "#31322"
 msgid "Aired"
@@ -202,7 +216,7 @@ msgstr "Menu Vidéo"
 
 msgctxt "#31356"
 msgid "Download Subtitles"
-msgstr "Télécharger des sous-titres"
+msgstr "Télécharger les Sous-titres"
 
 msgctxt "#31358"
 msgid "Teletext"
@@ -217,31 +231,45 @@ msgid "Arial based"
 msgstr "Basé sur Arial"
 
 msgctxt "#31400"
-msgid "Change the skin · Set language and region · Change file listing options · Set up a screensaver"
+msgid ""
+"Change the skin · Set language and region · Change file listing options · "
+"Set up a screensaver"
 msgstr "Changement de l'habillage · Définition de la langue et de la région · Modification des options de listes de fichiers · Configuration d'un économiseur d'écran"
 
 msgctxt "#31405"
-msgid "Configure & manage media sharing services · Configure & manage the weather service"
+msgid ""
+"Configure & manage media sharing services · Configure & manage the weather "
+"service"
 msgstr "Configuration & gestion des services de partage de média · Configuration du serveur Web · Configuration & gestion du service météo"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
-msgstr "Configuration de l'affichage · Configuration de l'audio · Configuration de l'accès Internet · Configuration de la gestion de l'énergie · Configuration de la journalisation"
+msgid ""
+"Configure display · Configure audio · Configure internet access · Configure "
+"power saving · Configure logging"
+msgstr "Configuration de l'affichage · Configuration audio · Configuration de l'accès internet · Économie d'énergie · Configuration de la journalisation"
 
 msgctxt "#31407"
-msgid "Manage your installed add-ons · Browse for and install add-ons from kodi.tv · Modify add-on settings"
+msgid ""
+"Manage your installed add-ons · Browse for and install add-ons from kodi.tv "
+"· Modify add-on settings"
 msgstr "Gestion des extensions installées · Parcours et installation des extensions depuis Kodi.tv · Modification des paramètres des extensions"
 
 msgctxt "#31408"
-msgid "Configure actions that can be used during playback · Configure how media content is played"
+msgid ""
+"Configure actions that can be used during playback · Configure how media "
+"content is played"
 msgstr "Configuration des actions pouvant être effectuées pendant la lecture · Configuration de la manière dont le média est lu"
 
 msgctxt "#31409"
-msgid "Configure library sources · Show the media lists display content · Configure how library lists are navigated"
+msgid ""
+"Configure library sources · Show the media lists display content · Configure "
+"how library lists are navigated"
 msgstr "Configuration des sources de la médiathèque · Configuration de la manière dont les listes de médias affichent le contenu · Configuration de la navigation des listes de la médiathèque"
 
 msgctxt "#31410"
-msgid "Configure skin · Configure region · Configure control · Configure screensaver · Configure master lock"
+msgid ""
+"Configure skin · Configure region · Configure control · Configure "
+"screensaver · Configure master lock"
 msgstr "Configuration de l'habillage · Configuration de la région · Configuration du contrôle · Configuration de l'économiseur d'écran · Configuration du verrouillage maître"
 
 msgctxt "#31411"
@@ -249,7 +277,9 @@ msgid "Configure your profiles · Set locking options · Enable login screen"
 msgstr "Configuration des profils · Définition des options de verrouillage · Activation de l'écran de connexion"
 
 msgctxt "#31412"
-msgid "Display system information · Hardware statistics · Check storage availability · View network configuration"
+msgid ""
+"Display system information · Hardware statistics · Check storage "
+"availability · View network configuration"
 msgstr "Affichage des profils · Statistiques sur le matériel · Vérification de la disponibilité d'espace de stockage · Visualisation de la configuration réseau"
 
 msgctxt "#31421"
@@ -285,7 +315,8 @@ msgid "Background:"
 msgstr "Arrière-plan :"
 
 msgctxt "#31555"
-msgid "Configure TV settings · Change full screen info · Manage EPG data settings"
+msgid ""
+"Configure TV settings · Change full screen info · Manage EPG data settings"
 msgstr "Configuration des paramètres TV · Modification des informations de plein écran · Gestion des données du guide électronique des programmes TV"
 
 msgctxt "#31556"
@@ -328,6 +359,67 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "Afficher les suppressions"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Codec vidéo"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Résolution vidéo"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Ratio d'aspect vidéo"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr "Débit Vidéo"
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Codec audio"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Chaînes audio"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr "Débit Audio"
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Résolution de l'écran"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr "Vitesse de rendu système"
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Usage CPU du système"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Médias"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Système"
+
 msgctxt "#31900"
 msgid "First Run"
 msgstr "Démarrage"
@@ -337,13 +429,35 @@ msgid "There are two things to know about navigating Estouchy"
 msgstr "Il y a deux choses à savoir au sujet de la navigation dans Estouchy"
 
 msgctxt "#31902"
-msgid "The Kodi logo functions as a 'HOME' button. Whenever you touch it, you will be taken back to the home screen."
+msgid ""
+"The Kodi logo functions as a 'HOME' button. Whenever you touch it, you will "
+"be taken back to the home screen."
 msgstr "Le logo Kodi fonctionne comme un bouton d'accueil. Quand il est touché, il renvoie à l'écran d'accueil."
 
 msgctxt "#31903"
-msgid "When you are playing audio or video, the item title will appear at the top of the screen. Touching it will take you to the fullscreen visualization or video window."
+msgid ""
+"When you are playing audio or video, the item title will appear at the top "
+"of the screen. Touching it will take you to the fullscreen visualization or "
+"video window."
 msgstr "En lecture audio ou vidéo, le titre de l'élément apparaîtra en haut de l'écran. Toucher le titre commute entre la visualisation plein écran et la fenêtre vidéo."
 
 msgctxt "#31904"
 msgid "Now Playing Title..."
 msgstr "Titre en lecture…"
+
+#~ msgctxt "#31406"
+#~ msgid ""
+#~ "Configure display · Configure audio · Configure internet access · "
+#~ "Configure power saving· Configure logging"
+#~ msgstr ""
+#~ "Configuration de l'affichage · Configuration de l'audio · Configuration "
+#~ "de l'accès Internet · Configuration de la gestion de l'énergie · "
+#~ "Configuration de la journalisation"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "Infos enregistreur vidéo"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "Infos processus de lecture"

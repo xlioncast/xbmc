@@ -112,8 +112,8 @@ public: \
     typedef result (linkage * name##_METHOD) args; \
   public: \
     union { \
-      name##_METHOD name; \
-      void*         name##_ptr; \
+      name##_METHOD m_##name; \
+      void*         m_##name##_ptr; \
     };
 
 #define DEFINE_METHOD_LINKAGE_BASE(result, linkage, name, args, args2) \
@@ -212,8 +212,8 @@ public: \
 //
 //  DEFINE_FUNC_ALIGNED 0-X
 //
-//  Defines a function for an export from a dll, wich
-//  require a aligned stack on function call
+//  Defines a function for an export from a dll, which
+//  requires an aligned stack on function call
 //  Use DEFINE_FUNC_ALIGNED for each function to be resolved.
 //
 //  result:  Result of the function
@@ -233,7 +233,7 @@ public: \
 //    __asm sub esp, [s];
 //    __asm and esp, ~15;
 //    __asm add esp, [s]
-//    m_test(p1, p2, p3);  //return value will still be correct aslong as we don't mess with it
+//    m_test(p1, p2, p3);  //return value will still be correct as long as we don't mess with it
 //    __asm mov esp,[o];
 //  };
 
@@ -365,7 +365,7 @@ public: \
     return false;
 
 #define RESOLVE_METHOD_FP(method) \
-  if (!m_dll->ResolveExport( #method , & method##_ptr )) \
+  if (!m_dll->ResolveExport( #method , & m_##method##_ptr )) \
     return false;
 
 
@@ -385,8 +385,8 @@ public: \
    m_dll->ResolveExport( #method , & m_##method##_ptr, false );
 
 #define RESOLVE_METHOD_OPTIONAL_FP(method) \
-   method##_ptr = NULL; \
-   m_dll->ResolveExport( #method , & method##_ptr, false );
+   m_##method##_ptr = NULL; \
+   m_dll->ResolveExport( #method , & m_##method##_ptr, false );
 
 
 

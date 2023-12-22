@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Serbian (Latin) (Serbia) (http://www.transifex.com/projects/p/kodi-main/language/sr_RS@latin/)\n"
+"PO-Revision-Date: 2022-07-01 08:26+0000\n"
+"Last-Translator: Christian Gade <gade@kodi.tv>\n"
+"Language-Team: Serbian (latin) <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/sr_Latn/>\n"
+"Language: sr_rs@latin\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: sr_RS@latin\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2;\n"
+"X-Generator: Weblate 4.13\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "Maska za uređaje sa ekranom osetljivim na dodir"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "Maska dizajnirana da bi bila korišćena na uređajima sa ekranima osetljivim na dodir kao što su tableti i pametni telefoni"
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -56,26 +65,35 @@ msgctxt "#31014"
 msgid "Episodes"
 msgstr "Epizode"
 
+msgctxt "#31015"
+msgid "Player info"
+msgstr ""
+
 msgctxt "#31016"
 msgid "Albums"
 msgstr "Albumi"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "PVR informacije"
+msgid "PVR"
+msgstr ""
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "Informacije procesa uređaja za reprodukciju"
+msgid "Player"
+msgstr "Uređaj za reprodukciju"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "Video dekoder"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "Oblik prikaza piksela"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
 msgstr "Korišćenje memorije sistema"
@@ -95,6 +113,18 @@ msgstr "Prijava"
 msgctxt "#31039"
 msgid "Updated:"
 msgstr "Ažurirano:"
+
+msgctxt "#31040"
+msgid "Select + X"
+msgstr ""
+
+msgctxt "#31041"
+msgid "Select + B"
+msgstr ""
+
+msgctxt "#31042"
+msgid "Select + Start"
+msgstr ""
 
 msgctxt "#31043"
 msgid "PAUSED"
@@ -186,7 +216,7 @@ msgstr "Video Meni"
 
 msgctxt "#31356"
 msgid "Download Subtitles"
-msgstr "Preuzmi Titlove"
+msgstr "Preuzmi titlove"
 
 msgctxt "#31358"
 msgid "Teletext"
@@ -209,8 +239,8 @@ msgid "Configure & manage media sharing services · Configure & manage the weath
 msgstr "Podesite & upravljajte servisima deljenja medija · Podesite & upravljajte servisom vremenske prognoze"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
-msgstr "Podesite prikaz ·  Podesite audio · Podesite pristup internetu · Podesite uštedu energije · Podesite evidentiranje"
+msgid "Configure display · Configure audio · Configure internet access · Configure power saving · Configure logging"
+msgstr "Podesite prikaz · Podesite audio · Podesite pristup internetu · Podesite uštedu energije · Podesite evidentiranje"
 
 msgctxt "#31407"
 msgid "Manage your installed add-ons · Browse for and install add-ons from kodi.tv · Modify add-on settings"
@@ -312,6 +342,67 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "Prikaži izbrisano"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Video kodek"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Rezolucija videa"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Format slike videa"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr ""
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Audio kodek"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Audio kanali"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr ""
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Rezolucija ekrana"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr ""
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Sistemsko korišćenje CPU"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Mediji"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Sistem"
+
 msgctxt "#31900"
 msgid "First Run"
 msgstr "Prvo pokretanje"
@@ -331,3 +422,15 @@ msgstr "Kada puštate audio ili video, naziv stavke će se pojaviti na vrhu ekra
 msgctxt "#31904"
 msgid "Now Playing Title..."
 msgstr "Naziv Sada Pušteno..."
+
+#~ msgctxt "#31406"
+#~ msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+#~ msgstr "Podesite prikaz · Podesite audio · Podesite pristup internetu · Podesite uštedu energije · Podesite evidentiranje"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "PVR informacije"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "Informacije procesa uređaja za reprodukciju"

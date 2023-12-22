@@ -10,39 +10,42 @@
 
 #include "threads/Thread.h"
 
+#include <memory>
+#include <mutex>
+
 #include <gtest/gtest.h>
 
-#define MILLIS(x) x
-
-inline static void SleepMillis(unsigned int millis)
+template<class E>
+inline static bool waitForWaiters(E& event, int numWaiters, std::chrono::milliseconds duration)
 {
-  std::this_thread::sleep_for(std::chrono::milliseconds(millis));
-}
-
-template<class E> inline static bool waitForWaiters(E& event, int numWaiters, int milliseconds)
-{
-  for( int i = 0; i < milliseconds; i++)
+  for (auto i = std::chrono::milliseconds::zero(); i < duration; i++)
   {
     if (event.getNumWaits() == numWaiters)
       return true;
-    SleepMillis(1);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
+
   return false;
 }
 
-inline static bool waitForThread(std::atomic<long>& mutex, int numWaiters, int milliseconds)
+inline static bool waitForThread(std::atomic<long>& mutex,
+                                 int numWaiters,
+                                 std::chrono::milliseconds duration)
 {
   CCriticalSection sec;
-  for( int i = 0; i < milliseconds; i++)
+  for (auto i = std::chrono::milliseconds::zero(); i < duration; i++)
   {
     if (mutex == (long)numWaiters)
       return true;
 
     {
-      CSingleLock tmplock(sec); // kick any memory syncs
+      std::unique_lock<CCriticalSection> tmplock(sec); // kick any memory syncs
     }
-    SleepMillis(1);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
+
   return false;
 }
 
@@ -56,34 +59,17 @@ public:
 
 class thread
 {
-  IRunnable* f;
-  CThread* cthread;
+  std::unique_ptr<CThread> cthread;
 
-//  inline thread(const thread& other) { }
 public:
-  inline explicit thread(IRunnable& runnable) :
-    f(&runnable), cthread(new CThread(f, "DumbThread"))
+  inline explicit thread(IRunnable& runnable)
+    : cthread(std::make_unique<CThread>(&runnable, "DumbThread"))
   {
     cthread->Create();
   }
 
-  inline thread() : f(NULL), cthread(NULL) {}
-  ~thread()
-  {
-    delete cthread;
-  }
+  void join() { cthread->Join(std::chrono::milliseconds::max()); }
 
-  inline thread(thread& other) : f(other.f), cthread(other.cthread) { other.f = NULL; other.cthread = NULL; }
-  inline thread& operator=(thread& other) { f = other.f; other.f = NULL; cthread = other.cthread; other.cthread = NULL; return *this; }
-
-  void join()
-  {
-    cthread->Join(static_cast<unsigned int>(-1));
-  }
-
-  bool timed_join(unsigned int millis)
-  {
-    return cthread->Join(millis);
-  }
+  bool timed_join(std::chrono::milliseconds duration) { return cthread->Join(duration); }
 };
 

@@ -11,13 +11,14 @@
 #include "Key.h"
 #include "XBMC_keytable.h"
 #include "utils/StringUtils.h"
-#include "utils/XBMCTinyXML.h"
 #include "utils/log.h"
 
 #include <string>
 #include <vector>
 
-uint32_t CKeyboardTranslator::TranslateButton(const TiXmlElement* pButton)
+#include <tinyxml2.h>
+
+uint32_t CKeyboardTranslator::TranslateButton(const tinyxml2::XMLElement* pButton)
 {
   uint32_t button_id = 0;
   const char* szButton = pButton->Value();
@@ -28,14 +29,14 @@ uint32_t CKeyboardTranslator::TranslateButton(const TiXmlElement* pButton)
   const std::string strKey = szButton;
   if (strKey == "key")
   {
-    std::string strID;
-    if (pButton->QueryValueAttribute("id", &strID) == TIXML_SUCCESS)
+    const char* strID;
+    if (pButton->QueryStringAttribute("id", &strID) == tinyxml2::XML_SUCCESS)
     {
-      const char* str = strID.c_str();
+      const char* str = strID;
       char* endptr;
       long int id = strtol(str, &endptr, 0);
       if (endptr - str != (int)strlen(str) || id <= 0 || id > 0x00FFFFFF)
-        CLog::Log(LOGDEBUG, "%s - invalid key id %s", __FUNCTION__, strID.c_str());
+        CLog::Log(LOGDEBUG, "{} - invalid key id {}", __FUNCTION__, strID);
       else
         button_id = (uint32_t)id;
     }
@@ -46,8 +47,8 @@ uint32_t CKeyboardTranslator::TranslateButton(const TiXmlElement* pButton)
     button_id = TranslateString(szButton);
 
   // Process the ctrl/shift/alt modifiers
-  std::string strMod;
-  if (pButton->QueryValueAttribute("mod", &strMod) == TIXML_SUCCESS)
+  const char* strMod;
+  if (pButton->QueryStringAttribute("mod", &strMod) == tinyxml2::XML_SUCCESS)
   {
     StringUtils::ToLower(strMod);
 
@@ -69,8 +70,7 @@ uint32_t CKeyboardTranslator::TranslateButton(const TiXmlElement* pButton)
       else if (substr == "longpress")
         button_id |= CKey::MODIFIER_LONG;
       else
-        CLog::Log(LOGERROR, "Keyboard Translator: Unknown key modifier %s in %s", substr.c_str(),
-                  strMod.c_str());
+        CLog::Log(LOGERROR, "Keyboard Translator: Unknown key modifier {} in {}", substr, strMod);
     }
   }
 
@@ -90,7 +90,7 @@ uint32_t CKeyboardTranslator::TranslateString(const std::string& szButton)
   else
   {
     // The lookup failed i.e. the key name wasn't found
-    CLog::Log(LOGERROR, "Keyboard Translator: Can't find button %s", szButton.c_str());
+    CLog::Log(LOGERROR, "Keyboard Translator: Can't find button {}", szButton);
   }
 
   buttonCode |= KEY_VKEY;

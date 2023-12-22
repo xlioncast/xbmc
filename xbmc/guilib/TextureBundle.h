@@ -10,8 +10,12 @@
 
 #include "TextureBundleXBT.h"
 
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
+
+class CTexture;
 
 class CTextureBundle
 {
@@ -22,17 +26,25 @@ public:
 
   void SetThemeBundle(bool themeBundle);
   bool HasFile(const std::string& Filename);
-  void GetTexturesFromPath(const std::string &path, std::vector<std::string> &textures);
-  static std::string Normalize(const std::string &name);
+  std::vector<std::string> GetTexturesFromPath(const std::string& path);
+  static std::string Normalize(std::string name);
 
-  bool LoadTexture(const std::string& Filename, CTexture** ppTexture, int& width, int& height);
+  /*!
+   * \brief Load texture from bundle
+   *
+   * \param[in] filename name of the texture to load
+   * \return std::optional<CTextureBundleXBT::Texture> if texture was loaded
+   */
+  std::optional<CTextureBundleXBT::Texture> LoadTexture(const std::string& filename);
 
-  int LoadAnim(const std::string& Filename,
-               CTexture*** ppTextures,
-               int& width,
-               int& height,
-               int& nLoops,
-               int** ppDelays);
+  /*!
+   * \brief Load animation from bundle
+   *
+   * \param[in] filename name of the animation to load
+   * \return std::optional<CTextureBundleXBT::Animation> if animation was loaded
+   */
+  std::optional<CTextureBundleXBT::Animation> LoadAnim(const std::string& filename);
+
   void Close();
 private:
   CTextureBundleXBT m_tbXBT;

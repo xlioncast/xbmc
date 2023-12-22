@@ -111,6 +111,8 @@
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>UIInterfaceOrientation</key>
 	<string>UIInterfaceOrientationLandscapeLeft</string>
 	<key>UILaunchStoryboardName</key>
@@ -393,6 +395,8 @@
 					<string>aqt</string>
 					<string>jss</string>
 					<string>ass</string>
+					<string>sup</string>
+					<string>vtt</string>
 					<string>idx</string>
 					<string>ifo</string>
 					<string>rar</string>
@@ -401,5 +405,9 @@
 			</dict>
 		</dict>
 	</array>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Translate speech to text in virtual keyboard dialog</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Used for speech recognition</string>
 </dict>
 </plist>

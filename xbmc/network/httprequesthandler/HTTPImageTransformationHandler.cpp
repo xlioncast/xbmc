@@ -110,15 +110,6 @@ MHD_RESULT CHTTPImageTransformationHandler::HandleRequest()
   if (m_response.type == HTTPError)
     return MHD_YES;
 
-  // nothing else to do if this is a HEAD request
-  if (m_request.method == HEAD)
-  {
-    m_response.status = MHD_HTTP_OK;
-    m_response.type = HTTPMemoryDownloadNoFreeNoCopy;
-
-    return MHD_YES;
-  }
-
   // get the transformation options
   std::map<std::string, std::string> options;
   HTTPRequestHandlerUtils::GetRequestHeaderValues(m_request.connection, MHD_GET_ARGUMENT_KIND, options);
@@ -159,12 +150,13 @@ MHD_RESULT CHTTPImageTransformationHandler::HandleRequest()
   // nothing else to do if the request is not ranged
   if (!GetRequestedRanges(m_response.totalLength))
   {
-    m_responseData.push_back(CHttpResponseRange(m_buffer, 0, m_response.totalLength - 1));
+    m_responseData.emplace_back(m_buffer, 0, m_response.totalLength - 1);
     return MHD_YES;
   }
 
   for (HttpRanges::const_iterator range = m_request.ranges.Begin(); range != m_request.ranges.End(); ++range)
-    m_responseData.push_back(CHttpResponseRange(m_buffer + range->GetFirstPosition(), range->GetFirstPosition(), range->GetLastPosition()));
+    m_responseData.emplace_back(m_buffer + range->GetFirstPosition(), range->GetFirstPosition(),
+                                range->GetLastPosition());
 
   return MHD_YES;
 }

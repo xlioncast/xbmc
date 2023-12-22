@@ -8,17 +8,19 @@
 
 #include "AudioDecoder.h"
 
-#include "Application.h"
 #include "CodecFactory.h"
 #include "FileItem.h"
+#include "ICodec.h"
 #include "ServiceBroker.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationVolumeHandling.h"
 #include "music/tags/MusicInfoTag.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 
-#include <math.h>
+#include <cmath>
+#include <mutex>
 
 CAudioDecoder::CAudioDecoder()
 {
@@ -45,7 +47,7 @@ CAudioDecoder::~CAudioDecoder()
 
 void CAudioDecoder::Destroy()
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   m_status = STATUS_NO_FILE;
 
   m_pcmBuffer.Destroy();
@@ -61,7 +63,7 @@ bool CAudioDecoder::Create(const CFileItem &file, int64_t seekOffset)
 {
   Destroy();
 
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   // reset our playback timing variables
   m_eof = false;
@@ -81,7 +83,8 @@ bool CAudioDecoder::Create(const CFileItem &file, int64_t seekOffset)
 
   if (!m_codec || !m_codec->Init(file, filecache * 1024))
   {
-    CLog::Log(LOGERROR, "CAudioDecoder: Unable to Init Codec while loading file %s", file.GetDynPath().c_str());
+    CLog::Log(LOGERROR, "CAudioDecoder: Unable to Init Codec while loading file {}",
+              file.GetDynPath());
     Destroy();
     return false;
   }
@@ -89,7 +92,7 @@ bool CAudioDecoder::Create(const CFileItem &file, int64_t seekOffset)
 
   if (blockSize == 0)
   {
-    CLog::Log(LOGERROR, "CAudioDecoder: Codec provided invalid parameters (%d-bit, %u channels)",
+    CLog::Log(LOGERROR, "CAudioDecoder: Codec provided invalid parameters ({}-bit, {} channels)",
               m_codec->m_bitsPerSample, GetFormat().m_channelLayout.Count());
     return false;
   }
@@ -138,6 +141,11 @@ AEAudioFormat CAudioDecoder::GetFormat()
   if (!m_codec)
     return format;
   return m_codec->m_format;
+}
+
+unsigned int CAudioDecoder::GetChannels()
+{
+  return GetFormat().m_channelLayout.Count();
 }
 
 int64_t CAudioDecoder::Seek(int64_t time)
@@ -200,7 +208,10 @@ void *CAudioDecoder::GetData(unsigned int samples)
 
   if (size > m_pcmBuffer.getMaxReadSize())
   {
-    CLog::Log(LOGWARNING, "CAudioDecoder::GetData() more bytes/samples (%i) requested than we have to give (%i)!", size, m_pcmBuffer.getMaxReadSize());
+    CLog::Log(
+        LOGWARNING,
+        "CAudioDecoder::GetData() more bytes/samples ({}) requested than we have to give ({})!",
+        size, m_pcmBuffer.getMaxReadSize());
     size = m_pcmBuffer.getMaxReadSize();
   }
 
@@ -212,7 +223,7 @@ void *CAudioDecoder::GetData(unsigned int samples)
     return m_outputBuffer;
   }
 
-  CLog::Log(LOGERROR, "CAudioDecoder::GetData() ReadBinary failed with %i samples", samples);
+  CLog::Log(LOGERROR, "CAudioDecoder::GetData() ReadBinary failed with {} samples", samples);
   return NULL;
 }
 
@@ -240,7 +251,7 @@ int CAudioDecoder::ReadSamples(int numsamples)
     m_status = STATUS_PLAYING;
 
   // grab a lock to ensure the codec is created at this point.
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   if (m_codec->m_format.m_dataFormat != AE_FMT_RAW)
   {
@@ -250,8 +261,10 @@ int CAudioDecoder::ReadSamples(int numsamples)
     numsamples -= (numsamples % GetFormat().m_channelLayout.Count());  // make sure it's divisible by our number of channels
     if (numsamples)
     {
-      int readSize = 0;
-      int result = m_codec->ReadPCM(m_pcmInputBuffer, numsamples * (m_codec->m_bitsPerSample >> 3), &readSize);
+      size_t readSize = 0;
+      int result = m_codec->ReadPCM(
+          m_pcmInputBuffer, static_cast<size_t>(numsamples * (m_codec->m_bitsPerSample >> 3)),
+          &readSize);
 
       if (result != READ_ERROR && readSize)
       {
@@ -278,7 +291,7 @@ int CAudioDecoder::ReadSamples(int numsamples)
       if (result == READ_ERROR)
       {
         // error decoding, lets finish up and get out
-        CLog::Log(LOGERROR, "CAudioDecoder: Error while decoding %i", result);
+        CLog::Log(LOGERROR, "CAudioDecoder: Error while decoding {}", result);
         return RET_ERROR;
       }
       if (result == READ_EOF)
@@ -307,7 +320,7 @@ int CAudioDecoder::ReadSamples(int numsamples)
       else if (result == READ_ERROR)
       {
         // error decoding, lets finish up and get out
-        CLog::Log(LOGERROR, "CAudioDecoder: Error while decoding %i", result);
+        CLog::Log(LOGERROR, "CAudioDecoder: Error while decoding {}", result);
         return RET_ERROR;
       }
       else if (result == READ_EOF)
@@ -322,10 +335,21 @@ int CAudioDecoder::ReadSamples(int numsamples)
   return RET_SLEEP; // nothing to do
 }
 
+bool CAudioDecoder::CanSeek()
+{
+  if (m_codec)
+    return m_codec->CanSeek();
+  else
+    return false;
+}
+
 float CAudioDecoder::GetReplayGain(float &peakVal)
 {
 #define REPLAY_GAIN_DEFAULT_LEVEL 89.0f
-  const ReplayGainSettings &replayGainSettings = g_application.GetReplayGainSettings();
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
+
+  const auto& replayGainSettings = appVolume->GetReplayGainSettings();
   if (replayGainSettings.iType == ReplayGain::NONE)
     return 1.0f;
 
@@ -364,9 +388,12 @@ float CAudioDecoder::GetReplayGain(float &peakVal)
     }
   }
   // convert to a gain type
-  float replaygain = pow(10.0f, (replaydB - REPLAY_GAIN_DEFAULT_LEVEL)* 0.05f);
+  float replaygain = std::pow(10.0f, (replaydB - REPLAY_GAIN_DEFAULT_LEVEL) * 0.05f);
 
-  CLog::Log(LOGDEBUG, "AudioDecoder::GetReplayGain - Final Replaygain applied: %f, Track/Album Gain %f, Peak %f", replaygain, replaydB, peak);
+  CLog::Log(LOGDEBUG,
+            "AudioDecoder::GetReplayGain - Final Replaygain applied: {:f}, Track/Album Gain {:f}, "
+            "Peak {:f}",
+            replaygain, replaydB, peak);
 
   peakVal = peak;
   return replaygain;

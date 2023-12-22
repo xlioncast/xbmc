@@ -1,20 +1,33 @@
 # Kodi Media Center language file
 # Addon Name: Estuary
 # Addon id: skin.estuary
-# Addon Provider: phil65, Ichabod Fletchman
+# Addon Provider: Team Kodi
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Bulgarian (Bulgaria) (http://www.transifex.com/projects/p/kodi-main/language/bg_BG/)\n"
+"PO-Revision-Date: 2023-12-04 09:42+0000\n"
+"Last-Translator: Christian Gade <gade@kodi.tv>\n"
+"Language-Team: Bulgarian <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estuary/bg_bg/>\n"
+"Language: bg_bg\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: bg_BG\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 5.2.1\n"
+
+msgctxt "Addon Summary"
+msgid "Estuary skin by phil65. (Kodi's default skin)"
+msgstr "Estuary облик от phil65 и Piers. (стандартния облик на Kodi)"
+
+msgctxt "Addon Description"
+msgid "Estuary is the default skin for Kodi 17.0 and above. It attempts to be easy for first time Kodi users to understand and use."
+msgstr "Estuary е стандартният облик на Kodi 17 и по-новите версии. Целта е да се улеснят хората, които се сблъскват за първи път с Kodi."
+
+msgctxt "Addon Disclaimer"
+msgid "Estuary is the default skin for Kodi, removing it may cause issues"
+msgstr "Estuary е стандартният облик на Kodi. Премахването му може да предизвика проблеми"
 
 msgctxt "#31000"
 msgid "Now playing"
@@ -76,10 +89,12 @@ msgctxt "#31014"
 msgid "Unplayed albums"
 msgstr "Непускани албуми"
 
+#. home screen recordings widget: recent tv / radio recordings
 msgctxt "#31015"
 msgid "Recent recordings"
 msgstr "Последни записи"
 
+#. home screen channel widget: recently played tv channels. (please note that in some non-english languages #31018 and #31016 might not be equal)
 msgctxt "#31016"
 msgid "Recently played channels"
 msgstr "Последно възпроизвеждани канали"
@@ -88,6 +103,7 @@ msgctxt "#31017"
 msgid "Rated"
 msgstr "С възрастова препоръка"
 
+#. home screen channel widget: recently played radio channels. (please note that in some non-english languages #31018 and #31016 might not be equal)
 msgctxt "#31018"
 msgid "Recently played channels"
 msgstr "Последно възпроизвеждани канали"
@@ -136,6 +152,7 @@ msgctxt "#31029"
 msgid "Last logged in"
 msgstr "Последно влизане"
 
+#. Label to show the system memory usage
 msgctxt "#31030"
 msgid "System memory usage"
 msgstr "Използвана памет"
@@ -231,14 +248,6 @@ msgstr "Показвай екрана за влизане след старти�
 msgctxt "#31058"
 msgid "Automatic Login on startup"
 msgstr "Автоматично влизане след стартиране"
-
-msgctxt "#31059"
-msgid "Select + X"
-msgstr "Select + X"
-
-msgctxt "#31060"
-msgid "Select + Start"
-msgstr "Select + Start"
 
 msgctxt "#31061"
 msgid "Main menu items"
@@ -340,18 +349,22 @@ msgctxt "#31098"
 msgid "Select your Kodi user profile[CR]to login and continue"
 msgstr "Изберете потребителски профил,[CR]за да продължите"
 
+#. viewtype name
 msgctxt "#31099"
 msgid "IconWall"
 msgstr "Стена от иконки"
 
+#. viewtype name
 msgctxt "#31100"
 msgid "Shift"
 msgstr "Отместване"
 
+#. viewtype name
 msgctxt "#31101"
 msgid "InfoWall"
 msgstr "Стена с информация"
 
+#. viewtype name
 msgctxt "#31102"
 msgid "Wall"
 msgstr "Стена"
@@ -372,6 +385,7 @@ msgctxt "#31106"
 msgid "Teletext"
 msgstr "Телетекст"
 
+#. viewtype name
 msgctxt "#31107"
 msgid "WideList"
 msgstr "Широк списък"
@@ -395,6 +409,10 @@ msgstr "Търси в библиотеката"
 msgctxt "#31114"
 msgid "Search YouTube"
 msgstr "Търси в YouTube"
+
+msgctxt "#31115"
+msgid "Toggle subtitle"
+msgstr ""
 
 msgctxt "#31116"
 msgid "Remove this main menu item"
@@ -476,18 +494,22 @@ msgctxt "#31136"
 msgid "Click here to see latest changes..."
 msgstr "Последни промени…"
 
+#. Label to show PVR info page
 msgctxt "#31137"
-msgid "PVR info"
-msgstr "Информация за ПВР"
+msgid "PVR"
+msgstr "ПВР"
 
+#. Label to show player info page
 msgctxt "#31138"
-msgid "Player process info"
-msgstr "Инф. за процеса на плейъра"
+msgid "Player"
+msgstr "Плейър"
 
+#. Label to show video decoder name
 msgctxt "#31139"
 msgid "Video decoder"
 msgstr "Видео декодер"
 
+#. Label to show the video pixel format
 msgctxt "#31140"
 msgid "Pixel format"
 msgstr "Формат на пикселите"
@@ -526,7 +548,7 @@ msgstr "Категории"
 
 msgctxt "#31149"
 msgid "Select genre fanart pack"
-msgstr "Избор на пакет с фен-арт за категориите "
+msgstr "Избор на пакет с фен-арт за категориите"
 
 msgctxt "#31150"
 msgid "Origin"
@@ -584,26 +606,164 @@ msgctxt "#31163"
 msgid "Show Fanart background"
 msgstr "Показване на фен-арт за фон"
 
+#. Choose profile identifier
 msgctxt "#31164"
 msgid "Choose kind of profile identification"
 msgstr "Изберете начин за идентифициране на профила"
 
+#. Label for the kind of profile identification
 msgctxt "#31165"
 msgid "Profile name"
 msgstr "Име на профила"
 
+#. Label for the kind of profile identification
 msgctxt "#31166"
 msgid "Profile avatar"
 msgstr "Снимка на профила"
 
+#. Label of a setting
 msgctxt "#31167"
 msgid "Animate background"
 msgstr "Анимиране на фон"
 
+#. Label of a setting
 msgctxt "#31168"
 msgid "Show posters instead of thumbs for musicvideos"
 msgstr "Показване на плакати вместо миниатюри за музикалните видеа"
 
+#. Description label for skin settings area
 msgctxt "#31169"
 msgid "Artwork related settings."
 msgstr "Категорията съдържа настройки свързани с изображенията."
+
+#. Label for OSD settings category
+msgctxt "#31170"
+msgid "On screen display"
+msgstr ""
+
+#. Helper text for the label of OSD settings category
+msgctxt "#31171"
+msgid "On screen display (OSD) related settings"
+msgstr ""
+
+#. Setting Automatically close video OSD
+msgctxt "#31172"
+msgid "Automatically close video OSD"
+msgstr ""
+
+#. Setting auto close time for video osd
+msgctxt "#31173"
+msgid "Video OSD autoclose time (seconds)"
+msgstr ""
+
+#. Setting to control what happens when clicking a music album on the home screen
+msgctxt "#31174"
+msgid "Default select action for albums on the home screen"
+msgstr ""
+
+#. Setting to control what happens when clicking a TV show on the home screen
+msgctxt "#31175"
+msgid "Default select action for TV shows on the home screen"
+msgstr ""
+
+#. Setting to control what happens when clicking a movie set on the home screen
+msgctxt "#31176"
+msgid "Default select action for movie sets on the home screen"
+msgstr ""
+
+# empty strings from id 31170 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Видео кодек"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Видео резолюция"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Съотношение на страните на видеото"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr ""
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Аудио кодек"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Аудио канали"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr ""
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Резолюция на екрана"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr ""
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Натоварване процесора"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Медийни източници"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Системни"
+
+#. Video version dialog button
+msgctxt "#31612"
+msgid "Add version"
+msgstr ""
+
+#. Video version dialog button
+msgctxt "#31613"
+msgid "Add extras"
+msgstr ""
+
+#. Video version dialog button
+msgctxt "#31614"
+msgid "Set default"
+msgstr ""
+
+#. Video version dialog button
+msgctxt "#31615"
+msgid "Extras"
+msgstr "Екстри"
+
+#~ msgctxt "#31059"
+#~ msgid "Select + X"
+#~ msgstr "Select + X"
+
+#~ msgctxt "#31060"
+#~ msgid "Select + Start"
+#~ msgstr "Select + Start"
+
+#~ msgctxt "#31137"
+#~ msgid "PVR info"
+#~ msgstr "Информация за ПВР"
+
+#~ msgctxt "#31138"
+#~ msgid "Player process info"
+#~ msgstr "Инф. за процеса на плейъра"

@@ -9,12 +9,13 @@
 #include "PVRChannelGroupsContainer.h"
 
 #include "pvr/channels/PVRChannel.h"
+#include "pvr/channels/PVRChannelGroupMember.h"
 #include "pvr/channels/PVRChannelGroups.h"
 #include "pvr/epg/EpgInfoTag.h"
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 
 #include <memory>
+#include <mutex>
 
 using namespace PVR;
 
@@ -26,46 +27,46 @@ CPVRChannelGroupsContainer::CPVRChannelGroupsContainer() :
 
 CPVRChannelGroupsContainer::~CPVRChannelGroupsContainer()
 {
+  Unload();
   delete m_groupsRadio;
   delete m_groupsTV;
 }
 
-bool CPVRChannelGroupsContainer::Update(bool bChannelsOnly /* = false */)
+bool CPVRChannelGroupsContainer::Update(const std::vector<std::shared_ptr<CPVRClient>>& clients)
 {
-  CSingleLock lock(m_critSection);
+  return LoadFromDatabase(clients) && UpdateFromClients(clients);
+}
+
+bool CPVRChannelGroupsContainer::LoadFromDatabase(
+    const std::vector<std::shared_ptr<CPVRClient>>& clients)
+{
+  return m_groupsTV->LoadFromDatabase(clients) && m_groupsRadio->LoadFromDatabase(clients);
+}
+
+bool CPVRChannelGroupsContainer::UpdateFromClients(
+    const std::vector<std::shared_ptr<CPVRClient>>& clients, bool bChannelsOnly /* = false */)
+{
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   if (m_bIsUpdating)
     return false;
   m_bIsUpdating = true;
-  m_bUpdateChannelsOnly = bChannelsOnly;
-  lock.Leave();
+  lock.unlock();
 
   CLog::LogFC(LOGDEBUG, LOGPVR, "Updating {}", bChannelsOnly ? "channels" : "channel groups");
-  bool bReturn = m_groupsTV->Update(bChannelsOnly) && m_groupsRadio->Update(bChannelsOnly);
+  bool bReturn = m_groupsTV->UpdateFromClients(clients, bChannelsOnly) &&
+                 m_groupsRadio->UpdateFromClients(clients, bChannelsOnly);
 
-  lock.Enter();
+  lock.lock();
   m_bIsUpdating = false;
-  lock.Leave();
+  lock.unlock();
 
   return bReturn;
 }
 
-bool CPVRChannelGroupsContainer::Load()
-{
-  Unload();
-  m_bLoaded = m_groupsTV->Load() && m_groupsRadio->Load();
-  return m_bLoaded;
-}
-
-bool CPVRChannelGroupsContainer::Loaded() const
-{
-  return m_bLoaded;
-}
-
 void CPVRChannelGroupsContainer::Unload()
 {
-  m_groupsRadio->Clear();
-  m_groupsTV->Clear();
-  m_bLoaded = false;
+  m_groupsRadio->Unload();
+  m_groupsTV->Unload();
 }
 
 CPVRChannelGroups* CPVRChannelGroupsContainer::Get(bool bRadio) const
@@ -96,16 +97,8 @@ std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetChannelById(int iCha
   return channel;
 }
 
-std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetChannelByEpgId(int iEpgId) const
-{
-  std::shared_ptr<CPVRChannel> channel = m_groupsTV->GetGroupAll()->GetByChannelEpgID(iEpgId);
-  if (!channel)
-    channel = m_groupsRadio->GetGroupAll()->GetByChannelEpgID(iEpgId);
-
-  return channel;
-}
-
-std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetChannelForEpgTag(const std::shared_ptr<CPVREpgInfoTag>& epgTag) const
+std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetChannelForEpgTag(
+    const std::shared_ptr<const CPVREpgInfoTag>& epgTag) const
 {
   if (!epgTag)
     return {};
@@ -113,18 +106,24 @@ std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetChannelForEpgTag(con
   return Get(epgTag->IsRadio())->GetGroupAll()->GetByUniqueID(epgTag->UniqueChannelID(), epgTag->ClientID());
 }
 
-std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetByPath(const std::string& strPath) const
+std::shared_ptr<CPVRChannelGroupMember> CPVRChannelGroupsContainer::GetChannelGroupMemberByPath(
+    const std::string& strPath) const
 {
   const CPVRChannelsPath path(strPath);
   if (path.IsValid())
-    return Get(path.IsRadio())->GetByPath(path);
+    return Get(path.IsRadio())->GetChannelGroupMemberByPath(path);
 
   return {};
 }
 
-std::shared_ptr<CPVRChannelGroup> CPVRChannelGroupsContainer::GetSelectedGroup(bool bRadio) const
+std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetByPath(const std::string& strPath) const
 {
-  return Get(bRadio)->GetSelectedGroup();
+  const std::shared_ptr<const CPVRChannelGroupMember> groupMember =
+      GetChannelGroupMemberByPath(strPath);
+  if (groupMember)
+    return groupMember->Channel();
+
+  return {};
 }
 
 std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetByUniqueID(int iUniqueChannelId, int iClientID) const
@@ -142,43 +141,22 @@ std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetByUniqueID(int iUniq
   return channel;
 }
 
-std::shared_ptr<CPVRChannel> CPVRChannelGroupsContainer::GetLastPlayedChannel() const
+std::shared_ptr<CPVRChannelGroupMember> CPVRChannelGroupsContainer::
+    GetLastPlayedChannelGroupMember() const
 {
-  std::shared_ptr<CPVRChannel> channelTV = m_groupsTV->GetGroupAll()->GetLastPlayedChannel();
-  std::shared_ptr<CPVRChannel> channelRadio = m_groupsRadio->GetGroupAll()->GetLastPlayedChannel();
+  std::shared_ptr<CPVRChannelGroupMember> channelTV =
+      m_groupsTV->GetGroupAll()->GetLastPlayedChannelGroupMember();
+  std::shared_ptr<CPVRChannelGroupMember> channelRadio =
+      m_groupsRadio->GetGroupAll()->GetLastPlayedChannelGroupMember();
 
-  if (!channelTV ||
-      (channelRadio && channelRadio->LastWatched() > channelTV->LastWatched()))
-     return channelRadio;
+  if (!channelTV || (channelRadio &&
+                     channelRadio->Channel()->LastWatched() > channelTV->Channel()->LastWatched()))
+    return channelRadio;
 
   return channelTV;
 }
 
-std::shared_ptr<CPVRChannelGroup> CPVRChannelGroupsContainer::GetLastPlayedGroup(int iChannelID /* = -1 */) const
+int CPVRChannelGroupsContainer::CleanupCachedImages()
 {
-  std::shared_ptr<CPVRChannelGroup> groupTV = m_groupsTV->GetLastPlayedGroup(iChannelID);
-  std::shared_ptr<CPVRChannelGroup> groupRadio = m_groupsRadio->GetLastPlayedGroup(iChannelID);
-
-  if (!groupTV || (groupRadio && groupTV->LastWatched() < groupRadio->LastWatched()))
-    return groupRadio;
-
-  return groupTV;
-}
-
-bool CPVRChannelGroupsContainer::CreateChannelEpgs()
-{
-  return m_groupsTV->CreateChannelEpgs() && m_groupsRadio->CreateChannelEpgs();
-}
-
-std::shared_ptr<CPVRChannelGroup> CPVRChannelGroupsContainer::GetPreviousPlayedGroup()
-{
-  CSingleLock lock(m_critSection);
-  return m_lastPlayedGroups[0];
-}
-
-void CPVRChannelGroupsContainer::SetLastPlayedGroup(const std::shared_ptr<CPVRChannelGroup>& group)
-{
-  CSingleLock lock(m_critSection);
-  m_lastPlayedGroups[0] = m_lastPlayedGroups[1];
-  m_lastPlayedGroups[1] = group;
+  return m_groupsTV->CleanupCachedImages() + m_groupsRadio->CleanupCachedImages();
 }

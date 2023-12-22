@@ -18,7 +18,14 @@
 
 #include <cstddef>
 
-CGUITexture* CGUITexture::CreateTexture(
+#include "PlatformDefs.h"
+
+void CGUITextureGL::Register()
+{
+  CGUITexture::Register(CGUITextureGL::CreateTexture, CGUITextureGL::DrawQuad);
+}
+
+CGUITexture* CGUITextureGL::CreateTexture(
     float posX, float posY, float width, float height, const CTextureInfo& texture)
 {
   return new CGUITextureGL(posX, posY, width, height, texture);
@@ -36,9 +43,9 @@ CGUITextureGL* CGUITextureGL::Clone() const
   return new CGUITextureGL(*this);
 }
 
-void CGUITextureGL::Begin(UTILS::Color color)
+void CGUITextureGL::Begin(UTILS::COLOR::Color color)
 {
-  CTexture* texture = m_texture.m_textures[m_currentFrame];
+  CTexture* texture = m_texture.m_textures[m_currentFrame].get();
   texture->LoadToGPU();
   if (m_diffuse.size())
     m_diffuse.m_textures[0]->LoadToGPU();
@@ -46,10 +53,10 @@ void CGUITextureGL::Begin(UTILS::Color color)
   texture->BindToUnit(0);
 
   // Setup Colors
-  m_col[0] = (GLubyte)GET_R(color);
-  m_col[1] = (GLubyte)GET_G(color);
-  m_col[2] = (GLubyte)GET_B(color);
-  m_col[3] = (GLubyte)GET_A(color);
+  m_col[0] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::R, color);
+  m_col[1] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::G, color);
+  m_col[2] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::B, color);
+  m_col[3] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::A, color);
 
   bool hasAlpha = m_texture.m_textures[m_currentFrame]->HasAlpha() || m_col[3] < 255;
 
@@ -57,11 +64,11 @@ void CGUITextureGL::Begin(UTILS::Color color)
   {
     if (m_col[0] == 255 && m_col[1] == 255 && m_col[2] == 255 && m_col[3] == 255 )
     {
-      m_renderSystem->EnableShader(SM_MULTI);
+      m_renderSystem->EnableShader(ShaderMethodGL::SM_MULTI);
     }
     else
     {
-      m_renderSystem->EnableShader(SM_MULTI_BLENDCOLOR);
+      m_renderSystem->EnableShader(ShaderMethodGL::SM_MULTI_BLENDCOLOR);
     }
 
     hasAlpha |= m_diffuse.m_textures[0]->HasAlpha();
@@ -72,11 +79,11 @@ void CGUITextureGL::Begin(UTILS::Color color)
   {
     if (m_col[0] == 255 && m_col[1] == 255 && m_col[2] == 255 && m_col[3] == 255)
     {
-      m_renderSystem->EnableShader(SM_TEXTURE_NOBLEND);
+      m_renderSystem->EnableShader(ShaderMethodGL::SM_TEXTURE_NOBLEND);
     }
     else
     {
-      m_renderSystem->EnableShader(SM_TEXTURE);
+      m_renderSystem->EnableShader(ShaderMethodGL::SM_TEXTURE);
     }
   }
 
@@ -245,10 +252,10 @@ void CGUITextureGL::Draw(float *x, float *y, float *z, const CRect &texture, con
   }
 }
 
-void CGUITexture::DrawQuad(const CRect& rect,
-                           UTILS::Color color,
-                           CTexture* texture,
-                           const CRect* texCoords)
+void CGUITextureGL::DrawQuad(const CRect& rect,
+                             UTILS::COLOR::Color color,
+                             CTexture* texture,
+                             const CRect* texCoords)
 {
   CRenderSystemGL *renderSystem = dynamic_cast<CRenderSystemGL*>(CServiceBroker::GetRenderSystem());
   if (texture)
@@ -274,19 +281,19 @@ void CGUITexture::DrawQuad(const CRect& rect,
   }vertex[4];
 
   if (texture)
-    renderSystem->EnableShader(SM_TEXTURE);
+    renderSystem->EnableShader(ShaderMethodGL::SM_TEXTURE);
   else
-    renderSystem->EnableShader(SM_DEFAULT);
+    renderSystem->EnableShader(ShaderMethodGL::SM_DEFAULT);
 
   GLint posLoc = renderSystem->ShaderGetPos();
   GLint tex0Loc = renderSystem->ShaderGetCoord0();
   GLint uniColLoc = renderSystem->ShaderGetUniCol();
 
   // Setup Colors
-  col[0] = (GLubyte)GET_R(color);
-  col[1] = (GLubyte)GET_G(color);
-  col[2] = (GLubyte)GET_B(color);
-  col[3] = (GLubyte)GET_A(color);
+  col[0] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::R, color);
+  col[1] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::G, color);
+  col[2] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::B, color);
+  col[3] = KODI::UTILS::GL::GetChannelFromARGB(KODI::UTILS::GL::ColorChannel::A, color);
 
   glUniform4f(uniColLoc, col[0] / 255.0f, col[1] / 255.0f, col[2] / 255.0f, col[3] / 255.0f);
 

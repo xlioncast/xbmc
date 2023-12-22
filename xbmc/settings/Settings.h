@@ -63,7 +63,7 @@ public:
   static constexpr auto SETTING_SCREENSAVER_SETTINGS = "screensaver.settings";
   static constexpr auto SETTING_SCREENSAVER_PREVIEW = "screensaver.preview";
   static constexpr auto SETTING_SCREENSAVER_TIME = "screensaver.time";
-  static constexpr auto SETTING_SCREENSAVER_USEMUSICVISINSTEAD = "screensaver.usemusicvisinstead";
+  static constexpr auto SETTING_SCREENSAVER_DISABLEFORAUDIO = "screensaver.disableforaudio";
   static constexpr auto SETTING_SCREENSAVER_USEDIMONPAUSE = "screensaver.usedimonpause";
   static constexpr auto SETTING_WINDOW_WIDTH = "window.width";
   static constexpr auto SETTING_WINDOW_HEIGHT = "window.height";
@@ -94,10 +94,13 @@ public:
       "videolibrary.episodeartwhitelist";
   static constexpr auto SETTING_VIDEOLIBRARY_MUSICVIDEOART_WHITELIST =
       "videolibrary.musicvideoartwhitelist";
-  static constexpr auto SETTING_VIDEOLIBRARY_ARTSETTINGS_UPDATED =
-      "videolibrary.artsettingsupdated";
   static constexpr auto SETTING_VIDEOLIBRARY_SHOWPERFORMERS =
       "videolibrary.musicvideosallperformers";
+  static constexpr auto SETTING_VIDEOLIBRARY_IGNOREVIDEOVERSIONS =
+      "videolibrary.ignorevideoversions";
+  static constexpr auto SETTING_VIDEOLIBRARY_IGNOREVIDEOEXTRAS = "videolibrary.ignorevideoextras";
+  static constexpr auto SETTING_VIDEOLIBRARY_SHOWVIDEOVERSIONSASFOLDER =
+      "videolibrary.showvideoversionsasfolder";
   static constexpr auto SETTING_LOCALE_AUDIOLANGUAGE = "locale.audiolanguage";
   static constexpr auto SETTING_VIDEOPLAYER_PREFERDEFAULTFLAG = "videoplayer.preferdefaultflag";
   static constexpr auto SETTING_VIDEOPLAYER_AUTOPLAYNEXTITEM = "videoplayer.autoplaynextitem";
@@ -115,6 +118,8 @@ public:
       "videoplayer.quitstereomodeonstop";
   static constexpr auto SETTING_VIDEOPLAYER_RENDERMETHOD = "videoplayer.rendermethod";
   static constexpr auto SETTING_VIDEOPLAYER_HQSCALERS = "videoplayer.hqscalers";
+  static constexpr auto SETTING_VIDEOPLAYER_USESUPERRESOLUTION = "videoplayer.usesuperresolution";
+  static constexpr auto SETTING_VIDEOPLAYER_HIGHPRECISIONPROCESSING = "videoplayer.highprecision";
   static constexpr auto SETTING_VIDEOPLAYER_USEMEDIACODEC = "videoplayer.usemediacodec";
   static constexpr auto SETTING_VIDEOPLAYER_USEMEDIACODECSURFACE =
       "videoplayer.usemediacodecsurface";
@@ -129,7 +134,10 @@ public:
   static constexpr auto SETTING_VIDEOPLAYER_USESTAGEFRIGHT = "videoplayer.usestagefright";
   static constexpr auto SETTING_VIDEOPLAYER_LIMITGUIUPDATE = "videoplayer.limitguiupdate";
   static constexpr auto SETTING_VIDEOPLAYER_SUPPORTMVC = "videoplayer.supportmvc";
+  static constexpr auto SETTING_VIDEOPLAYER_CONVERTDOVI = "videoplayer.convertdovi";
   static constexpr auto SETTING_MYVIDEOS_SELECTACTION = "myvideos.selectaction";
+  static constexpr auto SETTING_MYVIDEOS_SELECTDEFAULTVERSION = "myvideos.selectdefaultversion";
+  static constexpr auto SETTING_MYVIDEOS_PLAYACTION = "myvideos.playaction";
   static constexpr auto SETTING_MYVIDEOS_USETAGS = "myvideos.usetags";
   static constexpr auto SETTING_MYVIDEOS_EXTRACTFLAGS = "myvideos.extractflags";
   static constexpr auto SETTING_MYVIDEOS_EXTRACTCHAPTERTHUMBS = "myvideos.extractchapterthumbs";
@@ -138,16 +146,27 @@ public:
   static constexpr auto SETTING_MYVIDEOS_STACKVIDEOS = "myvideos.stackvideos";
   static constexpr auto SETTING_LOCALE_SUBTITLELANGUAGE = "locale.subtitlelanguage";
   static constexpr auto SETTING_SUBTITLES_PARSECAPTIONS = "subtitles.parsecaptions";
+  static constexpr auto SETTING_SUBTITLES_CAPTIONSALIGN = "subtitles.captionsalign";
   static constexpr auto SETTING_SUBTITLES_ALIGN = "subtitles.align";
   static constexpr auto SETTING_SUBTITLES_STEREOSCOPICDEPTH = "subtitles.stereoscopicdepth";
-  static constexpr auto SETTING_SUBTITLES_FONT = "subtitles.font";
-  static constexpr auto SETTING_SUBTITLES_HEIGHT = "subtitles.height";
+  static constexpr auto SETTING_SUBTITLES_FONTNAME = "subtitles.fontname";
+  static constexpr auto SETTING_SUBTITLES_FONTSIZE = "subtitles.fontsize";
   static constexpr auto SETTING_SUBTITLES_STYLE = "subtitles.style";
-  static constexpr auto SETTING_SUBTITLES_COLOR = "subtitles.color";
-  static constexpr auto SETTING_SUBTITLES_BGCOLOR = "subtitles.bgcolor";
+  static constexpr auto SETTING_SUBTITLES_COLOR = "subtitles.colorpick";
+  static constexpr auto SETTING_SUBTITLES_BORDERSIZE = "subtitles.bordersize";
+  static constexpr auto SETTING_SUBTITLES_BORDERCOLOR = "subtitles.bordercolorpick";
+  static constexpr auto SETTING_SUBTITLES_OPACITY = "subtitles.opacity";
+  static constexpr auto SETTING_SUBTITLES_BLUR = "subtitles.blur";
+  static constexpr auto SETTING_SUBTITLES_BACKGROUNDTYPE = "subtitles.backgroundtype";
+  static constexpr auto SETTING_SUBTITLES_SHADOWCOLOR = "subtitles.shadowcolor";
+  static constexpr auto SETTING_SUBTITLES_SHADOWOPACITY = "subtitles.shadowopacity";
+  static constexpr auto SETTING_SUBTITLES_SHADOWSIZE = "subtitles.shadowsize";
+  static constexpr auto SETTING_SUBTITLES_BGCOLOR = "subtitles.bgcolorpick";
   static constexpr auto SETTING_SUBTITLES_BGOPACITY = "subtitles.bgopacity";
+  static constexpr auto SETTING_SUBTITLES_MARGINVERTICAL = "subtitles.marginvertical";
   static constexpr auto SETTING_SUBTITLES_CHARSET = "subtitles.charset";
-  static constexpr auto SETTING_SUBTITLES_OVERRIDEASSFONTS = "subtitles.overrideassfonts";
+  static constexpr auto SETTING_SUBTITLES_OVERRIDEFONTS = "subtitles.overridefonts";
+  static constexpr auto SETTING_SUBTITLES_OVERRIDESTYLES = "subtitles.overridestyles";
   static constexpr auto SETTING_SUBTITLES_LANGUAGES = "subtitles.languages";
   static constexpr auto SETTING_SUBTITLES_STORAGEMODE = "subtitles.storagemode";
   static constexpr auto SETTING_SUBTITLES_CUSTOMPATH = "subtitles.custompath";
@@ -168,7 +187,8 @@ public:
   static constexpr auto SETTING_SCRAPERS_MUSICVIDEOSDEFAULT = "scrapers.musicvideosdefault";
   static constexpr auto SETTING_PVRMANAGER_PRESELECTPLAYINGCHANNEL =
       "pvrmanager.preselectplayingchannel";
-  static constexpr auto SETTING_PVRMANAGER_SYNCCHANNELGROUPS = "pvrmanager.syncchannelgroups";
+  static constexpr auto SETTING_PVRMANAGER_BACKENDCHANNELGROUPSORDER =
+      "pvrmanager.backendchannelgroupsorder";
   static constexpr auto SETTING_PVRMANAGER_BACKENDCHANNELORDER = "pvrmanager.backendchannelorder";
   static constexpr auto SETTING_PVRMANAGER_USEBACKENDCHANNELNUMBERS =
       "pvrmanager.usebackendchannelnumbers";
@@ -181,6 +201,7 @@ public:
   static constexpr auto SETTING_PVRMANAGER_GROUPMANAGER = "pvrmanager.groupmanager";
   static constexpr auto SETTING_PVRMANAGER_CHANNELSCAN = "pvrmanager.channelscan";
   static constexpr auto SETTING_PVRMANAGER_RESETDB = "pvrmanager.resetdb";
+  static constexpr auto SETTING_PVRMANAGER_ADDONS = "pvrmanager.addons";
   static constexpr auto SETTING_PVRMENU_DISPLAYCHANNELINFO = "pvrmenu.displaychannelinfo";
   static constexpr auto SETTING_PVRMENU_CLOSECHANNELOSDONSWITCH = "pvrmenu.closechannelosdonswitch";
   static constexpr auto SETTING_PVRMENU_ICONPATH = "pvrmenu.iconpath";
@@ -240,7 +261,6 @@ public:
       "musiclibrary.artistartwhitelist";
   static constexpr auto SETTING_MUSICLIBRARY_ALBUMART_WHITELIST = "musiclibrary.albumartwhitelist";
   static constexpr auto SETTING_MUSICLIBRARY_MUSICTHUMBS = "musiclibrary.musicthumbs";
-  static constexpr auto SETTING_MUSICLIBRARY_ARTSETTINGS_UPDATED = "musiclibrary.artsettings";
   static constexpr auto SETTING_MUSICLIBRARY_ALBUMSSCRAPER = "musiclibrary.albumsscraper";
   static constexpr auto SETTING_MUSICLIBRARY_ARTISTSSCRAPER = "musiclibrary.artistsscraper";
   static constexpr auto SETTING_MUSICLIBRARY_OVERRIDETAGS = "musiclibrary.overridetags";
@@ -307,6 +327,7 @@ public:
   static constexpr auto SETTING_SERVICES_UPNPLOOKFOREXTERNALSUBTITLES =
       "services.upnplookforexternalsubtitles";
   static constexpr auto SETTING_SERVICES_UPNPCONTROLLER = "services.upnpcontroller";
+  static constexpr auto SETTING_SERVICES_UPNPPLAYERVOLUMESYNC = "services.upnpplayervolumesync";
   static constexpr auto SETTING_SERVICES_UPNPRENDERER = "services.upnprenderer";
   static constexpr auto SETTING_SERVICES_WEBSERVER = "services.webserver";
   static constexpr auto SETTING_SERVICES_WEBSERVERPORT = "services.webserverport";
@@ -334,6 +355,8 @@ public:
   static constexpr auto SETTING_SMB_MINPROTOCOL = "smb.minprotocol";
   static constexpr auto SETTING_SMB_MAXPROTOCOL = "smb.maxprotocol";
   static constexpr auto SETTING_SMB_LEGACYSECURITY = "smb.legacysecurity";
+  static constexpr auto SETTING_SMB_CHUNKSIZE = "smb.chunksize";
+  static constexpr auto SETTING_SERVICES_WSDISCOVERY = "services.wsdiscovery";
   static constexpr auto SETTING_VIDEOSCREEN_MONITOR = "videoscreen.monitor";
   static constexpr auto SETTING_VIDEOSCREEN_SCREEN = "videoscreen.screen";
   static constexpr auto SETTING_VIDEOSCREEN_WHITELIST = "videoscreen.whitelist";
@@ -351,6 +374,12 @@ public:
   static constexpr auto SETTING_VIDEOSCREEN_TESTPATTERN = "videoscreen.testpattern";
   static constexpr auto SETTING_VIDEOSCREEN_LIMITEDRANGE = "videoscreen.limitedrange";
   static constexpr auto SETTING_VIDEOSCREEN_FRAMEPACKING = "videoscreen.framepacking";
+  static constexpr auto SETTING_VIDEOSCREEN_10BITSURFACES = "videoscreen.10bitsurfaces";
+  static constexpr auto SETTING_VIDEOSCREEN_USESYSTEMSDRPEAKLUMINANCE =
+      "videoscreen.usesystemsdrpeakluminance";
+  static constexpr auto SETTING_VIDEOSCREEN_GUISDRPEAKLUMINANCE = "videoscreen.guipeakluminance";
+  static constexpr auto SETTING_VIDEOSCREEN_DITHER = "videoscreen.dither";
+  static constexpr auto SETTING_VIDEOSCREEN_DITHERDEPTH = "videoscreen.ditherdepth";
   static constexpr auto SETTING_AUDIOOUTPUT_AUDIODEVICE = "audiooutput.audiodevice";
   static constexpr auto SETTING_AUDIOOUTPUT_CHANNELS = "audiooutput.channels";
   static constexpr auto SETTING_AUDIOOUTPUT_CONFIG = "audiooutput.config";
@@ -363,6 +392,7 @@ public:
   static constexpr auto SETTING_AUDIOOUTPUT_STREAMSILENCE = "audiooutput.streamsilence";
   static constexpr auto SETTING_AUDIOOUTPUT_STREAMNOISE = "audiooutput.streamnoise";
   static constexpr auto SETTING_AUDIOOUTPUT_GUISOUNDMODE = "audiooutput.guisoundmode";
+  static constexpr auto SETTING_AUDIOOUTPUT_GUISOUNDVOLUME = "audiooutput.guisoundvolume";
   static constexpr auto SETTING_AUDIOOUTPUT_PASSTHROUGH = "audiooutput.passthrough";
   static constexpr auto SETTING_AUDIOOUTPUT_PASSTHROUGHDEVICE = "audiooutput.passthroughdevice";
   static constexpr auto SETTING_AUDIOOUTPUT_AC3PASSTHROUGH = "audiooutput.ac3passthrough";
@@ -371,6 +401,7 @@ public:
   static constexpr auto SETTING_AUDIOOUTPUT_DTSPASSTHROUGH = "audiooutput.dtspassthrough";
   static constexpr auto SETTING_AUDIOOUTPUT_TRUEHDPASSTHROUGH = "audiooutput.truehdpassthrough";
   static constexpr auto SETTING_AUDIOOUTPUT_DTSHDPASSTHROUGH = "audiooutput.dtshdpassthrough";
+  static constexpr auto SETTING_AUDIOOUTPUT_DTSHDCOREFALLBACK = "audiooutput.dtshdcorefallback";
   static constexpr auto SETTING_AUDIOOUTPUT_VOLUMESTEPS = "audiooutput.volumesteps";
   static constexpr auto SETTING_INPUT_PERIPHERALS = "input.peripherals";
   static constexpr auto SETTING_INPUT_PERIPHERALLIBRARIES = "input.peripherallibraries";
@@ -383,10 +414,13 @@ public:
   static constexpr auto SETTING_INPUT_APPLEREMOTEMODE = "input.appleremotemode";
   static constexpr auto SETTING_INPUT_APPLEREMOTEALWAYSON = "input.appleremotealwayson";
   static constexpr auto SETTING_INPUT_APPLEREMOTESEQUENCETIME = "input.appleremotesequencetime";
-  static constexpr auto SETTING_INPUT_APPLESIRI = "input.applesiri";
-  static constexpr auto SETTING_INPUT_APPLESIRITIMEOUT = "input.applesiritimeout";
-  static constexpr auto SETTING_INPUT_APPLESIRITIMEOUTENABLED = "input.applesiritimeoutenabled";
-  static constexpr auto SETTING_INPUT_APPLEUSEKODIKEYBOARD = "input.appleusekodikeyboard";
+  static constexpr auto SETTING_INPUT_SIRIREMOTEIDLETIMERENABLED = "input.siriremoteidletimerenabled";
+  static constexpr auto SETTING_INPUT_SIRIREMOTEIDLETIME = "input.siriremoteidletime";
+  static constexpr auto SETTING_INPUT_SIRIREMOTEHORIZONTALSENSITIVITY =
+      "input.siriremotehorizontalsensitivity";
+  static constexpr auto SETTING_INPUT_SIRIREMOTEVERTICALSENSITIVITY =
+      "input.siriremoteverticalsensitivity";
+  static constexpr auto SETTING_INPUT_TVOSUSEKODIKEYBOARD = "input.tvosusekodikeyboard";
   static constexpr auto SETTING_NETWORK_USEHTTPPROXY = "network.usehttpproxy";
   static constexpr auto SETTING_NETWORK_HTTPPROXYTYPE = "network.httpproxytype";
   static constexpr auto SETTING_NETWORK_HTTPPROXYSERVER = "network.httpproxyserver";
@@ -427,11 +461,17 @@ public:
   static constexpr auto SETTING_ADDONS_ALLOW_UNKNOWN_SOURCES = "addons.unknownsources";
   static constexpr auto SETTING_ADDONS_UPDATEMODE = "addons.updatemode";
   static constexpr auto SETTING_ADDONS_MANAGE_DEPENDENCIES = "addons.managedependencies";
+  static constexpr auto SETTING_ADDONS_REMOVE_ORPHANED_DEPENDENCIES =
+      "addons.removeorphaneddependencies";
   static constexpr auto SETTING_GENERAL_ADDONFOREIGNFILTER = "general.addonforeignfilter";
   static constexpr auto SETTING_GENERAL_ADDONBROKENFILTER = "general.addonbrokenfilter";
   static constexpr auto SETTING_SOURCE_VIDEOS = "source.videos";
   static constexpr auto SETTING_SOURCE_MUSIC = "source.music";
   static constexpr auto SETTING_SOURCE_PICTURES = "source.pictures";
+  static constexpr auto SETTING_FILECACHE_BUFFERMODE = "filecache.buffermode";
+  static constexpr auto SETTING_FILECACHE_MEMORYSIZE = "filecache.memorysize"; // in MBytes
+  static constexpr auto SETTING_FILECACHE_READFACTOR = "filecache.readfactor"; // as integer (x100)
+  static constexpr auto SETTING_FILECACHE_CHUNKSIZE = "filecache.chunksize"; // in Bytes
 
   // values for SETTING_VIDEOLIBRARY_SHOWUNWATCHEDPLOTS
   static const int VIDEOLIBRARY_PLOTS_SHOW_UNWATCHED_MOVIES = 0;
@@ -448,6 +488,13 @@ public:
   static const int MUSICLIBRARY_ARTWORK_LEVEL_BASIC = 1;
   static const int MUSICLIBRARY_ARTWORK_LEVEL_CUSTOM = 2;
   static const int MUSICLIBRARY_ARTWORK_LEVEL_NONE = 3;
+
+  // values for SETTING_VIDEOPLAYER_AUTOPLAYNEXTITEM
+  static constexpr int SETTING_AUTOPLAYNEXT_MUSICVIDEOS = 0;
+  static constexpr int SETTING_AUTOPLAYNEXT_TVSHOWS = 1;
+  static constexpr int SETTING_AUTOPLAYNEXT_EPISODES = 2;
+  static constexpr int SETTING_AUTOPLAYNEXT_MOVIES = 3;
+  static constexpr int SETTING_AUTOPLAYNEXT_UNCATEGORIZED = 4;
 
   /*!
    \brief Creates a new settings wrapper around a new settings manager.

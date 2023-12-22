@@ -8,8 +8,10 @@
 
 #include "Win10App.h"
 
-#include "AppParamParser.h"
-#include "Application.h"
+#include "application/AppEnvironment.h"
+#include "application/AppParamParser.h"
+#include "application/AppParams.h"
+#include "application/Application.h"
 #include "pch.h"
 #include "platform/Environment.h"
 #include "platform/xbmc.h"
@@ -78,18 +80,22 @@ void App::Run()
   {
     // fix the case then window opened in FS, but current setting is RES_WINDOW
     // the proper way is make window params related to setting, but in this setting isn't loaded yet
-    // perhaps we should observe setting changes and change window's Preffered props
+    // perhaps we should observe setting changes and change window's Preferred props
     bool fullscreen = ApplicationView::GetForCurrentView().IsFullScreenMode();
 
     CAppParamParser appParamParser;
     appParamParser.Parse(m_argv.data(), m_argv.size());
-    appParamParser.m_startFullScreen = fullscreen;
+
+    const auto params = appParamParser.GetAppParams();
+    params->SetStartFullScreen(fullscreen);
 
     if (CSysInfo::GetWindowsDeviceFamily() == CSysInfo::Xbox)
-      appParamParser.m_standAlone = true;
+      params->SetStandAlone(true);
 
     // Create and run the app
-    XBMC_Run(true, appParamParser);
+    CAppEnvironment::SetUp(params);
+    XBMC_Run(true);
+    CAppEnvironment::TearDown();
   }
 
   WSACleanup();

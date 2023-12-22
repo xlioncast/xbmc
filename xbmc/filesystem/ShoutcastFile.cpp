@@ -22,6 +22,7 @@
 #include "music/tags/MusicInfoTag.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
+#include "threads/SingleLock.h"
 #include "utils/CharsetConverter.h"
 #include "utils/HTMLUtil.h"
 #include "utils/JSONVariantParser.h"
@@ -30,10 +31,12 @@
 #include "utils/UrlOptions.h"
 
 #include <climits>
+#include <memory>
+#include <mutex>
 
 using namespace XFILE;
 using namespace MUSIC_INFO;
-using namespace KODI::MESSAGING;
+using namespace std::chrono_literals;
 
 CShoutcastFile::CShoutcastFile() :
   IFile(), CThread("ShoutcastFile")
@@ -116,14 +119,14 @@ bool CShoutcastFile::Open(const CURL& url)
 
   if (result)
   {
-    CSingleLock lock(m_tagSection);
+    std::unique_lock<CCriticalSection> lock(m_tagSection);
 
-    m_masterTag.reset(new CMusicInfoTag());
+    m_masterTag = std::make_shared<CMusicInfoTag>();
     m_masterTag->SetStationName(icyTitle);
     m_masterTag->SetGenre(icyGenre);
     m_masterTag->SetLoaded(true);
 
-    m_tags.push({1, m_masterTag});
+    m_tags.emplace(1, m_masterTag);
     m_tagChange.Set();
   }
 
@@ -170,7 +173,7 @@ void CShoutcastFile::Close()
   m_title.clear();
 
   {
-    CSingleLock lock(m_tagSection);
+    std::unique_lock<CCriticalSection> lock(m_tagSection);
     while (!m_tags.empty())
       m_tags.pop();
     m_masterTag.reset();
@@ -294,14 +297,14 @@ bool CShoutcastFile::ExtractTagInfo(const char* buf)
       if (!CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_bShoutcastArt)
         coverURL.clear();
 
-      CSingleLock lock(m_tagSection);
+      std::unique_lock<CCriticalSection> lock(m_tagSection);
 
       const std::shared_ptr<CMusicInfoTag> tag = std::make_shared<CMusicInfoTag>(*m_masterTag);
       tag->SetArtist(artistInfo);
       tag->SetTitle(title);
       tag->SetStationArt(coverURL);
 
-      m_tags.push({m_file.GetPosition(), tag});
+      m_tags.emplace(m_file.GetPosition(), tag);
       m_tagChange.Set();
     }
   }
@@ -324,7 +327,7 @@ int CShoutcastFile::IoControl(EIoControl control, void* payload)
 {
   if (control == IOCTRL_SET_CACHE && m_cacheReader == nullptr)
   {
-    CSingleLock lock(m_tagSection);
+    std::unique_lock<CCriticalSection> lock(m_tagSection);
     m_cacheReader = static_cast<CFileCache*>(payload);
     Create();
   }
@@ -336,23 +339,23 @@ void CShoutcastFile::Process()
 {
   while (!m_bStop)
   {
-    if (m_tagChange.WaitMSec(500))
+    if (m_tagChange.Wait(500ms))
     {
-      CSingleLock lock(m_tagSection);
+      std::unique_lock<CCriticalSection> lock(m_tagSection);
       while (!m_bStop && !m_tags.empty())
       {
         const TagInfo& front = m_tags.front();
         if (m_cacheReader->GetPosition() < front.first) // tagpos
         {
           CSingleExit ex(m_tagSection);
-          CThread::Sleep(20);
+          CThread::Sleep(20ms);
         }
         else
         {
           CFileItem* item = new CFileItem(*front.second); // will be deleted by msg receiver
           m_tags.pop();
-          CApplicationMessenger::GetInstance().PostMsg(TMSG_UPDATE_CURRENT_ITEM, 1, -1,
-                                                       static_cast<void*>(item));
+          CServiceBroker::GetAppMessenger()->PostMsg(TMSG_UPDATE_CURRENT_ITEM, 1, -1,
+                                                     static_cast<void*>(item));
         }
       }
     }

@@ -1,9 +1,11 @@
 include ../../Makefile.include
-DEPS=../../Makefile.include Makefile
+DEPS =../../Makefile.include Makefile ../../download-files.include
 
 LIBNAME=libdrm
-VERSION=2.4.102
+VERSION=2.4.115
 ARCHIVE=$(LIBNAME)-$(VERSION).tar.xz
+SHA512=0c38d3cfd76f627b899f052527c2939d5fc87a417422dceb0761839ba21e69736703a87ba170b5ba7a4aca2506a240760c8c97ca1781a7fb78468225295293bd
+include ../../download-files.include
 
 MESON_BUILD_TYPE=release
 
@@ -16,21 +18,21 @@ CONFIGURE = $(NATIVEPREFIX)/bin/python3 $(NATIVEPREFIX)/bin/meson \
 	--prefix=$(PREFIX) \
 	--libdir=lib \
 	--buildtype=$(MESON_BUILD_TYPE) \
-	-Dlibkms=false \
-	-Dnouveau=false \
-	-Domap=false \
-	-Dexynos=false \
-	-Dtegra=false \
-	-Dintel=false \
-	-Dradeon=false \
-	-Damdgpu=false \
-	-Dvmwgfx=false \
-	-Dvc4=false \
-	-Dfreedreno=false \
-	-Detnaviv=false \
-	-Dcairo-tests=false \
-	-Dman-pages=false \
-	-Dvalgrind=false \
+	-Ddefault_library=shared \
+	-Dnouveau=disabled \
+	-Domap=disabled \
+	-Dexynos=disabled \
+	-Dtegra=disabled \
+	-Dintel=disabled \
+	-Dradeon=disabled \
+	-Damdgpu=disabled \
+	-Dvmwgfx=disabled \
+	-Dvc4=disabled \
+	-Dfreedreno=disabled \
+	-Detnaviv=disabled \
+	-Dcairo-tests=disabled \
+	-Dman-pages=disabled \
+	-Dvalgrind=disabled \
 	-Dfreedreno-kgsl=false \
 	-Dinstall-test-programs=false \
 	-Dudev=false
@@ -50,12 +52,7 @@ LIBDYLIB=$(PLATFORM)/build/$(LIBNAME).so
 
 all: .installed-$(PLATFORM)
 
-download: $(TARBALLS_LOCATION)/$(ARCHIVE)
-
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); rm -rf build; mkdir -p build

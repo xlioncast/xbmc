@@ -1,41 +1,33 @@
-include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile 01-all-disable-tests-docs.patch
-
-# lib name, version
-LIBNAME=libxslt
-VERSION=1.1.34
-SOURCE=$(LIBNAME)-$(VERSION)
-ARCHIVE=$(SOURCE).tar.gz
+include ../../Makefile.include LIBXSLT-VERSION ../../download-files.include
+DEPS = ../../Makefile.include Makefile LIBXSLT-VERSION ../../download-files.include
 
 # configuration settings
-CONFIGURE=cp -f $(CONFIG_SUB) $(CONFIG_GUESS) .; \
-          ./configure --prefix=$(PREFIX) --without-python --disable-shared   --with-debug --with-debugger --with-mem-debug --with-libxml-prefix=$(PREFIX)
+CMAKE_OPTIONS=-DBUILD_SHARED_LIBS=OFF \
+              -DLIBXSLT_WITH_PYTHON=OFF \
+              -DLIBXSLT_WITH_TESTS=OFF \
+              -DLIBXSLT_WITH_CRYPTO=ON \
+              -DLIBXSLT_WITH_MODULES=OFF
 
-LIBDYLIB=$(PLATFORM)/$(LIBNAME)/.libs/$(LIBNAME).a
+LIBDYLIB=$(PLATFORM)/build/$(BYPRODUCT)
 
 all: .installed-$(PLATFORM)
 
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
-	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
+	-rm -rf $(PLATFORM); mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
-	cd $(PLATFORM); patch -p1 -i ../01-all-disable-tests-docs.patch
-	cd $(PLATFORM); $(CONFIGURE)
+	cd $(PLATFORM); mkdir -p build
+	cd $(PLATFORM)/build; $(CMAKE) $(CMAKE_OPTIONS) ..
 
 $(LIBDYLIB): $(PLATFORM)
-	$(MAKE) -C $(PLATFORM)
-	touch $@
+	$(MAKE) -C $(PLATFORM)/build
 
 .installed-$(PLATFORM): $(LIBDYLIB)
-	$(MAKE) -C $(PLATFORM) install
+	$(MAKE) -C $(PLATFORM)/build install
 	touch $@
 
 clean:
-	$(MAKE) -C $(PLATFORM) clean
+	$(MAKE) -C $(PLATFORM)/build clean
 	rm -f .installed-$(PLATFORM)
 
 distclean::
 	rm -rf $(PLATFORM) .installed-$(PLATFORM)
-

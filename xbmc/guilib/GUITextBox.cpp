@@ -46,12 +46,11 @@ CGUITextBox::CGUITextBox(int parentID, int controlID, float posX, float posY, fl
     SetMonoFont(labelInfoMono->font);
 }
 
-CGUITextBox::CGUITextBox(const CGUITextBox &from)
-: CGUIControl(from), CGUITextLayout(from)
+CGUITextBox::CGUITextBox(const CGUITextBox& from)
+  : CGUIControl(from), CGUITextLayout(from), m_autoScrollCondition(from.m_autoScrollCondition)
 {
   m_pageControl = from.m_pageControl;
   m_scrollTime = from.m_scrollTime;
-  m_autoScrollCondition = from.m_autoScrollCondition;
   m_autoScrollTime = from.m_autoScrollTime;
   m_autoScrollDelay = from.m_autoScrollDelay;
   m_minHeight = from.m_minHeight;
@@ -78,9 +77,9 @@ CGUITextBox::~CGUITextBox(void)
   m_autoScrollRepeatAnim = NULL;
 }
 
-bool CGUITextBox::UpdateColors()
+bool CGUITextBox::UpdateColors(const CGUIListItem* item)
 {
-  bool changed = CGUIControl::UpdateColors();
+  bool changed = CGUIControl::UpdateColors(nullptr);
   changed |= m_label.UpdateColors();
 
   return changed;
@@ -129,7 +128,7 @@ void CGUITextBox::Process(unsigned int currentTime, CDirtyRegionList &dirtyregio
   // update our auto-scrolling as necessary
   if (m_autoScrollTime && m_lines.size() > m_itemsPerPage)
   {
-    if (!m_autoScrollCondition || m_autoScrollCondition->Get())
+    if (!m_autoScrollCondition || m_autoScrollCondition->Get(INFO::DEFAULT_CONTEXT))
     {
       if (m_lastRenderTime)
         m_autoScrollDelayTime += currentTime - m_lastRenderTime;
@@ -185,7 +184,8 @@ void CGUITextBox::Process(unsigned int currentTime, CDirtyRegionList &dirtyregio
 
   if (m_pageControl)
   {
-    CGUIMessage msg(GUI_MSG_ITEM_SELECT, GetID(), m_pageControl, MathUtils::round_int(m_scrollOffset / m_itemHeight));
+    CGUIMessage msg(GUI_MSG_ITEM_SELECT, GetID(), m_pageControl,
+                    MathUtils::round_int(static_cast<double>(m_scrollOffset / m_itemHeight)));
     SendWindowMessage(msg);
   }
 
@@ -241,10 +241,22 @@ void CGUITextBox::Render()
 
       while (posY < m_posY + m_renderHeight && current < (int)m_lines.size())
       {
+        const CGUIString& lineString = m_lines[current];
+        float linePosX = posX;
         uint32_t align = alignment;
-        if (m_lines[current].m_text.size() && m_lines[current].m_carriageReturn)
+
+        if (lineString.m_text.size() && lineString.m_carriageReturn)
           align &= ~XBFONT_JUSTIFIED; // last line of a paragraph shouldn't be justified
-        m_font->DrawText(posX, posY, m_colors, m_label.shadowColor, m_lines[current].m_text, align, m_width);
+
+        if (align & XBFONT_RIGHT)
+        {
+          // We need to adjust the posX in similar way the CGUILabel recalculate the render rect
+          // see CGUILabel::UpdateRenderRect()
+          linePosX -= GetTextWidth(lineString.GetAsWstring());
+        }
+
+        m_font->DrawText(linePosX, posY, m_colors, m_label.shadowColor, lineString.m_text, align,
+                         m_width);
         posY += m_itemHeight;
         current++;
       }
@@ -394,7 +406,7 @@ unsigned int CGUITextBox::GetRows() const
 
 int CGUITextBox::GetNumPages() const
 {
-  return (GetRows() + m_itemsPerPage - 1) / m_itemsPerPage;
+  return m_itemsPerPage > 0 ? (GetRows() + m_itemsPerPage - 1) / m_itemsPerPage : 0;
 }
 
 int CGUITextBox::GetCurrentPage() const
@@ -410,10 +422,10 @@ std::string CGUITextBox::GetLabel(int info) const
   switch (info)
   {
   case CONTAINER_NUM_PAGES:
-    label = StringUtils::Format("%u", GetNumPages());
+    label = std::to_string(GetNumPages());
     break;
   case CONTAINER_CURRENT_PAGE:
-    label = StringUtils::Format("%u", GetCurrentPage());
+    label = std::to_string(GetCurrentPage());
     break;
   default:
     break;

@@ -8,6 +8,8 @@
 
 #include "RenderContext.h"
 
+#include "games/GameServices.h"
+#include "games/agents/GameAgentManager.h"
 #include "rendering/RenderSystem.h"
 #include "settings/DisplaySettings.h"
 #include "settings/MediaSettings.h"
@@ -31,12 +33,16 @@ CRenderContext::CRenderContext(CRenderSystemBase* rendering,
                                CWinSystemBase* windowing,
                                CGraphicContext& graphicsContext,
                                CDisplaySettings& displaySettings,
-                               CMediaSettings& mediaSettings)
+                               CMediaSettings& mediaSettings,
+                               GAME::CGameServices& gameServices,
+                               CGUIComponent* guiComponent)
   : m_rendering(rendering),
     m_windowing(windowing),
     m_graphicsContext(graphicsContext),
     m_displaySettings(displaySettings),
-    m_mediaSettings(mediaSettings)
+    m_mediaSettings(mediaSettings),
+    m_gameServices(gameServices),
+    m_guiComponent(guiComponent)
 {
 }
 
@@ -68,24 +74,42 @@ bool CRenderContext::IsExtSupported(const char* extension)
 #if defined(HAS_GL) || defined(HAS_GLES)
 namespace
 {
-static ESHADERMETHOD TranslateShaderMethod(GL_SHADER_METHOD method)
+
+#ifdef HAS_GL
+static ShaderMethodGL TranslateShaderMethodGL(GL_SHADER_METHOD method)
 {
   switch (method)
   {
     case GL_SHADER_METHOD::DEFAULT:
-      return SM_DEFAULT;
+      return ShaderMethodGL::SM_DEFAULT;
     case GL_SHADER_METHOD::TEXTURE:
-      return SM_TEXTURE;
-#if defined(HAS_GLES)
-    case GL_SHADER_METHOD::TEXTURE_NOALPHA:
-      return SM_TEXTURE_NOALPHA;
-#endif
+      return ShaderMethodGL::SM_TEXTURE;
     default:
       break;
   }
 
-  return SM_DEFAULT;
+  return ShaderMethodGL::SM_DEFAULT;
 }
+#endif
+#ifdef HAS_GLES
+static ShaderMethodGLES TranslateShaderMethodGLES(GL_SHADER_METHOD method)
+{
+  switch (method)
+  {
+    case GL_SHADER_METHOD::DEFAULT:
+      return ShaderMethodGLES::SM_DEFAULT;
+    case GL_SHADER_METHOD::TEXTURE:
+      return ShaderMethodGLES::SM_TEXTURE;
+    case GL_SHADER_METHOD::TEXTURE_NOALPHA:
+      return ShaderMethodGLES::SM_TEXTURE_NOALPHA;
+    default:
+      break;
+  }
+
+  return ShaderMethodGLES::SM_DEFAULT;
+}
+#endif
+
 } // namespace
 #endif
 
@@ -94,11 +118,11 @@ void CRenderContext::EnableGUIShader(GL_SHADER_METHOD method)
 #if defined(HAS_GL)
   CRenderSystemGL* rendering = dynamic_cast<CRenderSystemGL*>(m_rendering);
   if (rendering != nullptr)
-    rendering->EnableShader(TranslateShaderMethod(method));
+    rendering->EnableShader(TranslateShaderMethodGL(method));
 #elif HAS_GLES >= 2
   CRenderSystemGLES* renderingGLES = dynamic_cast<CRenderSystemGLES*>(m_rendering);
   if (renderingGLES != nullptr)
-    renderingGLES->EnableGUIShader(TranslateShaderMethod(method));
+    renderingGLES->EnableGUIShader(TranslateShaderMethodGLES(method));
 #endif
 }
 
@@ -231,7 +255,7 @@ RESOLUTION CRenderContext::GetVideoResolution()
   return m_graphicsContext.GetVideoResolution();
 }
 
-void CRenderContext::Clear(::UTILS::Color color /* = 0 */)
+void CRenderContext::Clear(UTILS::COLOR::Color color)
 {
   m_graphicsContext.Clear(color);
 }
@@ -246,7 +270,7 @@ void CRenderContext::SetRenderingResolution(const RESOLUTION_INFO& res, bool nee
   m_graphicsContext.SetRenderingResolution(res, needsScaling);
 }
 
-::UTILS::Color CRenderContext::MergeAlpha(::UTILS::Color color)
+UTILS::COLOR::Color CRenderContext::MergeAlpha(UTILS::COLOR::Color color)
 {
   return m_graphicsContext.MergeAlpha(color);
 }
@@ -276,12 +300,22 @@ RESOLUTION_INFO& CRenderContext::GetResolutionInfo(RESOLUTION resolution)
   return m_displaySettings.GetResolutionInfo(resolution);
 }
 
-CGameSettings& CRenderContext::GetGameSettings()
+::CGameSettings& CRenderContext::GetGameSettings()
 {
   return m_mediaSettings.GetCurrentGameSettings();
 }
 
-CGameSettings& CRenderContext::GetDefaultGameSettings()
+::CGameSettings& CRenderContext::GetDefaultGameSettings()
 {
   return m_mediaSettings.GetDefaultGameSettings();
+}
+
+void CRenderContext::StartAgentManager(GAME::GameClientPtr gameClient)
+{
+  m_gameServices.GameAgentManager().Start(std::move(gameClient));
+}
+
+void CRenderContext::StopAgentManager()
+{
+  m_gameServices.GameAgentManager().Stop();
 }

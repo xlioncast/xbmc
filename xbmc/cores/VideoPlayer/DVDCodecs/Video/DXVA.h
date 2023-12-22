@@ -13,8 +13,10 @@
 #include "guilib/D3DResource.h"
 #include "threads/Event.h"
 
+#include <mutex>
 #include <vector>
 
+#include <d3d11_4.h>
 #include <wrl/client.h>
 extern "C"
 {
@@ -61,13 +63,28 @@ class CVideoBufferShared : public CVideoBuffer
 public:
   HRESULT GetResource(ID3D11Resource** ppResource) override;
   void Initialize(CDecoder* decoder) override;
+  virtual ~CVideoBufferShared();
 
 protected:
   explicit CVideoBufferShared(int id)
       : CVideoBuffer(id) {}
+  void InitializeFence(CDecoder* decoder);
+  void SetFence();
 
   HANDLE handle = INVALID_HANDLE_VALUE;
   Microsoft::WRL::ComPtr<ID3D11Resource> m_sharedRes;
+
+  /*! \brief decoder-side fence object */
+  Microsoft::WRL::ComPtr<ID3D11Fence> m_fence;
+  /*! \brief decoder-side context */
+  Microsoft::WRL::ComPtr<ID3D11DeviceContext4> m_deviceContext4;
+  /*! \brief fence shared handle that allows opening the fence on a different device */
+  HANDLE m_handleFence{INVALID_HANDLE_VALUE};
+  UINT64 m_fenceValue{0};
+  /*! \brief app-side fence object */
+  Microsoft::WRL::ComPtr<ID3D11Fence> m_appFence;
+  /*! \brief app-side context */
+  Microsoft::WRL::ComPtr<ID3D11DeviceContext4> m_appContext4;
 };
 
 class CVideoBufferCopy : public CVideoBufferShared
@@ -134,6 +151,10 @@ private:
   bool m_sharingAllowed = false;
   Microsoft::WRL::ComPtr<ID3D11VideoContext> m_pD3D11Context;
   Microsoft::WRL::ComPtr<ID3D11VideoDevice> m_pD3D11Device;
+#ifdef _DEBUG
+  Microsoft::WRL::ComPtr<ID3D11Debug> m_d3d11Debug;
+#endif
+
   std::vector<CDecoder*> m_decoders;
 };
 
@@ -156,7 +177,6 @@ public:
   bool IsValid(ID3D11View* view);
   size_t Size();
   bool HasFree();
-  bool HasRefs();
 
 protected:
   void Reset();
@@ -197,9 +217,6 @@ public:
   unsigned GetAllowedReferences() override;
   void Reset() override;
 
-  // IDVDResourceCounted overrides
-  long Release() override;
-
   bool OpenDecoder();
   int GetBuffer(AVCodecContext* avctx, AVFrame* pic);
   void ReleaseBuffer(uint8_t* data);
@@ -229,13 +246,13 @@ protected:
   // ID3DResource overrides
   void OnCreateDevice() override
   {
-    CSingleLock lock(m_section);
+    std::unique_lock<CCriticalSection> lock(m_section);
     m_state = DXVA_RESET;
     m_event.Set();
   }
   void OnDestroyDevice(bool fatal) override
   {
-    CSingleLock lock(m_section);
+    std::unique_lock<CCriticalSection> lock(m_section);
     m_state = DXVA_LOST;
     m_event.Reset();
   }
@@ -249,12 +266,12 @@ protected:
   CContext::shared_ptr m_dxvaContext;
   CVideoBuffer* m_videoBuffer = nullptr;
   struct AVD3D11VAContext* m_avD3D11Context = nullptr;
-  struct AVCodecContext* m_avCtx = nullptr;
   int m_refs = 0;
   unsigned int m_shared = 0;
   unsigned int m_surface_alignment = 0;
   HANDLE m_sharedHandle = INVALID_HANDLE_VALUE;
   D3D11_VIDEO_DECODER_DESC m_format = {};
+  bool m_DVDWorkaround = false;
 };
 
 } // namespace DXVA

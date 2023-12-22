@@ -8,6 +8,8 @@
 
 #include "GUIInfoHelper.h"
 
+#include "FileItem.h"
+#include "PlayListPlayer.h"
 #include "ServiceBroker.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindow.h"
@@ -31,40 +33,39 @@ namespace GUIINFO
 static const int WINDOW_CONDITION_HAS_LIST_ITEMS  = 1;
 static const int WINDOW_CONDITION_IS_MEDIA_WINDOW = 2;
 
-std::string GetPlaylistLabel(int item, int playlistid /* = PLAYLIST_NONE */)
+std::string GetPlaylistLabel(int item, PLAYLIST::Id playlistId /* = TYPE_NONE */)
 {
-  if (playlistid < PLAYLIST_NONE)
-    return std::string();
-
   PLAYLIST::CPlayListPlayer& player = CServiceBroker::GetPlaylistPlayer();
 
-  int iPlaylist = playlistid == PLAYLIST_NONE ? player.GetCurrentPlaylist() : playlistid;
+  if (playlistId == PLAYLIST::TYPE_NONE)
+    playlistId = player.GetCurrentPlaylist();
+
   switch (item)
   {
     case PLAYLIST_LENGTH:
     {
-      return StringUtils::Format("%i", player.GetPlaylist(iPlaylist).size());
+      return std::to_string(player.GetPlaylist(playlistId).size());
     }
     case PLAYLIST_POSITION:
     {
       int currentSong = player.GetCurrentSong();
       if (currentSong > -1)
-        return StringUtils::Format("%i", currentSong + 1);
+        return std::to_string(currentSong + 1);
       break;
     }
     case PLAYLIST_RANDOM:
     {
-      if (player.IsShuffled(iPlaylist))
+      if (player.IsShuffled(playlistId))
         return g_localizeStrings.Get(16041); // 16041: On
       else
         return g_localizeStrings.Get(591); // 591: Off
     }
     case PLAYLIST_REPEAT:
     {
-      PLAYLIST::REPEAT_STATE state = player.GetRepeat(iPlaylist);
-      if (state == PLAYLIST::REPEAT_ONE)
+      PLAYLIST::RepeatState state = player.GetRepeat(playlistId);
+      if (state == PLAYLIST::RepeatState::ONE)
         return g_localizeStrings.Get(592); // 592: One
-      else if (state == PLAYLIST::REPEAT_ALL)
+      else if (state == PLAYLIST::RepeatState::ALL)
         return g_localizeStrings.Get(593); // 593: All
       else
         return g_localizeStrings.Get(594); // 594: Off
@@ -90,7 +91,7 @@ bool CheckWindowCondition(CGUIWindow *window, int condition)
 
 CGUIWindow* GetWindowWithCondition(int contextWindow, int condition)
 {
-  CGUIWindowManager& windowMgr = CServiceBroker::GetGUI()->GetWindowManager();
+  const CGUIWindowManager& windowMgr = CServiceBroker::GetGUI()->GetWindowManager();
 
   CGUIWindow *window = windowMgr.GetWindow(contextWindow);
   if (CheckWindowCondition(window, condition))

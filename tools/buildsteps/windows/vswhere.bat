@@ -27,22 +27,15 @@ SET vcvars=no
 SET sdkver=
 
 SET vsver=
-SET toolsdir=%arch%
+REM Current tools are only using x86/win32
+REM ToDo: allow to set NATIVEPLATFORM to allow native tools based on actual native arch (eg x86/x86_64/arm/arm64)
+SET toolsdir=win32
 
 IF "%arch%" NEQ "x64" (
   SET vcarch=%vcarch%_%arch%
 )
 
-IF "%arch%"=="x86" (
-  SET toolsdir=win32
-)
-
-IF "%vcstore%"=="store" (
-  SET sdkver=10.0.18362.0
-  SET toolsdir="win10-%toolsdir%"
-)
-
-SET vswhere="%builddeps%\%toolsdir%\tools\vswhere\vswhere.exe"
+SET vswhere="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 
 FOR /f "usebackq tokens=1* delims=" %%i in (`%vswhere% -latest -property installationPath`) do (
   IF EXIST "%%i\VC\Auxiliary\Build\vcvarsall.bat" (
@@ -50,6 +43,8 @@ FOR /f "usebackq tokens=1* delims=" %%i in (`%vswhere% -latest -property install
     SET vsver=15 2017
     ECHO %%i | findstr "2019" >NUL 2>NUL
     IF NOT ERRORLEVEL 1 SET vsver=16 2019
+    ECHO %%i | findstr "2022" >NUL 2>NUL
+    IF NOT ERRORLEVEL 1 SET vsver=17 2022
   )
 )
 

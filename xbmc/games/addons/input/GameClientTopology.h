@@ -17,6 +17,10 @@ namespace KODI
 {
 namespace GAME
 {
+
+/*!
+ * \ingroup games
+ */
 class CGameClientTopology
 {
 public:
@@ -25,19 +29,20 @@ public:
 
   void Clear();
 
-  int PlayerLimit() const { return m_playerLimit; }
+  int GetPlayerLimit() const { return m_playerLimit; }
 
-  const CControllerTree& ControllerTree() const { return m_controllers; }
-  CControllerTree& ControllerTree() { return m_controllers; }
+  const CControllerTree& GetControllerTree() const { return m_controllers; }
+  CControllerTree& GetControllerTree() { return m_controllers; }
+
+  // Utility functions
+  static std::string MakeAddress(const std::string& baseAddress, const std::string& nodeId);
+  static std::pair<std::string, std::string> SplitAddress(const std::string& nodeAddress);
 
 private:
   static CControllerTree GetControllerTree(const GameClientPortVec& ports);
-  static CControllerPortNode GetPortNode(const GameClientPortPtr& port, const std::string& address);
+  static CPortNode GetPortNode(const GameClientPortPtr& port, const std::string& controllerAddress);
   static CControllerNode GetControllerNode(const GameClientDevicePtr& device,
                                            const std::string& portAddress);
-
-  // Utility function
-  static std::string MakeAddress(const std::string& baseAddress, const std::string& nodeId);
 
   // Game API parameters
   GameClientPortVec m_ports;
@@ -46,5 +51,6 @@ private:
   // Controller parameters
   CControllerTree m_controllers;
 };
+
 } // namespace GAME
 } // namespace KODI

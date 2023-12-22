@@ -11,6 +11,7 @@
 #include "AddonClass.h"
 #include "AddonString.h"
 #include "Exception.h"
+#include "Settings.h"
 #include "addons/IAddon.h"
 
 namespace XBMCAddon
@@ -99,6 +100,31 @@ namespace XBMCAddon
 #ifdef DOXYGEN_SHOULD_USE_THIS
       ///
       /// \ingroup python_xbmcaddon
+      /// @brief \python_func{ xbmcaddon.Addon([id]).getSettings() }
+      /// Returns a wrapper around the addon's settings.
+      ///
+      /// @return                        @ref python_settings wrapper
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v20 New function added.
+      ///
+      ///
+      /// **Example:**
+      /// ~~~~~~~~~~~~~{.py}
+      /// ..
+      /// settings = self.Addon.getSettings()
+      /// ..
+      /// ~~~~~~~~~~~~~
+      ///
+      getSettings(...);
+#else
+      Settings* getSettings();
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_xbmcaddon
       /// @brief \python_func{ xbmcaddon.Addon([id]).getSetting(id) }
       /// Returns the value of a setting as string.
       ///
@@ -138,6 +164,7 @@ namespace XBMCAddon
       ///-----------------------------------------------------------------------
       /// @python_v18
       /// New function added.
+      /// @python_v20 Deprecated. Use **Settings.getBool()** instead.
       ///
       ///
       /// **Example:**
@@ -166,6 +193,7 @@ namespace XBMCAddon
       ///-----------------------------------------------------------------------
       /// @python_v18
       /// New function added.
+      /// @python_v20 Deprecated. Use **Settings.getInt()** instead.
       ///
       ///
       /// **Example:**
@@ -194,6 +222,7 @@ namespace XBMCAddon
       ///-----------------------------------------------------------------------
       /// @python_v18
       /// New function added.
+      /// @python_v20 Deprecated. Use **Settings.getNumber()** instead.
       ///
       ///
       /// **Example:**
@@ -222,6 +251,7 @@ namespace XBMCAddon
       ///-----------------------------------------------------------------------
       /// @python_v18
       /// New function added.
+      /// @python_v20 Deprecated. Use **Settings.getString()** instead.
       ///
       ///
       /// **Example:**
@@ -283,6 +313,7 @@ namespace XBMCAddon
       ///-----------------------------------------------------------------------
       /// @python_v18
       /// New function added.
+      /// @python_v20 Deprecated. Use **Settings.setBool()** instead.
       ///
       ///
       /// **Example:**
@@ -314,6 +345,7 @@ namespace XBMCAddon
       ///-----------------------------------------------------------------------
       /// @python_v18
       /// New function added.
+      /// @python_v20 Deprecated. Use **Settings.setInt()** instead.
       ///
       ///
       /// **Example:**
@@ -345,6 +377,7 @@ namespace XBMCAddon
       ///-----------------------------------------------------------------------
       /// @python_v18
       /// New function added.
+      /// @python_v20 Deprecated. Use **Settings.setNumber()** instead.
       ///
       ///
       /// **Example:**
@@ -376,6 +409,7 @@ namespace XBMCAddon
       ///-----------------------------------------------------------------------
       /// @python_v18
       /// New function added.
+      /// @python_v20 Deprecated. Use **Settings.setString()** instead.
       ///
       ///
       /// **Example:**

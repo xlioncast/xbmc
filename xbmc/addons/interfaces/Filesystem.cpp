@@ -8,6 +8,7 @@
 
 #include "Filesystem.h"
 
+#include "FileItem.h"
 #include "Util.h"
 #include "addons/binary-addons/AddonDll.h"
 #include "filesystem/CurlFile.h"
@@ -166,7 +167,7 @@ bool Interface_Filesystem::can_open_directory(void* kodiBase, const char* url)
   }
 
   CFileItemList items;
-  return CDirectory::GetDirectory(url, items, "", DIR_FLAG_DEFAULTS);
+  return CDirectory::GetDirectory(url, items, "", DIR_FLAG_DEFAULTS | DIR_FLAG_BYPASS_CACHE);
 }
 
 bool Interface_Filesystem::create_directory(void* kodiBase, const char* path)
@@ -192,7 +193,7 @@ bool Interface_Filesystem::directory_exists(void* kodiBase, const char* path)
     return false;
   }
 
-  return CDirectory::Exists(path);
+  return CDirectory::Exists(path, false);
 }
 
 bool Interface_Filesystem::remove_directory(void* kodiBase, const char* path)
@@ -207,7 +208,7 @@ bool Interface_Filesystem::remove_directory(void* kodiBase, const char* path)
 
   // Empty directory
   CFileItemList fileItems;
-  CDirectory::GetDirectory(path, fileItems, "", DIR_FLAG_DEFAULTS);
+  CDirectory::GetDirectory(path, fileItems, "", DIR_FLAG_NO_FILE_DIRS | DIR_FLAG_BYPASS_CACHE);
   for (int i = 0; i < fileItems.Size(); ++i)
     CFile::Delete(fileItems.Get(i)->GetPath());
 
@@ -259,7 +260,8 @@ bool Interface_Filesystem::get_directory(void* kodiBase,
   }
 
   CFileItemList fileItems;
-  if (!CDirectory::GetDirectory(path, fileItems, mask, DIR_FLAG_NO_FILE_DIRS))
+  if (!CDirectory::GetDirectory(path, fileItems, mask,
+                                DIR_FLAG_NO_FILE_DIRS | DIR_FLAG_BYPASS_CACHE))
     return false;
 
   if (fileItems.Size() > 0)
@@ -418,7 +420,7 @@ char* Interface_Filesystem::get_cache_thumb_name(void* kodiBase, const char* fil
   }
 
   const auto crc = Crc32::ComputeFromLowerCase(filename);
-  const auto hex = StringUtils::Format("%08x.tbn", crc);
+  const auto hex = StringUtils::Format("{:08x}.tbn", crc);
   char* buffer = strdup(hex.c_str());
   return buffer;
 }
@@ -637,11 +639,7 @@ bool Interface_Filesystem::get_http_header(void* kodiBase,
   CAddonDll* addon = static_cast<CAddonDll*>(kodiBase);
   if (addon == nullptr || url == nullptr || headers == nullptr || headers->handle == nullptr)
   {
-    CLog::Log(LOGERROR,
-              "Interface_Filesystem::{} - invalid data (addon='{}', url='{}', headers='{}', "
-              "headers->handle='{}')",
-              __FUNCTION__, kodiBase, static_cast<const void*>(url),
-              static_cast<const void*>(headers), headers->handle);
+    CLog::Log(LOGERROR, "Interface_Filesystem::{} - invalid data pointer given", __func__);
     return false;
   }
 
@@ -959,7 +957,7 @@ double Interface_Filesystem::get_file_download_speed(void* kodiBase, void* file)
   {
     CLog::Log(LOGERROR, "Interface_Filesystem::{} - invalid data (addon='{}', file='{}')",
               __FUNCTION__, kodiBase, file);
-    return 0.0f;
+    return 0.0;
   }
 
   return static_cast<CFile*>(file)->GetDownloadSpeed();
@@ -999,7 +997,7 @@ bool Interface_Filesystem::io_control_get_seek_possible(void* kodiBase, void* fi
   {
     CLog::Log(LOGERROR, "Interface_VFS::{} - invalid data (addon='{}', file='{}')", __FUNCTION__,
               kodiBase, file);
-    return -1;
+    return false;
   }
 
   return static_cast<CFile*>(file)->IoControl(EIoControl::IOCTRL_SEEK_POSSIBLE, nullptr) != 0
@@ -1016,30 +1014,30 @@ bool Interface_Filesystem::io_control_get_cache_status(void* kodiBase,
   {
     CLog::Log(LOGERROR, "Interface_VFS::{} - invalid data (addon='{}', file='{}, status='{}')",
               __FUNCTION__, kodiBase, file, static_cast<const void*>(status));
-    return -1;
+    return false;
   }
 
-  SCacheStatus data = {0};
+  SCacheStatus data = {};
   int ret = static_cast<CFile*>(file)->IoControl(EIoControl::IOCTRL_CACHE_STATUS, &data);
   if (ret >= 0)
   {
     status->forward = data.forward;
     status->maxrate = data.maxrate;
     status->currate = data.currate;
-    status->lowspeed = data.lowspeed;
+    status->lowrate = data.lowrate;
     return true;
   }
   return false;
 }
 
-bool Interface_Filesystem::io_control_set_cache_rate(void* kodiBase, void* file, unsigned int rate)
+bool Interface_Filesystem::io_control_set_cache_rate(void* kodiBase, void* file, uint32_t rate)
 {
   CAddonDll* addon = static_cast<CAddonDll*>(kodiBase);
   if (addon == nullptr || file == nullptr)
   {
     CLog::Log(LOGERROR, "Interface_VFS::{} - invalid data (addon='{}', file='{}')", __FUNCTION__,
               kodiBase, file);
-    return -1;
+    return false;
   }
 
   return static_cast<CFile*>(file)->IoControl(EIoControl::IOCTRL_CACHE_SETRATE, &rate) >= 0 ? true
@@ -1053,7 +1051,7 @@ bool Interface_Filesystem::io_control_set_retry(void* kodiBase, void* file, bool
   {
     CLog::Log(LOGERROR, "Interface_VFS::{} - invalid data (addon='{}', file='{}')", __FUNCTION__,
               kodiBase, file);
-    return -1;
+    return false;
   }
 
   return static_cast<CFile*>(file)->IoControl(EIoControl::IOCTRL_SET_RETRY, &retry) >= 0 ? true

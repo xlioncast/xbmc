@@ -10,7 +10,9 @@
 
 #include "ServiceBroker.h"
 #include "Util.h"
+#include "addons/AddonManager.h"
 #include "addons/AddonSystemSettings.h"
+#include "addons/addoninfo/AddonType.h"
 #include "addons/gui/GUIDialogAddonSettings.h"
 #include "addons/gui/GUIWindowAddonBrowser.h"
 #include "dialogs/GUIDialogFileBrowser.h"
@@ -61,14 +63,16 @@ bool CGUIDialogInfoProviderSettings::Show()
 
   ADDON::AddonPtr defaultScraper;
   // Get default album scraper (when enabled - can default scraper be disabled??)
-  if (ADDON::CAddonSystemSettings::GetInstance().GetActive(ADDON::ADDON_SCRAPER_ALBUMS, defaultScraper))
+  if (ADDON::CAddonSystemSettings::GetInstance().GetActive(ADDON::AddonType::SCRAPER_ALBUMS,
+                                                           defaultScraper))
   {
     ADDON::ScraperPtr scraper = std::dynamic_pointer_cast<ADDON::CScraper>(defaultScraper);
     dialog->SetAlbumScraper(scraper);
   }
 
   // Get default artist scraper
-  if (ADDON::CAddonSystemSettings::GetInstance().GetActive(ADDON::ADDON_SCRAPER_ARTISTS, defaultScraper))
+  if (ADDON::CAddonSystemSettings::GetInstance().GetActive(ADDON::AddonType::SCRAPER_ARTISTS,
+                                                           defaultScraper))
   {
     ADDON::ScraperPtr scraper = std::dynamic_pointer_cast<ADDON::CScraper>(defaultScraper);
     dialog->SetArtistScraper(scraper);
@@ -175,15 +179,23 @@ void CGUIDialogInfoProviderSettings::OnSettingAction(const std::shared_ptr<const
       currentScraperId = m_albumscraper->ID();
     std::string selectedAddonId = currentScraperId;
 
-    if (CGUIWindowAddonBrowser::SelectAddonID(ADDON_SCRAPER_ALBUMS, selectedAddonId, false) == 1
-        && selectedAddonId != currentScraperId)
+    if (CGUIWindowAddonBrowser::SelectAddonID(AddonType::SCRAPER_ALBUMS, selectedAddonId, false) ==
+            1 &&
+        selectedAddonId != currentScraperId)
     {
       AddonPtr scraperAddon;
-      CServiceBroker::GetAddonMgr().GetAddon(selectedAddonId, scraperAddon, ADDON_UNKNOWN,
-                                             OnlyEnabled::YES);
-      m_albumscraper = std::dynamic_pointer_cast<CScraper>(scraperAddon);
-      SetupView();
-      SetFocus(settingId);
+      if (CServiceBroker::GetAddonMgr().GetAddon(selectedAddonId, scraperAddon,
+                                                 OnlyEnabled::CHOICE_YES))
+      {
+        m_albumscraper = std::dynamic_pointer_cast<CScraper>(scraperAddon);
+        SetupView();
+        SetFocus(settingId);
+      }
+      else
+      {
+        CLog::Log(LOGERROR, "{} - Could not get settings for addon: {}", __FUNCTION__,
+                  selectedAddonId);
+      }
     }
   }
   else if (settingId == CSettings::SETTING_MUSICLIBRARY_ARTISTSSCRAPER)
@@ -193,15 +205,22 @@ void CGUIDialogInfoProviderSettings::OnSettingAction(const std::shared_ptr<const
       currentScraperId = m_artistscraper->ID();
     std::string selectedAddonId = currentScraperId;
 
-    if (CGUIWindowAddonBrowser::SelectAddonID(ADDON_SCRAPER_ARTISTS, selectedAddonId, false) == 1
-        && selectedAddonId != currentScraperId)
+    if (CGUIWindowAddonBrowser::SelectAddonID(AddonType::SCRAPER_ARTISTS, selectedAddonId, false) ==
+            1 &&
+        selectedAddonId != currentScraperId)
     {
       AddonPtr scraperAddon;
-      CServiceBroker::GetAddonMgr().GetAddon(selectedAddonId, scraperAddon, ADDON_UNKNOWN,
-                                             OnlyEnabled::YES);
-      m_artistscraper = std::dynamic_pointer_cast<CScraper>(scraperAddon);
-      SetupView();
-      SetFocus(settingId);
+      if (CServiceBroker::GetAddonMgr().GetAddon(selectedAddonId, scraperAddon,
+                                                 OnlyEnabled::CHOICE_YES))
+      {
+        m_artistscraper = std::dynamic_pointer_cast<CScraper>(scraperAddon);
+        SetupView();
+        SetFocus(settingId);
+      }
+      else
+      {
+        CLog::Log(LOGERROR, "{} - Could not get addon: {}", __FUNCTION__, selectedAddonId);
+      }
     }
   }
   else if (settingId == SETTING_ALBUMSCRAPER_SETTINGS)
@@ -248,7 +267,7 @@ bool CGUIDialogInfoProviderSettings::Save()
     return true; //Save done by caller of ::Show
 
   // Save default settings for fetching additional information and art
-  CLog::Log(LOGINFO, "%s called", __FUNCTION__);
+  CLog::Log(LOGINFO, "{} called", __FUNCTION__);
   // Save Fetch addiitional info during update
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
   settings->SetBool(CSettings::SETTING_MUSICLIBRARY_DOWNLOADINFO, m_fetchInfo);
@@ -369,13 +388,13 @@ void CGUIDialogInfoProviderSettings::InitializeSettings()
   std::shared_ptr<CSettingCategory> category = AddCategory("infoprovidersettings", -1);
   if (category == nullptr)
   {
-    CLog::Log(LOGERROR, "%s: unable to setup settings", __FUNCTION__);
+    CLog::Log(LOGERROR, "{}: unable to setup settings", __FUNCTION__);
     return;
   }
   std::shared_ptr<CSettingGroup> group1 = AddGroup(category);
   if (group1 == nullptr)
   {
-    CLog::Log(LOGERROR, "%s: unable to setup settings", __FUNCTION__);
+    CLog::Log(LOGERROR, "{}: unable to setup settings", __FUNCTION__);
     return;
   }
 
@@ -389,22 +408,22 @@ void CGUIDialogInfoProviderSettings::InitializeSettings()
     entries.clear();
     if (m_singleScraperType == CONTENT_ALBUMS)
     {
-      entries.push_back(TranslatableIntegerSettingOption(38066, INFOPROVIDER_THISITEM));
-      entries.push_back(TranslatableIntegerSettingOption(38067, INFOPROVIDER_ALLVIEW));
+      entries.emplace_back(38066, INFOPROVIDER_THISITEM);
+      entries.emplace_back(38067, INFOPROVIDER_ALLVIEW);
     }
     else
     {
-      entries.push_back(TranslatableIntegerSettingOption(38064, INFOPROVIDER_THISITEM));
-      entries.push_back(TranslatableIntegerSettingOption(38065, INFOPROVIDER_ALLVIEW));
+      entries.emplace_back(38064, INFOPROVIDER_THISITEM);
+      entries.emplace_back(38065, INFOPROVIDER_ALLVIEW);
     }
-    entries.push_back(TranslatableIntegerSettingOption(38063, INFOPROVIDER_DEFAULT));
+    entries.emplace_back(38063, INFOPROVIDER_DEFAULT);
     AddList(group1, SETTING_APPLYTOITEMS, 38338, SettingLevel::Basic, m_applyToItems, entries, 38339); // "Apply settings to"
   }
 
   std::shared_ptr<CSettingGroup> group = AddGroup(category, 38337);
   if (group == nullptr)
   {
-    CLog::Log(LOGERROR, "%s: unable to setup settings", __FUNCTION__);
+    CLog::Log(LOGERROR, "{}: unable to setup settings", __FUNCTION__);
     return;
   }
   std::shared_ptr<CSettingAction> subsetting;

@@ -12,16 +12,10 @@
 #include "rendering/RenderSystem.h"
 #include "threads/Condition.h"
 #include "threads/CriticalSection.h"
-#include "utils/Color.h"
+#include "threads/SystemClock.h"
+#include "utils/ColorUtils.h"
 
 #include <wrl/client.h>
-
-enum PCI_Vendors
-{
-  PCIV_ATI    = 0x1002,
-  PCIV_nVidia = 0x10DE,
-  PCIV_Intel  = 0x8086
-};
 
 class ID3DResource;
 class CGUIShaderDX;
@@ -40,7 +34,7 @@ public:
   bool BeginRender() override;
   bool EndRender() override;
   void PresentRender(bool rendered, bool videoLayer) override;
-  bool ClearBuffers(UTILS::Color color) override;
+  bool ClearBuffers(UTILS::COLOR::Color color) override;
   void SetViewPort(const CRect& viewPort) override;
   void GetViewPort(CRect& viewPort) override;
   void RestoreViewPort() override;
@@ -62,7 +56,6 @@ public:
 
   // CRenderSystemDX methods
   CGUIShaderDX* GetGUIShader() const { return m_pGUIShader; }
-  bool Interlaced() const { return m_interlaced; }
   bool IsFormatSupport(DXGI_FORMAT format, unsigned int usage) const;
   CRect GetBackBufferRect();
   CD3DTexture& GetBackBuffer();
@@ -73,8 +66,8 @@ public:
   void SetAlphaBlendEnable(bool enable);
 
   // empty overrides
-  bool IsExtSupported(const char* extension) const override { return false; };
-  bool ResetRenderSystem(int width, int height) override { return true; };
+  bool IsExtSupported(const char* extension) const override { return false; }
+  bool ResetRenderSystem(int width, int height) override { return true; }
 
 protected:
   virtual void PresentRenderImpl(bool rendered) = 0;
@@ -89,7 +82,6 @@ protected:
   CCriticalSection m_decoderSection;
 
   // our adapter could change as we go
-  bool m_interlaced;
   bool m_inScene{ false }; ///< True if we're in a BeginScene()/EndScene() block
   bool m_BlendEnabled{ false };
   bool m_ScissorsEnabled{ false };
@@ -104,7 +96,7 @@ protected:
   // stereo interlaced/checkerboard intermediate target
   CD3DTexture m_rightEyeTex;
 
-  XbmcThreads::EndTime m_decodingTimer;
+  XbmcThreads::EndTime<> m_decodingTimer;
   XbmcThreads::ConditionVariable m_decodingEvent;
 
   std::shared_ptr<DX::DeviceResources> m_deviceResources;

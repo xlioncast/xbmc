@@ -17,7 +17,7 @@
 //------------------------------------------------------------------------
 
 #ifdef HAVE_NEW_CROSSGUID
-#include <guid.hpp>
+#include <crossguid/guid.hpp>
 #else
 #include <guid.h>
 #endif
@@ -29,7 +29,7 @@
 #include "CharsetConverter.h"
 #include "LangInfo.h"
 #include "StringUtils.h"
-#include "Util.h"
+#include "XBDateTime.h"
 
 #include <algorithm>
 #include <array>
@@ -52,6 +52,24 @@
 // clang-format on
 
 #define FORMAT_BLOCK_SIZE 512 // # of bytes for initial allocation for printf
+
+namespace
+{
+/*!
+ * \brief Converts a string to a number of a specified type, by using istringstream.
+ * \param str The string to convert
+ * \param fallback [OPT] The number to return when the conversion fails
+ * \return The converted number, otherwise fallback if conversion fails
+ */
+template<typename T>
+T NumberFromSS(std::string_view str, T fallback) noexcept
+{
+  std::istringstream iss{str.data()};
+  T result{fallback};
+  iss >> result;
+  return result;
+}
+} // unnamed namespace
 
 static constexpr const char* ADDON_GUID_RE = "^(\\{){0,1}[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}(\\}){0,1}$";
 
@@ -336,24 +354,58 @@ wchar_t toupperUnicode(const wchar_t& c)
   return c;
 }
 
+template<typename Str, typename Fn>
+void transformString(const Str& input, Str& output, Fn fn)
+{
+  std::transform(input.begin(), input.end(), output.begin(), fn);
+}
+
+std::string StringUtils::ToUpper(const std::string& str)
+{
+  std::string result(str.size(), '\0');
+  transformString(str, result, ::toupper);
+  return result;
+}
+
+std::wstring StringUtils::ToUpper(const std::wstring& str)
+{
+  std::wstring result(str.size(), '\0');
+  transformString(str, result, toupperUnicode);
+  return result;
+}
+
 void StringUtils::ToUpper(std::string &str)
 {
-  std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+  transformString(str, str, ::toupper);
 }
 
 void StringUtils::ToUpper(std::wstring &str)
 {
-  transform(str.begin(), str.end(), str.begin(), toupperUnicode);
+  transformString(str, str, toupperUnicode);
+}
+
+std::string StringUtils::ToLower(const std::string& str)
+{
+  std::string result(str.size(), '\0');
+  transformString(str, result, ::tolower);
+  return result;
+}
+
+std::wstring StringUtils::ToLower(const std::wstring& str)
+{
+  std::wstring result(str.size(), '\0');
+  transformString(str, result, tolowerUnicode);
+  return result;
 }
 
 void StringUtils::ToLower(std::string &str)
 {
-  transform(str.begin(), str.end(), str.begin(), ::tolower);
+  transformString(str, str, ::tolower);
 }
 
 void StringUtils::ToLower(std::wstring &str)
 {
-  transform(str.begin(), str.end(), str.begin(), tolowerUnicode);
+  transformString(str, str, tolowerUnicode);
 }
 
 void StringUtils::ToCapitalize(std::string &str)
@@ -537,6 +589,39 @@ std::string& StringUtils::RemoveDuplicatedSpacesAndTabs(std::string& str)
     ++it;
   }
   return str;
+}
+
+bool StringUtils::IsSpecialCharacter(char c)
+{
+  static constexpr std::string_view view(" .-_+,!'\"\t/\\*?#$%&@()[]{}");
+  if (std::any_of(view.begin(), view.end(), [c](char ch) { return ch == c; }))
+    return true;
+  else
+    return false;
+}
+
+std::string StringUtils::ReplaceSpecialCharactersWithSpace(const std::string& str)
+{
+  std::string result;
+  bool prevCharWasSpecial = false;
+
+  for (char c : str)
+  {
+    if (IsSpecialCharacter(c))
+    {
+      if (!prevCharWasSpecial)
+      {
+        result += ' ';
+      }
+      prevCharWasSpecial = true;
+    }
+    else
+    {
+      result += c;
+      prevCharWasSpecial = false;
+    }
+  }
+  return result;
 }
 
 int StringUtils::Replace(std::string &str, char oldChar, char newChar)
@@ -1072,10 +1157,10 @@ int64_t StringUtils::AlphaNumericCompare(const wchar_t* left, const wchar_t* rig
     // alphanumeric ascii, rather than some being mixed between the numbers and letters, and
     // above all other unicode letters, symbols and punctuation.
     // (Locale collation of these chars varies across platforms)
-    lsym = (lc >= 32 && lc < L'0') || (lc > L'9' && lc < L'A') || 
-           (lc > L'Z' && lc < L'a') || (lc > L'z' && lc < 128);
-    rsym = (rc >= 32 && rc < L'0') || (rc > L'9' && rc < L'A') || 
-           (rc > L'Z' && rc < L'a') || (rc > L'z' && rc < 128);
+    lsym = (lc >= 32 && lc < L'0') || (lc > L'9' && lc < L'A') || (lc > L'Z' && lc < L'a') ||
+           (lc > L'z' && lc < 128);
+    rsym = (rc >= 32 && rc < L'0') || (rc > L'9' && rc < L'A') || (rc > L'Z' && rc < L'a') ||
+           (rc > L'z' && rc < 128);
     if (lsym && !rsym)
       return -1;
     if (!lsym && rsym)
@@ -1083,10 +1168,10 @@ int64_t StringUtils::AlphaNumericCompare(const wchar_t* left, const wchar_t* rig
     if (lsym && rsym)
     {
       if (lc != rc)
-        return lc - rc;
+        return static_cast<int64_t>(lc) - static_cast<int64_t>(rc);
       else
       { // Same symbol advance to next wchar
-        l++; 
+        l++;
         r++;
         continue;
       }
@@ -1118,7 +1203,7 @@ int64_t StringUtils::AlphaNumericCompare(const wchar_t* left, const wchar_t* rig
       else
       {
         // Fetch collation facet from locale to do comparison of wide char although on some
-        // platforms this is not langauge specific but just compares unicode
+        // platforms this is not language specific but just compares unicode
         const std::collate<wchar_t>& coll =
             std::use_facet<std::collate<wchar_t>>(g_langInfo.GetSystemLocale());
         int cmp_res = coll.compare(&lc, &lc + 1, &rc, &rc + 1);
@@ -1260,7 +1345,7 @@ int StringUtils::AlphaNumericCollation(int nKey1, const void* pKey1, int nKey2, 
     if (lsym && rsym)
     {
       if (zA[i] != zB[j])
-        return zA[i] - zB[j];
+        return static_cast<int>(zA[i]) - static_cast<int>(zB[j]);
       else
       { // Same symbol advance to next
         i++;
@@ -1293,11 +1378,11 @@ int StringUtils::AlphaNumericCollation(int nKey1, const void* pKey1, int nKey2, 
     {
       if (!g_langInfo.UseLocaleCollation() || (lc <= 128 && rc <= 128))
         // Compare unicode (having applied accent folding collation to non-ascii chars).
-        return lc - rc;
+        return static_cast<int>(lc) - static_cast<int>(rc);
       else
       {
         // Fetch collation facet from locale to do comparison of wide char although on some
-        // platforms this is not langauge specific but just compares unicode
+        // platforms this is not language specific but just compares unicode
         const std::collate<wchar_t>& coll =
             std::use_facet<std::collate<wchar_t>>(g_langInfo.GetSystemLocale());
         int cmp_res = coll.compare(&lc, &lc + 1, &rc, &rc + 1);
@@ -1393,13 +1478,13 @@ std::string StringUtils::SecondsToTimeString(long lSeconds, TIME_FORMAT format)
 
   std::string strHMS;
   if (format == TIME_FORMAT_SECS)
-    strHMS = StringUtils::Format("%i", lSeconds);
+    strHMS = std::to_string(lSeconds);
   else if (format == TIME_FORMAT_MINS)
-    strHMS = StringUtils::Format("%i", lrintf(static_cast<float>(lSeconds) / 60.0f));
+    strHMS = std::to_string(lrintf(static_cast<float>(lSeconds) / 60.0f));
   else if (format == TIME_FORMAT_HOURS)
-    strHMS = StringUtils::Format("%i", lrintf(static_cast<float>(lSeconds) / 3600.0f));
+    strHMS = std::to_string(lrintf(static_cast<float>(lSeconds) / 3600.0f));
   else if (format & TIME_FORMAT_M)
-    strHMS += StringUtils::Format("%i", lSeconds % 3600 / 60);
+    strHMS += std::to_string(lSeconds % 3600 / 60);
   else
   {
     int hh = lSeconds / 3600;
@@ -1410,13 +1495,13 @@ std::string StringUtils::SecondsToTimeString(long lSeconds, TIME_FORMAT format)
     if (format == TIME_FORMAT_GUESS)
       format = (hh >= 1) ? TIME_FORMAT_HH_MM_SS : TIME_FORMAT_MM_SS;
     if (format & TIME_FORMAT_HH)
-      strHMS += StringUtils::Format("%2.2i", hh);
+      strHMS += StringUtils::Format("{:02}", hh);
     else if (format & TIME_FORMAT_H)
-      strHMS += StringUtils::Format("%i", hh);
+      strHMS += std::to_string(hh);
     if (format & TIME_FORMAT_MM)
-      strHMS += StringUtils::Format(strHMS.empty() ? "%2.2i" : ":%2.2i", mm);
+      strHMS += StringUtils::Format(strHMS.empty() ? "{:02}" : ":{:02}", mm);
     if (format & TIME_FORMAT_SS)
-      strHMS += StringUtils::Format(strHMS.empty() ? "%2.2i" : ":%2.2i", ss);
+      strHMS += StringUtils::Format(strHMS.empty() ? "{:02}" : ":{:02}", ss);
   }
 
   if (isNegative)
@@ -1487,28 +1572,28 @@ void StringUtils::RemoveCRLF(std::string& strLine)
 std::string StringUtils::SizeToString(int64_t size)
 {
   std::string strLabel;
-  const char prefixes[] = {' ', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'};
+  constexpr std::array<char, 9> prefixes = {' ', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'};
   unsigned int i = 0;
   double s = (double)size;
-  while (i < ARRAY_SIZE(prefixes) && s >= 1000.0)
+  while (i < prefixes.size() && s >= 1000.0)
   {
     s /= 1024.0;
     i++;
   }
 
   if (!i)
-    strLabel = StringUtils::Format("%.lf B", s);
-  else if (i == ARRAY_SIZE(prefixes))
+    strLabel = StringUtils::Format("{:.2f} B", s);
+  else if (i == prefixes.size())
   {
     if (s >= 1000.0)
-      strLabel = StringUtils::Format(">999.99 %cB", prefixes[i - 1]);
+      strLabel = StringUtils::Format(">999.99 {}B", prefixes[i - 1]);
     else
-      strLabel = StringUtils::Format("%.2lf %cB", s, prefixes[i - 1]);
+      strLabel = StringUtils::Format("{:.2f} {}B", s, prefixes[i - 1]);
   }
   else if (s >= 100.0)
-    strLabel = StringUtils::Format("%.1lf %cB", s, prefixes[i]);
+    strLabel = StringUtils::Format("{:.1f} {}B", s, prefixes[i]);
   else
-    strLabel = StringUtils::Format("%.2lf %cB", s, prefixes[i]);
+    strLabel = StringUtils::Format("{:.2f} {}B", s, prefixes[i]);
 
   return strLabel;
 }
@@ -1660,7 +1745,12 @@ void StringUtils::WordToDigits(std::string &word)
 std::string StringUtils::CreateUUID()
 {
 #ifdef HAVE_NEW_CROSSGUID
+#ifdef TARGET_ANDROID
+  JNIEnv* env = xbmc_jnienv();
+  return xg::newGuid(env).str();
+#else
   return xg::newGuid().str();
+#endif /* TARGET_ANDROID */
 #else
   static GuidGenerator guidGenerator;
   auto guid = guidGenerator.newGuid();
@@ -1734,6 +1824,26 @@ std::string StringUtils::Paramify(const std::string &param)
   return "\"" + result + "\"";
 }
 
+std::string StringUtils::DeParamify(const std::string& param)
+{
+  std::string result = param;
+
+  // remove double quotes around the whole string
+  if (StringUtils::StartsWith(result, "\"") && StringUtils::EndsWith(result, "\""))
+  {
+    result.erase(0, 1);
+    result.pop_back();
+
+    // unescape double quotes
+    StringUtils::Replace(result, "\\\"", "\"");
+
+    // unescape backspaces
+    StringUtils::Replace(result, "\\\\", "\\");
+  }
+
+  return result;
+}
+
 std::vector<std::string> StringUtils::Tokenize(const std::string &input, const std::string &delimiters)
 {
   std::vector<std::string> tokens;
@@ -1780,19 +1890,26 @@ void StringUtils::Tokenize(const std::string& input, std::vector<std::string>& t
   }
 }
 
-uint64_t StringUtils::ToUint64(const std::string& str, uint64_t fallback) noexcept
+uint32_t StringUtils::ToUint32(std::string_view str, uint32_t fallback /* = 0 */) noexcept
 {
-  std::istringstream iss(str);
-  uint64_t result(fallback);
-  iss >> result;
-  return result;
+  return NumberFromSS(str, fallback);
+}
+
+uint64_t StringUtils::ToUint64(std::string_view str, uint64_t fallback /* = 0 */) noexcept
+{
+  return NumberFromSS(str, fallback);
+}
+
+float StringUtils::ToFloat(std::string_view str, float fallback /* = 0.0f */) noexcept
+{
+  return NumberFromSS(str, fallback);
 }
 
 std::string StringUtils::FormatFileSize(uint64_t bytes)
 {
   const std::array<std::string, 6> units{{"B", "kB", "MB", "GB", "TB", "PB"}};
   if (bytes < 1000)
-    return Format("%" PRIu64 "B", bytes);
+    return Format("{}B", bytes);
 
   size_t i = 0;
   double value = static_cast<double>(bytes);
@@ -1802,11 +1919,31 @@ std::string StringUtils::FormatFileSize(uint64_t bytes)
     value /= 1024.0;
   }
   unsigned int decimals = value < 9.995 ? 2 : (value < 99.95 ? 1 : 0);
-  auto frmt = "%." + Format("%u", decimals) + "f%s";
-  return Format(frmt.c_str(), value, units[i].c_str());
+  return Format("{:.{}f}{}", value, decimals, units[i]);
+}
+
+bool StringUtils::Contains(std::string_view str,
+                           std::string_view keyword,
+                           bool isCaseInsensitive /* = true */)
+{
+  if (isCaseInsensitive)
+  {
+    auto itStr = std::search(str.begin(), str.end(), keyword.begin(), keyword.end(),
+                             [](unsigned char ch1, unsigned char ch2) {
+                               return std::toupper(ch1) == std::toupper(ch2);
+                             });
+    return (itStr != str.end());
+  }
+
+  return str.find(keyword) != std::string_view::npos;
 }
 
 const std::locale& StringUtils::GetOriginalLocale() noexcept
 {
   return g_langInfo.GetOriginalLocale();
+}
+
+std::string StringUtils::CreateFromCString(const char* cstr)
+{
+  return cstr != nullptr ? std::string(cstr) : std::string();
 }

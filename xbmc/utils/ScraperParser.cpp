@@ -8,7 +8,6 @@
 
 #include "ScraperParser.h"
 
-#include "addons/AddonManager.h"
 #include "guilib/LocalizeStrings.h"
 #include "RegExp.h"
 #include "HTMLUtil.h"
@@ -144,7 +143,7 @@ void CScraperParser::ReplaceBuffers(std::string& strDest)
   for (int i=MAX_SCRAPER_BUFFERS-1; i>=0; i--)
   {
     iIndex = 0;
-    std::string temp = StringUtils::Format("$$%i",i+1);
+    std::string temp = StringUtils::Format("$${}", i + 1);
     while ((iIndex = strDest.find(temp,iIndex)) != std::string::npos)
     {
       strDest.replace(strDest.begin()+iIndex,strDest.begin()+iIndex+temp.size(),m_param[i]);
@@ -274,7 +273,7 @@ void CScraperParser::ParseExpression(const std::string& input, std::string& dest
       if (iOptional > -1) // check that required param is there
       {
         char temp[12];
-        sprintf(temp,"\\%i",iOptional);
+        snprintf(temp, sizeof(temp), "\\%i", iOptional);
         std::string szParam = reg.GetReplaceString(temp);
         CRegExp reg2;
         reg2.RegComp("(.*)(\\\\\\(.*\\\\2.*)\\\\\\)(.*)");
@@ -299,7 +298,7 @@ void CScraperParser::ParseExpression(const std::string& input, std::string& dest
       int iLen = reg.GetFindLen();
       // nasty hack #1 - & means \0 in a replace string
       StringUtils::Replace(strCurOutput, "&","!!!AMPAMP!!!");
-      std::string result = reg.GetReplaceString(strCurOutput.c_str());
+      std::string result = reg.GetReplaceString(strCurOutput);
       if (!result.empty())
       {
         std::string strResult(result);
@@ -454,7 +453,7 @@ const std::string CScraperParser::Parse(const std::string& strTag,
   TiXmlElement* pChildElement = m_pRootElement->FirstChildElement(strTag.c_str());
   if(pChildElement == NULL)
   {
-    CLog::Log(LOGERROR,"%s: Could not find scraper function %s",__FUNCTION__,strTag.c_str());
+    CLog::Log(LOGERROR, "{}: Could not find scraper function {}", __FUNCTION__, strTag);
     return "";
   }
   int iResult = 1; // default to param 1
@@ -548,7 +547,7 @@ void CScraperParser::ConvertJSON(std::string &string)
     int pos = reg.GetSubStart(1);
     std::string szReplace(reg.GetMatch(1));
 
-    std::string replace = StringUtils::Format("&#x%s;", szReplace.c_str());
+    std::string replace = StringUtils::Format("&#x{};", szReplace);
     string.replace(string.begin()+pos-2, string.begin()+pos+4, replace);
   }
 
@@ -560,7 +559,7 @@ void CScraperParser::ConvertJSON(std::string &string)
     int pos2 = reg2.GetSubStart(2);
     std::string szHexValue(reg2.GetMatch(1));
 
-    std::string replace = StringUtils::Format("%li", strtol(szHexValue.c_str(), NULL, 16));
+    std::string replace = std::to_string(std::stol(szHexValue, NULL, 16));
     string.replace(string.begin()+pos1-2, string.begin()+pos2+reg2.GetSubLength(2), replace);
   }
 
@@ -594,7 +593,7 @@ void CScraperParser::GetBufferParams(bool* result, const char* attribute, bool d
 void CScraperParser::InsertToken(std::string& strOutput, int buf, const char* token)
 {
   char temp[4];
-  sprintf(temp,"\\%i",buf);
+  snprintf(temp, sizeof(temp), "\\%i", buf);
   size_t i2=0;
   while ((i2 = strOutput.find(temp,i2)) != std::string::npos)
   {

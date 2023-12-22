@@ -12,7 +12,7 @@
 #include "guilib/LocalizeStrings.h"
 #include "pvr/PVRManager.h"
 #include "pvr/addons/PVRClients.h"
-#include "pvr/guilib/PVRGUIActions.h"
+#include "pvr/guilib/PVRGUIActionsParentalControl.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/SettingsManager.h"
@@ -20,6 +20,7 @@
 #include "utils/log.h"
 
 #include <memory>
+#include <mutex>
 #include <set>
 #include <string>
 #include <utility>
@@ -62,9 +63,21 @@ CPVRSettings::~CPVRSettings()
   settings->GetSettingsManager()->UnregisterSettingsHandler(this);
 }
 
+void CPVRSettings::RegisterCallback(ISettingCallback* callback)
+{
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  m_callbacks.insert(callback);
+}
+
+void CPVRSettings::UnregisterCallback(ISettingCallback* callback)
+{
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  m_callbacks.erase(callback);
+}
+
 void CPVRSettings::Init(const std::set<std::string>& settingNames)
 {
-  for (auto settingName : settingNames)
+  for (const auto& settingName : settingNames)
   {
     SettingPtr setting = CServiceBroker::GetSettingsComponent()->GetSettings()->GetSetting(settingName);
     if (!setting)
@@ -73,7 +86,7 @@ void CPVRSettings::Init(const std::set<std::string>& settingNames)
       continue;
     }
 
-    CSingleLock lock(m_critSection);
+    std::unique_lock<CCriticalSection> lock(m_critSection);
     m_settings.insert(std::make_pair(settingName, setting->Clone(settingName)));
   }
 }
@@ -83,7 +96,7 @@ void CPVRSettings::OnSettingsLoaded()
   std::set<std::string> settingNames;
 
   {
-    CSingleLock lock(m_critSection);
+    std::unique_lock<CCriticalSection> lock(m_critSection);
     for (const auto& settingName : m_settings)
       settingNames.insert(settingName.first);
 
@@ -98,13 +111,18 @@ void CPVRSettings::OnSettingChanged(const std::shared_ptr<const CSetting>& setti
   if (setting == nullptr)
     return;
 
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   m_settings[setting->GetId()] = setting->Clone(setting->GetId());
+  const auto callbacks(m_callbacks);
+  lock.unlock();
+
+  for (const auto& callback : callbacks)
+    callback->OnSettingChanged(setting);
 }
 
 bool CPVRSettings::GetBoolValue(const std::string& settingName) const
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   auto settingIt = m_settings.find(settingName);
   if (settingIt != m_settings.end() && (*settingIt).second->GetType() == SettingType::Boolean)
   {
@@ -119,7 +137,7 @@ bool CPVRSettings::GetBoolValue(const std::string& settingName) const
 
 int CPVRSettings::GetIntValue(const std::string& settingName) const
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   auto settingIt = m_settings.find(settingName);
   if (settingIt != m_settings.end() && (*settingIt).second->GetType() == SettingType::Integer)
   {
@@ -134,7 +152,7 @@ int CPVRSettings::GetIntValue(const std::string& settingName) const
 
 std::string CPVRSettings::GetStringValue(const std::string& settingName) const
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   auto settingIt = m_settings.find(settingName);
   if (settingIt != m_settings.end() && (*settingIt).second->GetType() == SettingType::String)
   {
@@ -154,14 +172,14 @@ void CPVRSettings::MarginTimeFiller(const SettingConstPtr& /*setting*/,
 {
   list.clear();
 
-  static const int marginTimeValues[] =
-  {
-    0, 1, 3, 5, 10, 15, 20, 30, 60, 90, 120, 180 // minutes
+  static const int marginTimeValues[] = {
+      0, 1, 2, 3, 5, 10, 15, 20, 30, 60, 90, 120, 180 // minutes
   };
 
   for (int iValue : marginTimeValues)
   {
-    list.emplace_back(StringUtils::Format(g_localizeStrings.Get(14044).c_str(), iValue) /* %i min */, iValue);
+    list.emplace_back(StringUtils::Format(g_localizeStrings.Get(14044), iValue) /* {} min */,
+                      iValue);
   }
 }
 
@@ -208,5 +226,6 @@ bool CPVRSettings::CheckParentalPin(const std::string& condition,
                                     const std::shared_ptr<const CSetting>& setting,
                                     void* data)
 {
-  return CServiceBroker::GetPVRManager().GUIActions()->CheckParentalPIN() == ParentalCheckResult::SUCCESS;
+  return CServiceBroker::GetPVRManager().Get<PVR::GUI::Parental>().CheckParentalPIN() ==
+         ParentalCheckResult::SUCCESS;
 }

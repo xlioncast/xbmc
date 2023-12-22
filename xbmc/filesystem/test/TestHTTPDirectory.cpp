@@ -43,7 +43,7 @@ using namespace XFILE;
 #define SAMPLE_ITEM_1_LABEL "folder1"
 #define SAMPLE_ITEM_2_LABEL "folder2"
 #define SAMPLE_ITEM_3_LABEL "sample3: the sampling.mpg"
-#define SAMPLE_ITEM_4_LABEL "sample4.mpg"
+#define SAMPLE_ITEM_4_LABEL "sample & samplability 4.mpg"
 #define SAMPLE_ITEM_5_LABEL "sample5.mpg"
 #define SAMPLE_ITEM_6_LABEL "sample6.mpg"
 
@@ -72,7 +72,7 @@ protected:
     std::uniform_int_distribution<uint16_t> dist(49152, 65535);
     m_webServerPort = dist(mt);
 
-    m_baseUrl = StringUtils::Format("http://" WEBSERVER_HOST ":%u", m_webServerPort);
+    m_baseUrl = StringUtils::Format("http://" WEBSERVER_HOST ":{}", m_webServerPort);
   }
 
   ~TestHTTPDirectory() override = default;

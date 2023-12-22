@@ -44,7 +44,6 @@ bool CRendererVTB::Register()
 
 CRendererVTB::CRendererVTB()
 {
-  m_textureCache = nullptr;
   auto winSystem = dynamic_cast<WIN_SYSTEM_CLASS*>(CServiceBroker::GetWinSystem());
   m_glContext = winSystem->GetEAGLContextObj();
   CVReturn ret = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault,
@@ -54,7 +53,7 @@ CRendererVTB::CRendererVTB()
                                               &m_textureCache);
   if (ret != kCVReturnSuccess)
   {
-    CLog::Log(LOGERROR, "CRendererVTB::CRendererVTB - Error creating texture cache (err: %d)", ret);
+    CLog::Log(LOGERROR, "CRendererVTB::CRendererVTB - Error creating texture cache (err: {})", ret);
   }
 
   for (auto &buf : m_vtbBuffers)
@@ -205,7 +204,7 @@ bool CRendererVTB::UploadTexture(int index)
 
   if (ret != kCVReturnSuccess)
   {
-    CLog::Log(LOGERROR, "CRendererVTB::UploadTexture - Error uploading texture Y (err: %d)", ret);
+    CLog::Log(LOGERROR, "CRendererVTB::UploadTexture - Error uploading texture Y (err: {})", ret);
     return false;
   }
 
@@ -218,7 +217,7 @@ bool CRendererVTB::UploadTexture(int index)
 
   if (ret != kCVReturnSuccess)
   {
-    CLog::Log(LOGERROR, "CRendererVTB::UploadTexture - Error uploading texture UV (err: %d)", ret);
+    CLog::Log(LOGERROR, "CRendererVTB::UploadTexture - Error uploading texture UV (err: {})", ret);
     return false;
   }
 

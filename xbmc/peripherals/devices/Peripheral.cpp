@@ -9,7 +9,9 @@
 #include "Peripheral.h"
 
 #include "Util.h"
-#include "filesystem/File.h"
+#include "XBDateTime.h"
+#include "games/controllers/Controller.h"
+#include "games/controllers/ControllerLayout.h"
 #include "guilib/LocalizeStrings.h"
 #include "input/joysticks/interfaces/IInputHandler.h"
 #include "peripherals/Peripherals.h"
@@ -18,9 +20,11 @@
 #include "peripherals/addons/PeripheralAddon.h"
 #include "peripherals/bus/PeripheralBus.h"
 #include "peripherals/bus/virtual/PeripheralBusAddon.h"
+#include "settings/SettingAddon.h"
 #include "settings/lib/Setting.h"
+#include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
-#include "utils/XBMCTinyXML.h"
+#include "utils/XBMCTinyXML2.h"
 #include "utils/XMLUtils.h"
 #include "utils/log.h"
 
@@ -50,9 +54,6 @@ CPeripheral::CPeripheral(CPeripherals& manager,
     m_iVendorId(scanResult.m_iVendorId),
     m_iProductId(scanResult.m_iProductId),
     m_strVersionInfo(g_localizeStrings.Get(13205)), // "unknown"
-    m_bInitialised(false),
-    m_bHidden(false),
-    m_bError(false),
     m_bus(bus)
 {
   PeripheralTypeTranslator::FormatHexString(scanResult.m_iVendorId, m_strVendorId);
@@ -60,15 +61,15 @@ CPeripheral::CPeripheral(CPeripherals& manager,
   if (scanResult.m_iSequence > 0)
   {
     m_strFileLocation =
-        StringUtils::Format("peripherals://%s/%s_%d.dev",
+        StringUtils::Format("peripherals://{}/{}_{}.dev",
                             PeripheralTypeTranslator::BusTypeToString(scanResult.m_busType),
-                            scanResult.m_strLocation.c_str(), scanResult.m_iSequence);
+                            scanResult.m_strLocation, scanResult.m_iSequence);
   }
   else
   {
     m_strFileLocation = StringUtils::Format(
-        "peripherals://%s/%s.dev", PeripheralTypeTranslator::BusTypeToString(scanResult.m_busType),
-        scanResult.m_strLocation.c_str());
+        "peripherals://{}/{}.dev", PeripheralTypeTranslator::BusTypeToString(scanResult.m_busType),
+        scanResult.m_strLocation);
   }
 }
 
@@ -147,25 +148,23 @@ bool CPeripheral::Initialise(void)
 
   if (m_iVendorId == 0x0000 && m_iProductId == 0x0000)
   {
-    m_strSettingsFile =
-        StringUtils::Format("special://profile/peripheral_data/%s_%s.xml",
-                            PeripheralTypeTranslator::BusTypeToString(m_mappedBusType),
-                            CUtil::MakeLegalFileName(safeDeviceName, LEGAL_WIN32_COMPAT).c_str());
+    m_strSettingsFile = StringUtils::Format(
+        "special://profile/peripheral_data/{}_{}.xml",
+        PeripheralTypeTranslator::BusTypeToString(m_mappedBusType),
+        CUtil::MakeLegalFileName(std::move(safeDeviceName), LEGAL_WIN32_COMPAT));
   }
   else
   {
     // Backwards compatibility - old settings files didn't include the device name
-    m_strSettingsFile =
-        StringUtils::Format("special://profile/peripheral_data/%s_%s_%s.xml",
-                            PeripheralTypeTranslator::BusTypeToString(m_mappedBusType),
-                            m_strVendorId.c_str(), m_strProductId.c_str());
+    m_strSettingsFile = StringUtils::Format(
+        "special://profile/peripheral_data/{}_{}_{}.xml",
+        PeripheralTypeTranslator::BusTypeToString(m_mappedBusType), m_strVendorId, m_strProductId);
 
-    if (!XFILE::CFile::Exists(m_strSettingsFile))
-      m_strSettingsFile =
-          StringUtils::Format("special://profile/peripheral_data/%s_%s_%s_%s.xml",
-                              PeripheralTypeTranslator::BusTypeToString(m_mappedBusType),
-                              m_strVendorId.c_str(), m_strProductId.c_str(),
-                              CUtil::MakeLegalFileName(safeDeviceName, LEGAL_WIN32_COMPAT).c_str());
+    if (!CFileUtils::Exists(m_strSettingsFile))
+      m_strSettingsFile = StringUtils::Format(
+          "special://profile/peripheral_data/{}_{}_{}_{}.xml",
+          PeripheralTypeTranslator::BusTypeToString(m_mappedBusType), m_strVendorId, m_strProductId,
+          CUtil::MakeLegalFileName(std::move(safeDeviceName), LEGAL_WIN32_COMPAT));
   }
 
   LoadPersistedSettings();
@@ -181,9 +180,8 @@ bool CPeripheral::Initialise(void)
 
   if (bReturn)
   {
-    CLog::Log(LOGDEBUG, "%s - initialised peripheral on '%s' with %d features and %d sub devices",
-              __FUNCTION__, m_strLocation.c_str(), (int)m_features.size(),
-              (int)m_subDevices.size());
+    CLog::Log(LOGDEBUG, "{} - initialised peripheral on '{}' with {} features and {} sub devices",
+              __FUNCTION__, m_strLocation, (int)m_features.size(), (int)m_subDevices.size());
     m_bInitialised = true;
   }
 
@@ -203,6 +201,7 @@ bool CPeripheral::IsMultiFunctional(void) const
 std::vector<std::shared_ptr<CSetting>> CPeripheral::GetSettings(void) const
 {
   std::vector<PeripheralDeviceSetting> tmpSettings;
+  tmpSettings.reserve(m_settings.size());
   for (const auto& it : m_settings)
     tmpSettings.push_back(it.second);
   sort(tmpSettings.begin(), tmpSettings.end(), SortBySettingsOrder());
@@ -218,7 +217,7 @@ void CPeripheral::AddSetting(const std::string& strKey, const SettingConstPtr& s
 {
   if (!setting)
   {
-    CLog::Log(LOGERROR, "%s - invalid setting", __FUNCTION__);
+    CLog::Log(LOGERROR, "{} - invalid setting", __FUNCTION__);
     return;
   }
 
@@ -268,12 +267,21 @@ void CPeripheral::AddSetting(const std::string& strKey, const SettingConstPtr& s
       break;
       case SettingType::String:
       {
-        std::shared_ptr<const CSettingString> mappedSetting =
-            std::static_pointer_cast<const CSettingString>(setting);
-        std::shared_ptr<CSettingString> stringSetting =
-            std::make_shared<CSettingString>(strKey, *mappedSetting);
-        if (stringSetting)
+        if (std::dynamic_pointer_cast<const CSettingAddon>(setting))
         {
+          std::shared_ptr<const CSettingAddon> mappedSetting =
+              std::static_pointer_cast<const CSettingAddon>(setting);
+          std::shared_ptr<CSettingAddon> addonSetting =
+              std::make_shared<CSettingAddon>(strKey, *mappedSetting);
+          addonSetting->SetVisible(mappedSetting->IsVisible());
+          deviceSetting.m_setting = addonSetting;
+        }
+        else
+        {
+          std::shared_ptr<const CSettingString> mappedSetting =
+              std::static_pointer_cast<const CSettingString>(setting);
+          std::shared_ptr<CSettingString> stringSetting =
+              std::make_shared<CSettingString>(strKey, *mappedSetting);
           stringSetting->SetVisible(mappedSetting->IsVisible());
           deviceSetting.m_setting = stringSetting;
         }
@@ -422,8 +430,8 @@ bool CPeripheral::SetSetting(const std::string& strKey, float fValue)
         std::static_pointer_cast<CSettingNumber>((*it).second.m_setting);
     if (floatSetting)
     {
-      bChanged = floatSetting->GetValue() != fValue;
-      floatSetting->SetValue(fValue);
+      bChanged = floatSetting->GetValue() != static_cast<double>(fValue);
+      floatSetting->SetValue(static_cast<double>(fValue));
       if (bChanged && m_bInitialised)
         m_changedSettings.insert(strKey);
     }
@@ -476,13 +484,19 @@ bool CPeripheral::SetSetting(const std::string& strKey, const std::string& strVa
 
 void CPeripheral::PersistSettings(bool bExiting /* = false */)
 {
-  CXBMCTinyXML doc;
-  TiXmlElement node("settings");
+  CXBMCTinyXML2 doc;
+  auto* node = doc.NewElement("settings");
+  if (node == nullptr)
+    return;
+
   doc.InsertEndChild(node);
   for (const auto& itr : m_settings)
   {
-    TiXmlElement nodeSetting("setting");
-    nodeSetting.SetAttribute("id", itr.first.c_str());
+    auto* nodeSetting = doc.NewElement("setting");
+    if (nodeSetting == nullptr)
+      continue;
+
+    nodeSetting->SetAttribute("id", itr.first.c_str());
     std::string strValue;
     switch (itr.second.m_setting->GetType())
     {
@@ -499,7 +513,7 @@ void CPeripheral::PersistSettings(bool bExiting /* = false */)
         std::shared_ptr<CSettingInt> intSetting =
             std::static_pointer_cast<CSettingInt>(itr.second.m_setting);
         if (intSetting)
-          strValue = StringUtils::Format("%d", intSetting->GetValue());
+          strValue = std::to_string(intSetting->GetValue());
       }
       break;
       case SettingType::Number:
@@ -507,7 +521,7 @@ void CPeripheral::PersistSettings(bool bExiting /* = false */)
         std::shared_ptr<CSettingNumber> floatSetting =
             std::static_pointer_cast<CSettingNumber>(itr.second.m_setting);
         if (floatSetting)
-          strValue = StringUtils::Format("%.2f", floatSetting->GetValue());
+          strValue = StringUtils::Format("{:.2f}", floatSetting->GetValue());
       }
       break;
       case SettingType::Boolean:
@@ -515,13 +529,13 @@ void CPeripheral::PersistSettings(bool bExiting /* = false */)
         std::shared_ptr<CSettingBool> boolSetting =
             std::static_pointer_cast<CSettingBool>(itr.second.m_setting);
         if (boolSetting)
-          strValue = StringUtils::Format("%d", boolSetting->GetValue() ? 1 : 0);
+          strValue = std::to_string(boolSetting->GetValue() ? 1 : 0);
       }
       break;
       default:
         break;
     }
-    nodeSetting.SetAttribute("value", strValue.c_str());
+    nodeSetting->SetAttribute("value", strValue.c_str());
     doc.RootElement()->InsertEndChild(nodeSetting);
   }
 
@@ -537,11 +551,11 @@ void CPeripheral::PersistSettings(bool bExiting /* = false */)
 
 void CPeripheral::LoadPersistedSettings(void)
 {
-  CXBMCTinyXML doc;
+  CXBMCTinyXML2 doc;
   if (doc.LoadFile(m_strSettingsFile))
   {
-    const TiXmlElement* setting = doc.RootElement()->FirstChildElement("setting");
-    while (setting)
+    const auto* setting = doc.RootElement()->FirstChildElement("setting");
+    while (setting != nullptr)
     {
       std::string strId = XMLUtils::GetAttribute(setting, "id");
       std::string strValue = XMLUtils::GetAttribute(setting, "value");
@@ -672,9 +686,15 @@ void CPeripheral::UnregisterJoystickButtonMapper(IButtonMapper* mapper)
 
 std::string CPeripheral::GetIcon() const
 {
-  std::string icon = "DefaultAddon.png";
+  std::string icon;
 
-  if (m_busType == PERIPHERAL_BUS_ADDON)
+  // Try controller profile
+  const GAME::ControllerPtr controller = ControllerProfile();
+  if (controller)
+    icon = controller->Layout().ImagePath();
+
+  // Try add-on
+  if (icon.empty() && m_busType == PERIPHERAL_BUS_ADDON)
   {
     CPeripheralBusAddon* bus = static_cast<CPeripheralBusAddon*>(m_bus);
 
@@ -688,6 +708,10 @@ std::string CPeripheral::GetIcon() const
     }
   }
 
+  // Fallback
+  if (icon.empty())
+    icon = "DefaultAddon.png";
+
   return icon;
 }
 
@@ -699,4 +723,9 @@ bool CPeripheral::operator==(const PeripheralScanResult& right) const
 bool CPeripheral::operator!=(const PeripheralScanResult& right) const
 {
   return !(*this == right);
+}
+
+CDateTime CPeripheral::LastActive()
+{
+  return CDateTime();
 }

@@ -16,7 +16,6 @@
 #include "Util.h"
 #include "dialogs/GUIDialogBusy.h"
 #include "dialogs/GUIDialogFileBrowser.h"
-#include "filesystem/File.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
@@ -29,11 +28,11 @@
 #include "settings/MediaSourceSettings.h"
 #include "settings/SettingsComponent.h"
 #include "storage/MediaManager.h"
-
-using namespace XFILE;
+#include "utils/FileUtils.h"
 
 #define CONTROL_BTN_REFRESH       6
 #define CONTROL_USERRATING        7
+#define CONTROL_BTN_PLAY 8
 #define CONTROL_BTN_GET_THUMB     10
 #define CONTROL_ALBUMINFO         12
 
@@ -138,7 +137,7 @@ bool CGUIDialogSongInfo::OnMessage(CGUIMessage& message)
         // Send a message to all windows to tell them to update the fileitem
         // This communicates the rating change to the music lib window, current playlist and OSD.
         // The music lib window item is updated to but changes to the rating when it is the sort
-        // do not show on screen until refresh() that fetchs the list from scratch, sorts etc.
+        // do not show on screen until refresh() that fetches the list from scratch, sorts etc.
         CGUIMessage msg(GUI_MSG_NOTIFY_ALL, 0, 0, GUI_MSG_UPDATE_ITEM, 0, m_song);
         CServiceBroker::GetGUI()->GetWindowManager().SendMessage(msg);
       }
@@ -185,6 +184,12 @@ bool CGUIDialogSongInfo::OnMessage(CGUIMessage& message)
           return true;
         }
       }
+      else if (iControl == CONTROL_BTN_PLAY)
+      {
+        OnPlaySong(m_song);
+        return true;
+      }
+      return false;
     }
     break;
   }
@@ -247,6 +252,7 @@ void CGUIDialogSongInfo::OnInitWindow()
   SET_CONTROL_LABEL(CONTROL_USERRATING, 38023);
   SET_CONTROL_LABEL(CONTROL_BTN_GET_THUMB, 13511);
   SET_CONTROL_LABEL(CONTROL_ALBUMINFO, 10523);
+  SET_CONTROL_LABEL(CONTROL_BTN_PLAY, 208);
 
   CGUIDialog::OnInitWindow();
 }
@@ -281,13 +287,14 @@ bool CGUIDialogSongInfo::SetSong(CFileItem* item)
   m_event.Reset();
   m_cancelled = false;  // SetSong happens before win_init
   // In a separate job fetch song info and fill list of art types.
-  int jobid = CJobManager::GetInstance().AddJob(new CGetSongInfoJob(), nullptr, CJob::PRIORITY_LOW);
+  int jobid =
+      CServiceBroker::GetJobManager()->AddJob(new CGetSongInfoJob(), nullptr, CJob::PRIORITY_LOW);
 
-  // Wait to get all data before show, allowing user to to cancel if fetch is slow
+  // Wait to get all data before show, allowing user to cancel if fetch is slow
   if (!CGUIDialogBusy::WaitOnEvent(m_event, TIME_TO_BUSY_DIALOG))
   {
     // Cancel job still waiting in queue (unlikely)
-    CJobManager::GetInstance().CancelJob(jobid);
+    CServiceBroker::GetJobManager()->CancelJob(jobid);
     // Flag to stop job already in progress
     m_cancelled = true;
     return false;
@@ -372,7 +379,7 @@ void CGUIDialogSongInfo::OnGetArt()
       CFileItem item(m_song->GetMusicInfoTag()->GetURL(), false);
       localThumb = item.GetUserMusicThumb(true);
     }
-    if (CFile::Exists(localThumb))
+    if (CFileUtils::Exists(localThumb))
     {
       CFileItemPtr item(new CFileItem("thumb://Local", false));
       item->SetArt("thumb", localThumb);
@@ -388,10 +395,10 @@ void CGUIDialogSongInfo::OnGetArt()
     std::string thumb(item->GetArt("thumb"));
     if (thumb.empty())
       continue;
-    CTextureCache::GetInstance().ClearCachedImage(thumb);
+    CServiceBroker::GetTextureCache()->ClearCachedImage(thumb);
     // Remove any thumbnail of local image too (created when browsing files)
     std::string thumbthumb(CTextureUtils::GetWrappedThumbURL(thumb));
-    CTextureCache::GetInstance().ClearCachedImage(thumbthumb);
+    CServiceBroker::GetTextureCache()->ClearCachedImage(thumbthumb);
   }
 
   if (bHasArt && !bFallback)
@@ -430,7 +437,7 @@ void CGUIDialogSongInfo::OnGetArt()
       newArt = localThumb;
 //    else if (result == "thumb://Embedded")
 //      newArt = embeddedArt;
-    else if (CFile::Exists(result))
+    else if (CFileUtils::Exists(result))
       newArt = result;
     else // none
       newArt.clear();
@@ -507,5 +514,10 @@ void CGUIDialogSongInfo::ShowFor(CFileItem* pItem)
       }
     }
   }
+}
 
+void CGUIDialogSongInfo::OnPlaySong(const std::shared_ptr<CFileItem>& item)
+{
+  Close(true);
+  MUSIC_UTILS::PlayItem(item, "");
 }

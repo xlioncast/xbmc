@@ -45,7 +45,7 @@ float CBaseRenderer::GetAspectRatio() const
   return m_sourceFrameRatio * width / height * m_sourceHeight / m_sourceWidth;
 }
 
-void CBaseRenderer::GetVideoRect(CRect &source, CRect &dest, CRect &view)
+void CBaseRenderer::GetVideoRect(CRect& source, CRect& dest, CRect& view) const
 {
   source = m_sourceRect;
   dest = m_destRect;
@@ -104,13 +104,19 @@ void CBaseRenderer::restoreRotatedCoords()
     m_rotatedDestCoords[i] = m_savedRotatedDestCoords[i];
 }
 
-void CBaseRenderer::CalcNormalRenderRect(float offsetX, float offsetY, float width, float height,
-                                         float inputFrameRatio, float zoomAmount, float verticalShift)
+void CBaseRenderer::CalcDestRect(float offsetX,
+                                 float offsetY,
+                                 float width,
+                                 float height,
+                                 float inputFrameRatio,
+                                 float zoomAmount,
+                                 float verticalShift,
+                                 CRect& destRect)
 {
   // if view window is empty, set empty destination
   if (height == 0 || width == 0)
   {
-    m_destRect.SetRect(0.0f, 0.0f, 0.0f, 0.0f);
+    destRect.SetRect(0.0f, 0.0f, 0.0f, 0.0f);
     return;
   }
 
@@ -152,7 +158,7 @@ void CBaseRenderer::CalcNormalRenderRect(float offsetX, float offsetY, float wid
   }
   else
   {
-    // maximize the movie hight
+    // maximize the movie height
     newHeight = std::min(width, height);
     newWidth = newHeight / outputFrameRatio;
     if (newWidth > width)
@@ -190,13 +196,30 @@ void CBaseRenderer::CalcNormalRenderRect(float offsetX, float offsetY, float wid
   else if (verticalShift < -1.0f)
     posY += shiftRange * (verticalShift + 1.0f);
 
-  m_destRect.x1 = (float)MathUtils::round_int(posX + offsetX);
-  m_destRect.x2 = m_destRect.x1 + MathUtils::round_int(newWidth);
-  m_destRect.y1 = (float)MathUtils::round_int(posY + offsetY);
-  m_destRect.y2 = m_destRect.y1 + MathUtils::round_int(newHeight);
+  destRect.x1 = static_cast<float>(MathUtils::round_int(static_cast<double>(posX + offsetX)));
+  destRect.x2 = destRect.x1 + MathUtils::round_int(static_cast<double>(newWidth));
+  destRect.y1 = static_cast<float>(MathUtils::round_int(static_cast<double>(posY + offsetY)));
+  destRect.y2 = destRect.y1 + MathUtils::round_int(static_cast<double>(newHeight));
+}
+
+void CBaseRenderer::CalcNormalRenderRect(float offsetX,
+                                         float offsetY,
+                                         float width,
+                                         float height,
+                                         float inputFrameRatio,
+                                         float zoomAmount,
+                                         float verticalShift)
+{
+  CalcDestRect(offsetX, offsetY, width, height, inputFrameRatio, zoomAmount, verticalShift,
+               m_destRect);
+
+  // bail out if view window is empty
+  if (height == 0 || width == 0)
+    return;
 
   // clip as needed
-  if (!(CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenVideo() || CServiceBroker::GetWinSystem()->GetGfxContext().IsCalibrating()))
+  if (m_alwaysClip || !(CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenVideo() ||
+                        CServiceBroker::GetWinSystem()->GetGfxContext().IsCalibrating()))
   {
     CRect original(m_destRect);
     m_destRect.Intersect(CRect(offsetX, offsetY, offsetX + width, offsetY + height));
@@ -348,7 +371,7 @@ EShaderFormat CBaseRenderer::GetShaderFormat()
   else if (m_format == AV_PIX_FMT_UYVY422)
     ret = SHADER_UYVY;
   else
-    CLog::Log(LOGERROR, "CBaseRenderer::GetShaderFormat - unsupported format %d", m_format);
+    CLog::Log(LOGERROR, "CBaseRenderer::GetShaderFormat - unsupported format {}", m_format);
 
   return ret;
 }
@@ -410,7 +433,8 @@ void CBaseRenderer::SetViewMode(int viewMode)
   { // super zoom
     float stretchAmount = (screenWidth / screenHeight) * info.fPixelRatio / sourceFrameRatio;
     CDisplaySettings::GetInstance().SetPixelRatio(pow(stretchAmount, float(2.0/3.0)));
-    CDisplaySettings::GetInstance().SetZoomAmount(pow(stretchAmount, float((stretchAmount < 1.0) ? -1.0/3.0 : 1.0/3.0)));
+    CDisplaySettings::GetInstance().SetZoomAmount(
+        pow(stretchAmount, float((stretchAmount < 1.0f) ? -1.0 / 3.0 : 1.0 / 3.0)));
     CDisplaySettings::GetInstance().SetNonLinearStretched(true);
   }
   else if (m_videoSettings.m_ViewMode == ViewModeStretch16x9 ||
@@ -476,6 +500,11 @@ void CBaseRenderer::SetViewMode(int viewMode)
 void CBaseRenderer::MarkDirty()
 {
   CServiceBroker::GetGUI()->GetWindowManager().MarkDirty(m_destRect);
+}
+
+void CBaseRenderer::EnableAlwaysClip()
+{
+  m_alwaysClip = true;
 }
 
 void CBaseRenderer::SetVideoSettings(const CVideoSettings &settings)

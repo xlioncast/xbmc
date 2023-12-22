@@ -29,7 +29,7 @@ public:
   CGUIFadeLabelControl(int parentID, int controlID, float posX, float posY, float width, float height, const CLabelInfo& labelInfo, bool scrollOut, unsigned int timeToDelayAtEnd, bool resetOnLabelChange, bool randomized);
   CGUIFadeLabelControl(const CGUIFadeLabelControl &from);
   ~CGUIFadeLabelControl(void) override;
-  CGUIFadeLabelControl *Clone() const override { return new CGUIFadeLabelControl(*this); };
+  CGUIFadeLabelControl* Clone() const override { return new CGUIFadeLabelControl(*this); }
 
   void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
   void Render() override;
@@ -42,7 +42,7 @@ public:
   bool AllLabelsShown() const { return m_allLabelsShown; }
 
 protected:
-  bool UpdateColors() override;
+  bool UpdateColors(const CGUIListItem* item) override;
   std::string GetDescription() const override;
   void AddLabel(const std::string &label);
 

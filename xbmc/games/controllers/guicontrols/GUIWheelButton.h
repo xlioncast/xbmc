@@ -14,12 +14,15 @@ namespace KODI
 {
 namespace GAME
 {
+/*!
+ * \ingroup games
+ */
 class CGUIWheelButton : public CGUIFeatureButton
 {
 public:
   CGUIWheelButton(const CGUIButtonControl& buttonTemplate,
                   IConfigurationWizard* wizard,
-                  const CControllerFeature& feature,
+                  const CPhysicalFeature& feature,
                   unsigned int index);
 
   ~CGUIWheelButton() override = default;

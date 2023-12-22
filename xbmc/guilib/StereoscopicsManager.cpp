@@ -13,17 +13,18 @@
 
 #include "StereoscopicsManager.h"
 
-#include "Application.h"
 #include "GUIComponent.h"
-#include "GUIInfoManager.h"
 #include "GUIUserMessages.h"
 #include "ServiceBroker.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationPlayer.h"
 #include "cores/DataCacheCore.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "dialogs/GUIDialogSelect.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
-#include "input/Key.h"
+#include "input/actions/Action.h"
+#include "input/actions/ActionIDs.h"
 #include "messaging/ApplicationMessenger.h"
 #include "rendering/RenderSystem.h"
 #include "settings/AdvancedSettings.h"
@@ -37,8 +38,6 @@
 #include "utils/log.h"
 
 #include <stdlib.h>
-
-using namespace KODI::MESSAGING;
 
 struct StereoModeMap
 {
@@ -87,11 +86,9 @@ static const struct StereoModeMap StringToGuiModeMap[] =
   {}
 };
 
-
 CStereoscopicsManager::CStereoscopicsManager()
+  : m_settings(CServiceBroker::GetSettingsComponent()->GetSettings())
 {
-  m_settings = CServiceBroker::GetSettingsComponent()->GetSettings();
-
   m_stereoModeSetByUser = RENDER_STEREO_MODE_UNDEFINED;
   m_lastStereoModeSetByUser = RENDER_STEREO_MODE_UNDEFINED;
 
@@ -167,7 +164,9 @@ std::string CStereoscopicsManager::DetectStereoModeByString(const std::string &n
 
   if (!re.RegComp(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_3d.c_str()))
   {
-    CLog::Log(LOGERROR, "%s: Invalid RegExp for matching 3d content:'%s'", __FUNCTION__, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_3d.c_str());
+    CLog::Log(
+        LOGERROR, "{}: Invalid RegExp for matching 3d content:'{}'", __FUNCTION__,
+        CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_3d);
     return stereoMode;
   }
 
@@ -176,7 +175,9 @@ std::string CStereoscopicsManager::DetectStereoModeByString(const std::string &n
 
   if (!re.RegComp(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_sbs.c_str()))
   {
-    CLog::Log(LOGERROR, "%s: Invalid RegExp for matching 3d SBS content:'%s'", __FUNCTION__, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_sbs.c_str());
+    CLog::Log(
+        LOGERROR, "{}: Invalid RegExp for matching 3d SBS content:'{}'", __FUNCTION__,
+        CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_sbs);
     return stereoMode;
   }
 
@@ -188,7 +189,9 @@ std::string CStereoscopicsManager::DetectStereoModeByString(const std::string &n
 
   if (!re.RegComp(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_tab.c_str()))
   {
-    CLog::Log(LOGERROR, "%s: Invalid RegExp for matching 3d TAB content:'%s'", __FUNCTION__, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_tab.c_str());
+    CLog::Log(
+        LOGERROR, "{}: Invalid RegExp for matching 3d TAB content:'{}'", __FUNCTION__,
+        CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_tab);
     return stereoMode;
   }
 
@@ -257,7 +260,8 @@ RENDER_STEREO_MODE CStereoscopicsManager::GetStereoModeOfPlayingVideo(void) cons
       mode = static_cast<RENDER_STEREO_MODE>(convertedMode);
   }
 
-  CLog::Log(LOGDEBUG, "StereoscopicsManager: autodetected stereo mode for movie mode %s is: %s", playerMode.c_str(), ConvertGuiStereoModeToString(mode));
+  CLog::Log(LOGDEBUG, "StereoscopicsManager: autodetected stereo mode for movie mode {} is: {}",
+            playerMode, ConvertGuiStereoModeToString(mode));
   return mode;
 }
 
@@ -387,7 +391,8 @@ void CStereoscopicsManager::OnSettingChanged(const std::shared_ptr<const CSettin
   if (settingId == CSettings::SETTING_VIDEOSCREEN_STEREOSCOPICMODE)
   {
     RENDER_STEREO_MODE mode = GetStereoMode();
-    CLog::Log(LOGDEBUG, "StereoscopicsManager: stereo mode setting changed to %s", ConvertGuiStereoModeToString(mode));
+    CLog::Log(LOGDEBUG, "StereoscopicsManager: stereo mode setting changed to {}",
+              ConvertGuiStereoModeToString(mode));
     ApplyStereoMode(mode);
   }
 }
@@ -487,11 +492,15 @@ bool CStereoscopicsManager::OnAction(const CAction &action)
 void CStereoscopicsManager::ApplyStereoMode(const RENDER_STEREO_MODE &mode, bool notify)
 {
   RENDER_STEREO_MODE currentMode = CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode();
-  CLog::Log(LOGDEBUG, "StereoscopicsManager::ApplyStereoMode: trying to apply stereo mode. Current: %s | Target: %s", ConvertGuiStereoModeToString(currentMode), ConvertGuiStereoModeToString(mode));
+  CLog::Log(LOGDEBUG,
+            "StereoscopicsManager::ApplyStereoMode: trying to apply stereo mode. Current: {} | "
+            "Target: {}",
+            ConvertGuiStereoModeToString(currentMode), ConvertGuiStereoModeToString(mode));
   if (currentMode != mode)
   {
     CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoMode(mode);
-    CLog::Log(LOGDEBUG, "StereoscopicsManager: stereo mode changed to %s", ConvertGuiStereoModeToString(mode));
+    CLog::Log(LOGDEBUG, "StereoscopicsManager: stereo mode changed to {}",
+              ConvertGuiStereoModeToString(mode));
     if (notify)
       CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info, g_localizeStrings.Get(36501), GetLabelForStereoMode(mode));
   }
@@ -501,7 +510,9 @@ std::string CStereoscopicsManager::GetVideoStereoMode() const
 {
   std::string playerMode;
 
-  if (g_application.GetAppPlayer().IsPlaying())
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsPlaying())
     playerMode = CServiceBroker::GetDataCacheCore().GetVideoStereoMode();
 
   return playerMode;
@@ -559,7 +570,7 @@ void CStereoscopicsManager::OnStreamChange()
   {
   case STEREOSCOPIC_PLAYBACK_MODE_ASK: // Ask
     {
-      CApplicationMessenger::GetInstance().SendMsg(TMSG_MEDIA_PAUSE);
+      CServiceBroker::GetAppMessenger()->SendMsg(TMSG_MEDIA_PAUSE);
 
       CGUIDialogSelect* pDlgSelect = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(WINDOW_DIALOG_SELECT);
       pDlgSelect->Reset();
@@ -596,7 +607,7 @@ void CStereoscopicsManager::OnStreamChange()
         SetStereoModeByUser(mode);
       }
 
-      CApplicationMessenger::GetInstance().SendMsg(TMSG_MEDIA_UNPAUSE);
+      CServiceBroker::GetAppMessenger()->SendMsg(TMSG_MEDIA_UNPAUSE);
     }
     break;
   case STEREOSCOPIC_PLAYBACK_MODE_PREFERRED: // Stereoscopic

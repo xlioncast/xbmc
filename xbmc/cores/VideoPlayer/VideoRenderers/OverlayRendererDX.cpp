@@ -6,24 +6,27 @@
  *  See LICENSES/README.md for more information.
  */
 
-#include "Application.h"
-#include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlayImage.h"
-#include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlaySpu.h"
-#include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlaySSA.h"
-#include "guilib/D3DResource.h"
-#include "windowing/GraphicContext.h"
-#include "guilib/GUIShaderDX.h"
+#include "OverlayRendererDX.h"
+
 #include "OverlayRenderer.h"
 #include "OverlayRendererUtil.h"
-#include "OverlayRendererDX.h"
-#include "rendering/dx/RenderContext.h"
+#include "application/Application.h"
+#include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlayImage.h"
+#include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlaySSA.h"
+#include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlaySpu.h"
+#include "guilib/D3DResource.h"
+#include "guilib/GUIShaderDX.h"
 #include "rendering/dx/DeviceResources.h"
+#include "rendering/dx/RenderContext.h"
 #include "utils/log.h"
+#include "windowing/GraphicContext.h"
 
 #ifndef ASSERT
 #include <crtdbg.h>
 #define ASSERT(f) _ASSERTE((f))
 #endif
+
+#include <cmath>
 
 using namespace OVERLAY;
 using namespace DirectX;
@@ -39,14 +42,14 @@ static bool LoadTexture(int width, int height, int stride
 {
   if (!texture->Create(width, height, 1, D3D11_USAGE_IMMUTABLE, format, pixels, stride))
   {
-    CLog::Log(LOGERROR, "%s - failed to allocate texture.", __FUNCTION__);
+    CLog::Log(LOGERROR, "{} - failed to allocate texture.", __FUNCTION__);
     return false;
   }
 
   D3D11_TEXTURE2D_DESC desc = {};
   if (!texture->GetDesc(&desc))
   {
-    CLog::Log(LOGERROR, "%s - failed to get texture description.", __FUNCTION__);
+    CLog::Log(LOGERROR, "{} - failed to get texture description.", __FUNCTION__);
     texture->Release();
     return false;
   }
@@ -58,34 +61,35 @@ static bool LoadTexture(int width, int height, int stride
   return true;
 }
 
-COverlayQuadsDX::COverlayQuadsDX(ASS_Image* images, int width, int height)
+std::shared_ptr<COverlay> COverlay::Create(ASS_Image* images, float width, float height)
+{
+  return std::make_shared<COverlayQuadsDX>(images, width, height);
+}
+
+COverlayQuadsDX::COverlayQuadsDX(ASS_Image* images, float width, float height)
 {
   m_width  = 1.0;
   m_height = 1.0;
-  m_align  = ALIGN_VIDEO;
+  m_align = ALIGN_SCREEN;
   m_pos    = POSITION_RELATIVE;
   m_x      = 0.0f;
   m_y      = 0.0f;
   m_count  = 0;
 
   SQuads quads;
-  if(!convert_quad(images, quads, width))
+  if (!convert_quad(images, quads, static_cast<int>(width)))
     return;
 
   float u, v;
-  if(!LoadTexture(quads.size_x
-                , quads.size_y
-                , quads.size_x
-                , DXGI_FORMAT_R8_UNORM
-                , quads.data
-                , &u, &v
-                , &m_texture))
+  if (!LoadTexture(quads.size_x, quads.size_y, quads.size_x, DXGI_FORMAT_R8_UNORM,
+                   quads.texture.data(), &u, &v, &m_texture))
   {
     return;
   }
 
-  Vertex* vt = new Vertex[6 * quads.count], *vt_orig = vt;
-  SQuad*  vs = quads.quad;
+  Vertex* vt = new Vertex[6 * quads.quad.size()];
+  Vertex* vt_orig = vt;
+  SQuad* vs = quads.quad.data();
 
   float scale_u = u / quads.size_x;
   float scale_v = v / quads.size_y;
@@ -93,7 +97,7 @@ COverlayQuadsDX::COverlayQuadsDX(ASS_Image* images, int width, int height)
   float scale_x = 1.0f / width;
   float scale_y = 1.0f / height;
 
-  for (int i = 0; i < quads.count; i++)
+  for (size_t i = 0; i < quads.quad.size(); i++)
   {
     for (int s = 0; s < 6; s++)
     {
@@ -132,11 +136,12 @@ COverlayQuadsDX::COverlayQuadsDX(ASS_Image* images, int width, int height)
   }
 
   vt = vt_orig;
-  m_count = quads.count;
+  m_count = static_cast<unsigned int>(quads.quad.size());
 
-  if (!m_vertex.Create(D3D11_BIND_VERTEX_BUFFER, 6 * quads.count, sizeof(Vertex), DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, vt))
+  if (!m_vertex.Create(D3D11_BIND_VERTEX_BUFFER, 6 * m_count, sizeof(Vertex), DXGI_FORMAT_UNKNOWN,
+                       D3D11_USAGE_IMMUTABLE, vt))
   {
-    CLog::Log(LOGERROR, "%s - failed to create vertex buffer", __FUNCTION__);
+    CLog::Log(LOGERROR, "{} - failed to create vertex buffer", __FUNCTION__);
     m_texture.Release();
   }
 
@@ -196,97 +201,94 @@ void COverlayQuadsDX::Render(SRenderState &state)
   pGUIShader->RestoreBuffers();
 }
 
+std::shared_ptr<COverlay> COverlay::Create(const CDVDOverlayImage& o, CRect& rSource)
+{
+  return std::make_shared<COverlayImageDX>(o, rSource);
+}
+
 COverlayImageDX::~COverlayImageDX()
 {
 }
 
-COverlayImageDX::COverlayImageDX(CDVDOverlayImage* o)
+COverlayImageDX::COverlayImageDX(const CDVDOverlayImage& o, CRect& rSource)
 {
-  uint32_t* rgba;
-  int stride;
-  if(o->palette)
+  if (o.palette.empty())
   {
-    m_pma  = !!USE_PREMULTIPLIED_ALPHA;
-    rgba   = convert_rgba(o, m_pma);
-    stride = o->width * 4;
+    m_pma = false;
+    const uint32_t* rgba = reinterpret_cast<const uint32_t*>(o.pixels.data());
+    Load(rgba, o.width, o.height, o.linesize);
   }
   else
   {
-    m_pma  = false;
-    rgba   = (uint32_t*)o->data;
-    stride = o->linesize;
+    std::vector<uint32_t> rgba(o.width * o.height);
+    m_pma = !!USE_PREMULTIPLIED_ALPHA;
+    convert_rgba(o, m_pma, rgba);
+    Load(rgba.data(), o.width, o.height, o.width * 4);
   }
 
-  if(!rgba)
+  if (o.source_width > 0 && o.source_height > 0)
   {
-    CLog::Log(LOGERROR, "COverlayImageDX::COverlayImageDX - failed to convert overlay to rgb");
-    return;
-  }
+    m_pos = POSITION_RELATIVE;
+    m_x = (0.5f * o.width + o.x) / o.source_width;
+    m_y = (0.5f * o.height + o.y) / o.source_height;
 
-  Load(rgba, o->width, o->height, stride);
-  if((BYTE*)rgba != o->data)
-    free(rgba);
+    const float subRatio{static_cast<float>(o.source_width) / o.source_height};
+    const float vidRatio{rSource.Width() / rSource.Height()};
 
-  if(o->source_width && o->source_height)
-  {
-    float center_x = (float)(0.5f * o->width  + o->x) / o->source_width;
-    float center_y = (float)(0.5f * o->height + o->y) / o->source_height;
+    // We always consider aligning 4/3 subtitles to the video,
+    // for example SD DVB subtitles (4/3) must be stretched on fullhd video
 
-    m_width  = (float)o->width  / o->source_width;
-    m_height = (float)o->height / o->source_height;
-    m_pos    = POSITION_RELATIVE;
-
-#if 0
-    if(center_x > 0.4 && center_x < 0.6
-    && center_y > 0.8 && center_y < 1.0)
+    if (std::fabs(subRatio - vidRatio) < 0.001f || IsSquareResolution(subRatio))
     {
-     /* render bottom aligned to subtitle line */
-      m_align  = ALIGN_SUBTITLE;
-      m_x      = 0.0f;
-      m_y      = - 0.5 * m_height;
+      m_align = ALIGN_VIDEO;
+      m_width = static_cast<float>(o.width) / o.source_width;
+      m_height = static_cast<float>(o.height) / o.source_height;
     }
     else
-#endif
     {
-      /* render aligned to screen to avoid cropping problems */
-      m_align  = ALIGN_SCREEN;
-      m_x      = center_x;
-      m_y      = center_y;
+      // We should have a re-encoded/cropped (removed black bars) video source.
+      // Then we cannot align to video otherwise the subtitles will be deformed
+      // better align to screen by keeping the aspect-ratio.
+      m_align = ALIGN_SCREEN_AR;
+      m_width = static_cast<float>(o.width);
+      m_height = static_cast<float>(o.height);
+      m_source_width = static_cast<float>(o.source_width);
+      m_source_height = static_cast<float>(o.source_height);
     }
   }
   else
   {
-    m_align  = ALIGN_VIDEO;
-    m_pos    = POSITION_ABSOLUTE;
-    m_x      = (float)o->x;
-    m_y      = (float)o->y;
-    m_width  = (float)o->width;
-    m_height = (float)o->height;
+    m_align = ALIGN_VIDEO;
+    m_pos = POSITION_ABSOLUTE;
+    m_x = static_cast<float>(o.x);
+    m_y = static_cast<float>(o.y);
+    m_width = static_cast<float>(o.width);
+    m_height = static_cast<float>(o.height);
   }
 }
 
-COverlayImageDX::COverlayImageDX(CDVDOverlaySpu* o)
+std::shared_ptr<COverlay> COverlay::Create(const CDVDOverlaySpu& o)
+{
+  return std::make_shared<COverlayImageDX>(o);
+}
+
+COverlayImageDX::COverlayImageDX(const CDVDOverlaySpu& o)
 {
   int min_x, max_x, min_y, max_y;
-  uint32_t* rgba = convert_rgba(o, USE_PREMULTIPLIED_ALPHA
-                              , min_x, max_x, min_y, max_y);
-  if(!rgba)
-  {
-    CLog::Log(LOGERROR, "COverlayImageDX::COverlayImageDX - failed to convert overlay to rgb");
-    return;
-  }
-  Load(rgba + min_x + min_y * o->width, max_x - min_x, max_y - min_y, o->width * 4);
-  free(rgba);
+  std::vector<uint32_t> rgba(o.width * o.height);
 
-  m_align  = ALIGN_VIDEO;
-  m_pos    = POSITION_ABSOLUTE;
-  m_x      = (float)(min_x + o->x);
-  m_y      = (float)(min_y + o->y);
-  m_width  = (float)(max_x - min_x);
-  m_height = (float)(max_y - min_y);
+  convert_rgba(o, USE_PREMULTIPLIED_ALPHA, min_x, max_x, min_y, max_y, rgba);
+  Load(rgba.data() + min_x + min_y * o.width, max_x - min_x, max_y - min_y, o.width * 4);
+
+  m_align = ALIGN_VIDEO;
+  m_pos = POSITION_ABSOLUTE;
+  m_x = static_cast<float>(min_x + o.x);
+  m_y = static_cast<float>(min_y + o.y);
+  m_width = static_cast<float>(max_x - min_x);
+  m_height = static_cast<float>(max_y - min_y);
 }
 
-void COverlayImageDX::Load(uint32_t* rgba, int width, int height, int stride)
+void COverlayImageDX::Load(const uint32_t* rgba, int width, int height, int stride)
 {
   float u, v;
   if(!LoadTexture(width
@@ -314,7 +316,7 @@ void COverlayImageDX::Load(uint32_t* rgba, int width, int height, int stride)
 
   if (!m_vertex.Create(D3D11_BIND_VERTEX_BUFFER, 4, sizeof(Vertex), DXGI_FORMAT_UNKNOWN, D3D11_USAGE_IMMUTABLE, vt))
   {
-    CLog::Log(LOGERROR, "%s - failed to create vertex buffer", __FUNCTION__);
+    CLog::Log(LOGERROR, "{} - failed to create vertex buffer", __FUNCTION__);
     m_texture.Release();
   }
 }

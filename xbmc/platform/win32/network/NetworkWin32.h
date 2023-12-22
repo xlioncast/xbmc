@@ -33,7 +33,7 @@ public:
    void GetMacAddressRaw(char rawMac[6]) const override;
 
    bool GetHostMacAddress(unsigned long host, std::string& mac) const override;
-   bool GetHostMacAddress(const struct sockaddr& host, std::string& mac) const;
+   bool GetHostMacAddress(struct sockaddr* host, std::string& mac) const;
 
    std::string GetCurrentIPAddress() const override;
    std::string GetCurrentNetmask() const override;
@@ -70,7 +70,6 @@ private:
    int m_sock;
    CStopWatch m_netrefreshTimer;
    CCriticalSection m_critSection;
+   std::vector<uint8_t> m_adapterAddresses;
 };
-
-using CNetwork = CNetworkWin32;
 

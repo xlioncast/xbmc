@@ -10,9 +10,9 @@
 
 #include "AddonUtils.h"
 #include "commons/Exception.h"
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 
+#include <mutex>
 #include <vector>
 
 namespace XBMCAddon
@@ -38,14 +38,14 @@ namespace XBMCAddon
   void RetardedAsyncCallbackHandler::invokeCallback(Callback* cb)
   {
     XBMC_TRACE;
-    CSingleLock lock(critSection);
+    std::unique_lock<CCriticalSection> lock(critSection);
     g_callQueue.push_back(new AsyncCallbackMessage(cb,this));
   }
 
   RetardedAsyncCallbackHandler::~RetardedAsyncCallbackHandler()
   {
     XBMC_TRACE;
-    CSingleLock lock(critSection);
+    std::unique_lock<CCriticalSection> lock(critSection);
 
     // find any messages that might be there because of me ... and remove them
     CallbackQueue::iterator iter = g_callQueue.begin();
@@ -64,7 +64,7 @@ namespace XBMCAddon
   void RetardedAsyncCallbackHandler::makePendingCalls()
   {
     XBMC_TRACE;
-    CSingleLock lock(critSection);
+    std::unique_lock<CCriticalSection> lock(critSection);
     CallbackQueue::iterator iter = g_callQueue.begin();
     while (iter != g_callQueue.end())
     {
@@ -89,11 +89,12 @@ namespace XBMCAddon
           //  is deallocating. holding this lock should prevent it from
           //  deallocating during the execution of this call.
 #ifdef ENABLE_XBMC_TRACE_API
-          CLog::Log(LOGDEBUG,"%sNEWADDON executing callback 0x%lx",_tg.getSpaces(),(long)(p->cb.get()));
+          CLog::Log(LOGDEBUG, "{}NEWADDON executing callback 0x{:x}", _tg.getSpaces(),
+                    (long)(p->cb.get()));
 #endif
           AddonClass* obj = (p->cb->getObject());
           AddonClass::Ref<AddonClass> ref(obj);
-          CSingleLock lock2(*obj);
+          std::unique_lock<CCriticalSection> lock2(*obj);
           if (!p->cb->getObject()->isDeallocating())
           {
             try
@@ -104,7 +105,8 @@ namespace XBMCAddon
             catch (XbmcCommons::Exception& e) { e.LogThrowMessage(); }
             catch (...)
             {
-              CLog::Log(LOGERROR,"Unknown exception while executing callback 0x%lx", (long)(p->cb.get()));
+              CLog::Log(LOGERROR, "Unknown exception while executing callback {:#x}",
+                        reinterpret_cast<int64_t>(p->cb.get()));
             }
           }
         }
@@ -123,7 +125,7 @@ namespace XBMCAddon
   void RetardedAsyncCallbackHandler::clearPendingCalls(void* userData)
   {
     XBMC_TRACE;
-    CSingleLock lock(critSection);
+    std::unique_lock<CCriticalSection> lock(critSection);
     CallbackQueue::iterator iter = g_callQueue.begin();
     while (iter != g_callQueue.end())
     {
@@ -132,7 +134,9 @@ namespace XBMCAddon
       if(p->handler->shouldRemoveCallback(p->cb->getObject(),userData))
       {
 #ifdef ENABLE_XBMC_TRACE_API
-        CLog::Log(LOGDEBUG,"%sNEWADDON removing callback 0x%lx for PyThreadState 0x%lx from queue", _tg.getSpaces(),(long)(p->cb.get()) ,(long)userData);
+        CLog::Log(LOGDEBUG,
+                  "{}NEWADDON removing callback 0x{:x} for PyThreadState 0x{:x} from queue",
+                  _tg.getSpaces(), (long)(p->cb.get()), (long)userData);
 #endif
         iter = g_callQueue.erase(iter);
       }

@@ -14,6 +14,8 @@
 #include "input/Key.h"
 #include "utils/StringUtils.h"
 
+#include <memory>
+
 #define CONTROL_HEADING         1
 #define CONTROL_NUMBER_OF_ITEMS 2
 #define CONTROL_SIMPLE_LIST     3
@@ -25,16 +27,14 @@
 CGUIDialogSelect::CGUIDialogSelect() : CGUIDialogSelect(WINDOW_DIALOG_SELECT) {}
 
 CGUIDialogSelect::CGUIDialogSelect(int windowId)
-    : CGUIDialogBoxBase(windowId, "DialogSelect.xml"),
+  : CGUIDialogBoxBase(windowId, "DialogSelect.xml"),
+    m_vecList(std::make_unique<CFileItemList>()),
     m_bButtonEnabled(false),
     m_bButton2Enabled(false),
     m_bButtonPressed(false),
     m_bButton2Pressed(false),
-    m_selectedItem(nullptr),
     m_useDetails(false),
-    m_multiSelection(false),
-    m_selectedItems(),
-    m_vecList(new CFileItemList())
+    m_multiSelection(false)
 {
   m_bConfirmed = false;
   m_loadType = KEEP_IN_MEMORY;
@@ -197,7 +197,7 @@ int CGUIDialogSelect::Add(const std::string& strLabel)
 
 int CGUIDialogSelect::Add(const CFileItem& item)
 {
-  m_vecList->Add(CFileItemPtr(new CFileItem(item)));
+  m_vecList->Add(std::make_shared<CFileItem>(item));
   return m_vecList->Size() - 1;
 }
 
@@ -219,7 +219,7 @@ const CFileItemPtr CGUIDialogSelect::GetSelectedFileItem() const
 {
   if (m_selectedItem)
     return m_selectedItem;
-  return CFileItemPtr(new CFileItem);
+  return std::make_shared<CFileItem>();
 }
 
 const std::vector<int>& CGUIDialogSelect::GetSelectedItems() const
@@ -354,8 +354,8 @@ void CGUIDialogSelect::OnInitWindow()
   }
   m_viewControl.SetCurrentView(m_useDetails ? CONTROL_DETAILED_LIST : CONTROL_SIMPLE_LIST);
 
-  SET_CONTROL_LABEL(CONTROL_NUMBER_OF_ITEMS, StringUtils::Format("%i %s",
-      m_vecList->Size(), g_localizeStrings.Get(127).c_str()));
+  SET_CONTROL_LABEL(CONTROL_NUMBER_OF_ITEMS,
+                    StringUtils::Format("{} {}", m_vecList->Size(), g_localizeStrings.Get(127)));
 
   if (m_multiSelection)
     EnableButton(true, 186);

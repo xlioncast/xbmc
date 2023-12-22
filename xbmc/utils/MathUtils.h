@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include <stdint.h>
 #include <assert.h>
 #include <climits>
 #include <cmath>
+#include <stdint.h>
+#include <type_traits>
 
 #if defined(HAVE_SSE2) && defined(__SSE2__)
 #include <emmintrin.h>
@@ -21,19 +22,25 @@
 // avoid including system.h or other magic includes.
 // use 'gcc -dM -E - < /dev/null' or similar to find them.
 
-#if defined(__ppc__) || \
-    defined(__powerpc__) || \
-    defined(__mips__) || \
-    defined(__arm__) || \
-    defined(__aarch64__) || \
-    defined(__SH4__) || \
-    defined(__sparc__) || \
+// clang-format off
+#if defined(__aarch64__) || \
+    defined(__alpha__) || \
     defined(__arc__) || \
+    defined(__arm__) || \
+    defined(__loongarch__) || \
     defined(_M_ARM) || \
+    defined(__mips__) || \
     defined(__or1k__) || \
+    defined(__powerpc__) || \
+    defined(__ppc__) || \
+    defined(__riscv) || \
+    defined(__SH4__) || \
+    defined(__s390x__) || \
+    defined(__sparc__) || \
     defined(__xtensa__)
-  #define DISABLE_MATHUTILS_ASM_ROUND_INT
+#define DISABLE_MATHUTILS_ASM_ROUND_INT
 #endif
+// clang-format on
 
 /*! \brief Math utility class.
  Note that the test() routine should return true for all implementations
@@ -118,7 +125,8 @@ namespace MathUtils
     int i;
 #if defined(HAVE_SSE2) && defined(__SSE2__)
     const float round_dn_to_nearest = 0.4999999f;
-    i = (x > 0) ? _mm_cvttsd_si32(_mm_set_sd(x + round_to_nearest)) : _mm_cvttsd_si32(_mm_set_sd(x - round_dn_to_nearest));
+    i = (x > 0) ? _mm_cvttsd_si32(_mm_set_sd(x + static_cast<double>(round_to_nearest)))
+                : _mm_cvttsd_si32(_mm_set_sd(x - static_cast<double>(round_dn_to_nearest)));
 
 #elif defined(TARGET_WINDOWS)
     __asm
@@ -192,6 +200,22 @@ namespace MathUtils
   inline bool FloatEquals(FloatT f1, FloatT f2, FloatT maxDelta)
   {
     return (std::abs(f2 - f1) < maxDelta);
+  }
+
+  /*!
+   * \brief Round a floating point number to nearest multiple
+   * \param value The value to round
+   * \param multiple The multiple
+   * \return The rounded value
+   */
+  template<typename T, std::enable_if_t<std::is_floating_point<T>::value, bool> = true>
+  inline T RoundF(const T value, const T multiple)
+  {
+    if (multiple == 0)
+      return value;
+
+    return static_cast<T>(std::round(static_cast<double>(value) / static_cast<double>(multiple)) *
+                          static_cast<double>(multiple));
   }
 
 #if 0

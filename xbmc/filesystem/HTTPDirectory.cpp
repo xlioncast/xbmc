@@ -36,7 +36,7 @@ bool CHTTPDirectory::GetDirectory(const CURL& url, CFileItemList &items)
 
   if(!http.Open(url))
   {
-    CLog::Log(LOGERROR, "%s - Unable to get http directory (%s)", __FUNCTION__, url.GetRedacted().c_str());
+    CLog::Log(LOGERROR, "{} - Unable to get http directory ({})", __FUNCTION__, url.GetRedacted());
     return false;
   }
 
@@ -75,6 +75,13 @@ bool CHTTPDirectory::GetDirectory(const CURL& url, CFileItemList &items)
   std::string strBuffer;
   if (http.ReadData(strBuffer) && strBuffer.length() > 0)
   {
+    /* if Content-Length is found and its not text/html, URL is pointing to file so don't treat URL as HTTPDirectory */
+    if (!http.GetHttpHeader().GetValue("Content-Length").empty() &&
+        !StringUtils::StartsWithNoCase(http.GetHttpHeader().GetValue("Content-type"), "text/html"))
+    {
+      return false;
+    }
+
     std::string fileCharset(http.GetProperty(XFILE::FILE_PROPERTY_CONTENT_CHARSET));
     if (!fileCharset.empty() && fileCharset != "UTF-8")
     {
@@ -128,6 +135,16 @@ bool CHTTPDirectory::GetDirectory(const CURL& url, CFileItemList &items)
         strLinkBase.erase(pos);
       }
 
+      // Convert any HTTP character entities (e.g.: "&amp;") to percentage encoding
+      // (e.g.: "%xx") as some web servers (Apache) put these in HTTP Directory Indexes
+      // this is also needed as CURL objects interpret them incorrectly due to the ;
+      // also being allowed as URL option separator
+      if (fileCharset.empty())
+        g_charsetConverter.unknownToUTF8(strLinkBase);
+      g_charsetConverter.utf8ToW(strLinkBase, wLink, false);
+      HTML::CHTMLUtil::ConvertHTMLToW(wLink, wConverted);
+      g_charsetConverter.wToUTF8(wConverted, strLinkBase);
+
       // encoding + and ; to URL encode if it is not already encoded by http server used on the remote server (example: Apache)
       // more characters may be added here when required when required by certain http servers
       pos = strLinkBase.find_first_of("+;");
@@ -143,11 +160,6 @@ bool CHTTPDirectory::GetDirectory(const CURL& url, CFileItemList &items)
 
       URIUtils::RemoveSlashAtEnd(strLinkTemp);
       strLinkTemp = CURL::Decode(strLinkTemp);
-      if (fileCharset.empty())
-        g_charsetConverter.unknownToUTF8(strLinkTemp);
-      g_charsetConverter.utf8ToW(strLinkTemp, wLink, false);
-      HTML::CHTMLUtil::ConvertHTMLToW(wLink, wConverted);
-      g_charsetConverter.wToUTF8(wConverted, strLinkTemp);
 
       if (StringUtils::EndsWith(strNameTemp, "..>") &&
           StringUtils::StartsWith(strLinkTemp, strNameTemp.substr(0, strNameTemp.length() - 3)))
@@ -171,15 +183,6 @@ bool CHTTPDirectory::GetDirectory(const CURL& url, CFileItemList &items)
         CFileItemPtr pItem(new CFileItem(strNameTemp));
         pItem->SetProperty("IsHTTPDirectory", true);
         CURL url2(url);
-
-        /* NOTE: Force any &...; encoding (e.g. &amp;) into % encoding else CURL objects interpret them incorrectly
-         * due to the ; also being allowed as URL option separator
-         */
-        if (fileCharset.empty())
-          g_charsetConverter.unknownToUTF8(strLinkBase);
-        g_charsetConverter.utf8ToW(strLinkBase, wLink, false);
-        HTML::CHTMLUtil::ConvertHTMLToW(wLink, wConverted);
-        g_charsetConverter.wToUTF8(wConverted, strLinkBase);
 
         url2.SetFileName(strBasePath + strLinkBase);
         url2.SetOptions(strLinkOptions);

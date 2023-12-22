@@ -41,19 +41,20 @@ static std::string GetContentMapping(NPT_String& objectClass)
         const char* Content;
     };
     static const SClassMapping mapping[] = {
-          { "object.item.videoItem.videoBroadcast", "episodes"      }
-        , { "object.item.videoItem.musicVideoClip", "musicvideos"  }
-        , { "object.item.videoItem"               , "movies"       }
-        , { "object.item.audioItem.musicTrack"    , "songs"        }
-        , { "object.item.audioItem"               , "songs"        }
-        , { "object.item.imageItem.photo"         , "photos"       }
-        , { "object.item.imageItem"               , "photos"       }
-        , { "object.container.album.videoAlbum"   , "tvshows"      }
-        , { "object.container.album.musicAlbum"   , "albums"       }
-        , { "object.container.album.photoAlbum"   , "photos"       }
-        , { "object.container.album"              , "albums"       }
-        , { "object.container.person"             , "artists"      }
-        , { NULL                                  , NULL           }
+          { "object.item.videoItem.videoBroadcast"                  , "episodes"      }
+        , { "object.item.videoItem.musicVideoClip"                  , "musicvideos"  }
+        , { "object.item.videoItem"                                 , "movies"       }
+        , { "object.item.audioItem.musicTrack"                      , "songs"        }
+        , { "object.item.audioItem"                                 , "songs"        }
+        , { "object.item.imageItem.photo"                           , "photos"       }
+        , { "object.item.imageItem"                                 , "photos"       }
+        , { "object.container.album.videoAlbum.videoBroadcastShow"  , "tvshows"      }
+        , { "object.container.album.videoAlbum.videoBroadcastSeason", "seasons"      }
+        , { "object.container.album.musicAlbum"                     , "albums"       }
+        , { "object.container.album.photoAlbum"                     , "photos"       }
+        , { "object.container.album"                                , "albums"       }
+        , { "object.container.person"                               , "artists"      }
+        , { NULL                                                    , NULL           }
     };
     for(const SClassMapping* map = mapping; map->ObjectClass; map++)
     {
@@ -75,7 +76,7 @@ static bool FindDeviceWait(CUPnP* upnp, const char* uuid, PLT_DeviceDataReferenc
     // (and wait for it to respond for 5 secs if we're just starting upnp client)
     NPT_TimeStamp watchdog;
     NPT_System::GetCurrentTimeStamp(watchdog);
-    watchdog += 5.f;
+    watchdog += 5.0;
 
     for (;;) {
         if (NPT_SUCCEEDED(upnp->m_MediaBrowser->FindServer(uuid, device)) && !device.IsNull())
@@ -101,14 +102,13 @@ static bool FindDeviceWait(CUPnP* upnp, const char* uuid, PLT_DeviceDataReferenc
 /*----------------------------------------------------------------------
 |   CUPnPDirectory::GetFriendlyName
 +---------------------------------------------------------------------*/
-const char*
-CUPnPDirectory::GetFriendlyName(const CURL& url)
+std::string CUPnPDirectory::GetFriendlyName(const CURL& url)
 {
     NPT_String path = url.Get().c_str();
     if (!path.EndsWith("/")) path += "/";
 
     if (path.Left(7).Compare("upnp://", true) != 0) {
-        return NULL;
+      return {};
     } else if (path.Compare("upnp://", true) == 0) {
         return "UPnP Media Servers (Auto-Discover)";
     }
@@ -116,7 +116,7 @@ CUPnPDirectory::GetFriendlyName(const CURL& url)
     // look for nextslash
     int next_slash = path.Find('/', 7);
     if (next_slash == -1)
-        return NULL;
+      return {};
 
     NPT_String uuid = path.SubString(7, next_slash-7);
     NPT_String object_id = path.SubString(next_slash+1, path.GetLength()-next_slash-2);
@@ -124,9 +124,9 @@ CUPnPDirectory::GetFriendlyName(const CURL& url)
     // look for device
     PLT_DeviceDataReference device;
     if(!FindDeviceWait(CUPnP::GetInstance(), uuid, device))
-        return NULL;
+      return {};
 
-    return (const char*)device->GetFriendlyName();
+    return device->GetFriendlyName().GetChars();
 }
 
 /*----------------------------------------------------------------------
@@ -151,18 +151,18 @@ bool CUPnPDirectory::GetResource(const CURL& path, CFileItem &item)
 
     PLT_DeviceDataReference device;
     if(!FindDeviceWait(upnp, uuid.c_str(), device)) {
-        CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - unable to find uuid %s", uuid.c_str());
-        return false;
+      CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - unable to find uuid {}", uuid);
+      return false;
     }
 
     PLT_MediaObjectListReference list;
     if (NPT_FAILED(upnp->m_MediaBrowser->BrowseSync(device, object.c_str(), list, true))) {
-        CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - unable to find object %s", object.c_str());
-        return false;
+      CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - unable to find object {}", object);
+      return false;
     }
 
     if (list.IsNull() || !list->GetItemCount()) {
-      CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - no items returned for object %s", object.c_str());
+      CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - no items returned for object {}", object);
       return false;
     }
 
@@ -220,7 +220,7 @@ CUPnPDirectory::GetDirectory(const CURL& url, CFileItemList &items)
         int next_slash = path.Find('/', 7);
 
         NPT_String uuid = (next_slash==-1)?path.SubString(7):path.SubString(7, next_slash-7);
-        NPT_String object_id = (next_slash==-1)?"":path.SubString(next_slash+1);
+        NPT_String object_id = (next_slash == -1) ? NPT_String("") : path.SubString(next_slash + 1);
         object_id.TrimRight("/");
         if (object_id.GetLength()) {
             object_id = CURL::Decode((char*)object_id).c_str();
@@ -233,7 +233,7 @@ CUPnPDirectory::GetDirectory(const CURL& url, CFileItemList &items)
 
         // issue a browse request with object_id
         // if object_id is empty use "0" for root
-        object_id = object_id.IsEmpty()?"0":object_id;
+        object_id = object_id.IsEmpty() ? NPT_String("0") : object_id;
 
         // remember a count of object classes
         std::map<NPT_String, int> classes;
@@ -305,16 +305,6 @@ CUPnPDirectory::GetDirectory(const CURL& url, CFileItemList &items)
                 continue;
             }
 
-            // never show empty containers in media views
-            if((*entry)->IsContainer()) {
-                if( (audio || video || image)
-                 && ((PLT_MediaContainer*)(*entry))->m_ChildrenCount == 0) {
-                    ++entry;
-                    continue;
-                }
-            }
-
-
             // keep count of classes
             classes[(*entry)->m_ObjectClass.type]++;
             CFileItemPtr pItem = BuildObject(*entry, UPnPClient);
@@ -365,4 +355,9 @@ cleanup:
 failure:
     return false;
 }
+}
+
+bool CUPnPDirectory::Resolve(CFileItem& item) const
+{
+  return GetResource(item.GetURL(), item);
 }

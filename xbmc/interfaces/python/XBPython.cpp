@@ -8,6 +8,7 @@
 
 // clang-format off
 // python.h should always be included first before any other includes
+#include <mutex>
 #include <Python.h>
 // clang-format on
 
@@ -15,8 +16,6 @@
 
 #include "ServiceBroker.h"
 #include "Util.h"
-#include "cores/DllLoader/DllLoaderContainer.h"
-#include "filesystem/File.h"
 #include "filesystem/SpecialProtocol.h"
 #include "interfaces/AnnouncementManager.h"
 #include "interfaces/legacy/AddonUtils.h"
@@ -25,14 +24,17 @@
 #include "interfaces/python/PythonInvoker.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/CharsetConverter.h"
 #include "utils/JSONVariantWriter.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
-#include "utils/CharsetConverter.h"
 
 #ifdef TARGET_WINDOWS
 #include "platform/Environment.h"
-#include "utils/SystemInfo.h"
+#endif
+
+#ifdef HAS_WEB_INTERFACE
+#include "network/httprequesthandler/python/HTTPPythonWsgiInvoker.h"
 #endif
 
 #include <algorithm>
@@ -40,14 +42,10 @@
 // Only required for Py3 < 3.7
 PyThreadState* savestate;
 
+bool XBPython::m_bInitialized = false;
+
 XBPython::XBPython()
 {
-  m_bInitialized = false;
-  m_mainThreadState = NULL;
-  m_iDllScriptCounter = 0;
-  m_vecPlayerCallbackList.clear();
-  m_vecMonitorCallbackList.clear();
-
   CServiceBroker::GetAnnouncementManager()->AddAnnouncer(this);
 }
 
@@ -55,12 +53,20 @@ XBPython::~XBPython()
 {
   XBMC_TRACE;
   CServiceBroker::GetAnnouncementManager()->RemoveAnnouncer(this);
+
+#if PY_VERSION_HEX >= 0x03070000
+  if (Py_IsInitialized())
+  {
+    PyThreadState_Swap(PyInterpreterState_ThreadHead(PyInterpreterState_Main()));
+    Py_Finalize();
+  }
+#endif
 }
 
 #define LOCK_AND_COPY(type, dest, src) \
   if (!m_bInitialized) \
     return; \
-  CSingleLock lock(src); \
+  std::unique_lock<CCriticalSection> lock(src); \
   src.hadSomethingRemoved = false; \
   type dest; \
   dest = src
@@ -264,14 +270,14 @@ void XBPython::OnQueueNextItem()
 void XBPython::RegisterPythonPlayerCallBack(IPlayerCallback* pCallback)
 {
   XBMC_TRACE;
-  CSingleLock lock(m_vecPlayerCallbackList);
+  std::unique_lock<CCriticalSection> lock(m_vecPlayerCallbackList);
   m_vecPlayerCallbackList.push_back(pCallback);
 }
 
 void XBPython::UnregisterPythonPlayerCallBack(IPlayerCallback* pCallback)
 {
   XBMC_TRACE;
-  CSingleLock lock(m_vecPlayerCallbackList);
+  std::unique_lock<CCriticalSection> lock(m_vecPlayerCallbackList);
   PlayerCallbackList::iterator it = m_vecPlayerCallbackList.begin();
   while (it != m_vecPlayerCallbackList.end())
   {
@@ -288,14 +294,14 @@ void XBPython::UnregisterPythonPlayerCallBack(IPlayerCallback* pCallback)
 void XBPython::RegisterPythonMonitorCallBack(XBMCAddon::xbmc::Monitor* pCallback)
 {
   XBMC_TRACE;
-  CSingleLock lock(m_vecMonitorCallbackList);
+  std::unique_lock<CCriticalSection> lock(m_vecMonitorCallbackList);
   m_vecMonitorCallbackList.push_back(pCallback);
 }
 
 void XBPython::UnregisterPythonMonitorCallBack(XBMCAddon::xbmc::Monitor* pCallback)
 {
   XBMC_TRACE;
-  CSingleLock lock(m_vecMonitorCallbackList);
+  std::unique_lock<CCriticalSection> lock(m_vecMonitorCallbackList);
   MonitorCallbackList::iterator it = m_vecMonitorCallbackList.begin();
   while (it != m_vecMonitorCallbackList.end())
   {
@@ -432,7 +438,7 @@ void XBPython::Uninitialize()
   m_vecPyList.clear();
   m_vecPyList.hadSomethingRemoved = true;
 
-  lock.Leave(); //unlock here because the python thread might lock when it exits
+  lock.unlock(); //unlock here because the python thread might lock when it exits
 
   // cleanup threads that are still running
   tmpvec.clear();
@@ -443,7 +449,7 @@ void XBPython::Process()
   if (m_bInitialized)
   {
     PyList tmpvec;
-    CSingleLock lock(m_vecPyList);
+    std::unique_lock<CCriticalSection> lock(m_vecPyList);
     for (PyList::iterator it = m_vecPyList.begin(); it != m_vecPyList.end();)
     {
       if (it->bDone)
@@ -455,7 +461,7 @@ void XBPython::Process()
       else
         ++it;
     }
-    lock.Leave();
+    lock.unlock();
 
     //delete scripts which are done
     tmpvec.clear();
@@ -468,8 +474,8 @@ bool XBPython::OnScriptInitialized(ILanguageInvoker* invoker)
     return false;
 
   XBMC_TRACE;
-  CLog::Log(LOGINFO, "initializing python engine.");
-  CSingleLock lock(m_critSection);
+  CLog::Log(LOGDEBUG, "initializing python engine.");
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   m_iDllScriptCounter++;
   if (!m_bInitialized)
   {
@@ -489,31 +495,46 @@ bool XBPython::OnScriptInitialized(ILanguageInvoker* invoker)
       // so point it to frameworks which is where python3.8 is located
       setenv("PYTHONHOME", CSpecialProtocol::TranslatePath("special://frameworks").c_str(), 1);
       setenv("PYTHONPATH", CSpecialProtocol::TranslatePath("special://frameworks").c_str(), 1);
-      CLog::Log(LOGDEBUG, "PYTHONHOME -> %s",
-                CSpecialProtocol::TranslatePath("special://frameworks").c_str());
-      CLog::Log(LOGDEBUG, "PYTHONPATH -> %s",
-                CSpecialProtocol::TranslatePath("special://frameworks").c_str());
+      CLog::Log(LOGDEBUG, "PYTHONHOME -> {}",
+                CSpecialProtocol::TranslatePath("special://frameworks"));
+      CLog::Log(LOGDEBUG, "PYTHONPATH -> {}",
+                CSpecialProtocol::TranslatePath("special://frameworks"));
     }
 #elif defined(TARGET_WINDOWS)
-    // because the third party build of python is compiled with vs2008 we need
-    // a hack to set the PYTHONPATH
-    std::string buf;
-    buf = "PYTHONPATH=" + CSpecialProtocol::TranslatePath("special://xbmc/system/python/Lib");
-    CEnvironment::putenv(buf);
-    buf = "PYTHONOPTIMIZE=1";
-    CEnvironment::putenv(buf);
-    buf = "OS=win32";
-    CEnvironment::putenv(buf);
+
+#ifdef TARGET_WINDOWS_STORE
+#ifdef _DEBUG
+    CEnvironment::putenv("PYTHONCASEOK=1");
+#endif
+    CEnvironment::putenv("OS=win10");
+#else // TARGET_WINDOWS_DESKTOP
+    CEnvironment::putenv("OS=win32");
+#endif
 
     std::wstring pythonHomeW;
     CCharsetConverter::utf8ToW(CSpecialProtocol::TranslatePath("special://xbmc/system/python"),
                            pythonHomeW);
     Py_SetPythonHome(pythonHomeW.c_str());
 
-#ifdef _DEBUG
-    if (CSysInfo::GetWindowsDeviceFamily() == CSysInfo::Xbox)
-      CEnvironment::putenv("PYTHONCASEOK=1");
+    std::string pythonPath = CSpecialProtocol::TranslatePath("special://xbmc/system/python/DLLs");
+    pythonPath += ";";
+    pythonPath += CSpecialProtocol::TranslatePath("special://xbmc/system/python/Lib");
+    pythonPath += ";";
+    pythonPath += CSpecialProtocol::TranslatePath("special://xbmc/system/python/Lib/site-packages");
+    std::wstring pythonPathW;
+    CCharsetConverter::utf8ToW(pythonPath, pythonPathW);
+
+    Py_SetPath(pythonPathW.c_str());
+
+    Py_OptimizeFlag = 1;
 #endif
+
+    // *::GlobalInitializeModules() functions call PyImport_ExtendInittab(). PyImport_ExtendInittab() should
+    // be called before Py_Initialize() as required by the Python documentation.
+    CAddonPythonInvoker::GlobalInitializeModules();
+
+#ifdef HAS_WEB_INTERFACE
+    CHTTPPythonWsgiInvoker::GlobalInitializeModules();
 #endif
 
     Py_Initialize();
@@ -529,10 +550,6 @@ bool XBPython::OnScriptInitialized(ILanguageInvoker* invoker)
     // Acquire GIL if thread doesn't currently hold.
     if (!PyGILState_Check())
       PyEval_RestoreThread((PyThreadState*)m_mainThreadState);
-
-    const wchar_t* python_argv[1] = {L""};
-    //! @bug libpython isn't const correct
-    PySys_SetArgv(1, const_cast<wchar_t**>(python_argv));
 
     if (!(m_mainThreadState = PyThreadState_Get()))
       CLog::Log(LOGERROR, "Python threadstate is NULL.");
@@ -556,7 +573,7 @@ void XBPython::OnScriptStarted(ILanguageInvoker* invoker)
   inf.id = invoker->GetId();
   inf.bDone = false;
   inf.pyThread = static_cast<CPythonInvoker*>(invoker);
-  CSingleLock lock(m_vecPyList);
+  std::unique_lock<CCriticalSection> lock(m_vecPyList);
   m_vecPyList.push_back(inf);
 }
 
@@ -581,16 +598,16 @@ void XBPython::NotifyScriptAborting(ILanguageInvoker* invoker)
 
 void XBPython::OnExecutionEnded(ILanguageInvoker* invoker)
 {
-  CSingleLock lock(m_vecPyList);
+  std::unique_lock<CCriticalSection> lock(m_vecPyList);
   PyList::iterator it = m_vecPyList.begin();
   while (it != m_vecPyList.end())
   {
     if (it->id == invoker->GetId())
     {
       if (it->pyThread->IsStopping())
-        CLog::Log(LOGINFO, "Python interpreter interrupted by user");
+        CLog::Log(LOGDEBUG, "Python interpreter interrupted by user");
       else
-        CLog::Log(LOGINFO, "Python interpreter stopped");
+        CLog::Log(LOGDEBUG, "Python interpreter stopped");
       it->bDone = true;
     }
     ++it;
@@ -600,7 +617,7 @@ void XBPython::OnExecutionEnded(ILanguageInvoker* invoker)
 void XBPython::OnScriptFinalized(ILanguageInvoker* invoker)
 {
   XBMC_TRACE;
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   // for linux - we never release the library. its loaded and stays in memory.
   if (m_iDllScriptCounter)
     m_iDllScriptCounter--;
@@ -622,7 +639,7 @@ bool XBPython::WaitForEvent(CEvent& hEvent, unsigned int milliseconds)
 {
   // wait for either this event our our global event
   XbmcThreads::CEventGroup eventGroup{&hEvent, &m_globalEvent};
-  CEvent* ret = eventGroup.wait(milliseconds);
+  CEvent* ret = eventGroup.wait(std::chrono::milliseconds(milliseconds));
   if (ret)
     m_globalEvent.Reset();
   return ret != NULL;

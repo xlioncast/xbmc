@@ -40,7 +40,7 @@ public:
   void Drain() override;
   static void          EnumerateDevicesEx(AEDeviceInfoList &list, bool force = false);
   static void Register();
-  static IAESink* Create(std::string &device, AEAudioFormat &desiredFormat);
+  static std::unique_ptr<IAESink> Create(std::string& device, AEAudioFormat& desiredFormat);
 
 protected:
   static jni::CJNIAudioTrack *CreateAudioTrack(int stream, int sampleRate, int channelMask, int encoding, int bufferSize);
@@ -62,6 +62,8 @@ private:
   double                m_duration_written;
   unsigned int          m_min_buffer_size;
   uint64_t              m_headPos;
+  uint64_t m_headPosOld;
+  uint32_t m_stuckCounter;
   uint64_t m_timestampPos = 0;
   // Moving Average computes the weighted average delay over
   // a fixed size of delay values - current size: 20 values
@@ -79,6 +81,7 @@ private:
   static std::set<unsigned int>       m_sink_sampleRates;
   static bool m_sinkSupportsFloat;
   static bool m_sinkSupportsMultiChannelFloat;
+  static bool m_passthrough_use_eac3;
 
   AEAudioFormat      m_format;
   int16_t           *m_alignedS16;
@@ -86,12 +89,13 @@ private:
   unsigned int       m_sink_sampleRate;
   bool               m_passthrough;
   double             m_audiotrackbuffer_sec;
+  double m_audiotrackbuffer_sec_orig;
   int                m_encoding;
   double m_pause_ms = 0.0;
   double m_delay = 0.0;
   double m_hw_delay = 0.0;
   CJNIAudioTimestamp m_timestamp;
-  XbmcThreads::EndTime m_stampTimer;
+  XbmcThreads::EndTime<> m_stampTimer;
 
   std::vector<float> m_floatbuf;
   std::vector<int16_t> m_shortbuf;

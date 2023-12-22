@@ -1,14 +1,12 @@
 package @APP_PACKAGE@;
 
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.HashSet;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
 import android.app.Notification;
@@ -26,7 +24,6 @@ import android.net.Uri;
 import android.provider.BaseColumns;
 import android.util.Log;
 
-import @APP_PACKAGE@.content.XBMCYTDLContentProvider;
 import @APP_PACKAGE@.model.Album;
 import @APP_PACKAGE@.model.Movie;
 import @APP_PACKAGE@.model.MusicVideo;
@@ -62,10 +59,10 @@ public class XBMCJsonRPC
 
   private final static int MAX_ITEMS = 20;
 
-  private static String TAG = "@APP_NAME@json";
+  private static String TAG = "@APP_NAME@";
 
   private String m_xbmc_web_url = "http://localhost:8080";
-  private java.util.HashSet<Integer> mRecomendationIds = new java.util.HashSet<Integer>();
+  private HashSet<Integer> mRecomendationIds = new HashSet<Integer>();
 
   private int MAX_RECOMMENDATIONS = 3;
 
@@ -139,13 +136,13 @@ public class XBMCJsonRPC
     }
     catch (Exception e)
     {
-      Log.e(TAG, "Failed to read JSON");
+      Log.e(TAG, "XBMCJsonRPC: Failed to read JSON");
       e.printStackTrace();
       return null;
     }
     catch (UnsatisfiedLinkError e)
     {
-      Log.e(TAG, "_requestJSON: Not available");
+      Log.e(TAG, "XBMCJsonRPC: _requestJSON: Not available");
       return null;
     }
   }
@@ -158,14 +155,11 @@ public class XBMCJsonRPC
       if (stringResp == null)
         return null;
 
-      JsonParser parser = new JsonParser();
-      JsonElement element = parser.parse(stringResp);
-      JsonObject resp = element.getAsJsonObject();
-      return resp;
+      return JsonParser.parseString(stringResp).getAsJsonObject();
     }
     catch (Exception e)
     {
-      Log.e(TAG, "Failed to parse JSON");
+      Log.e(TAG, "XBMCJsonRPC: Failed to parse JSON");
       e.printStackTrace();
       return null;
     }
@@ -179,14 +173,11 @@ public class XBMCJsonRPC
       if (stringResp == null)
         return null;
 
-      JsonParser parser = new JsonParser();
-      JsonElement element = parser.parse(stringResp);
-      JsonArray resp = element.getAsJsonArray();
-      return resp;
+      return JsonParser.parseString(stringResp).getAsJsonArray();
     }
     catch (Exception e)
     {
-      Log.e(TAG, "Failed to parse JSON");
+      Log.e(TAG, "XBMCJsonRPC: Failed to parse JSON");
       e.printStackTrace();
       return null;
     }
@@ -497,7 +488,7 @@ public class XBMCJsonRPC
               45*60*1000,
               -1
             });
-            Log.d(TAG, "tvshow: " + tvshow.get("title").getAsString() + ", " + tvshow.get("year").getAsInt());
+            Log.d(TAG, "XBMCJsonRPC: tvshow: " + tvshow.get("title").getAsString() + ", " + tvshow.get("year").getAsInt());
             nb_shows++;
             totCount++;
           }
@@ -784,7 +775,7 @@ public class XBMCJsonRPC
       //detailsIntent.putExtra(MovieDetailsActivity.MOVIE, movie);
       //detailsIntent.putExtra(MovieDetailsActivity.NOTIFICATION_ID, id);
 
-      return PendingIntent.getActivity(ctx, 0, detailsIntent, PendingIntent.FLAG_CANCEL_CURRENT);
+      return PendingIntent.getActivity(ctx, 0, detailsIntent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     } catch (Exception e)
     {
       e.printStackTrace();
@@ -800,7 +791,7 @@ public class XBMCJsonRPC
       detailsIntent.setAction(Intent.ACTION_GET_CONTENT);
       detailsIntent.setData(Uri.parse("videodb://tvshows/titles/" + tvshow.get("tvshowid").getAsString() + "/"));
 
-      return PendingIntent.getActivity(ctx, 0, detailsIntent, PendingIntent.FLAG_CANCEL_CURRENT);
+      return PendingIntent.getActivity(ctx, 0, detailsIntent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     } catch (Exception e)
     {
       e.printStackTrace();
@@ -816,7 +807,7 @@ public class XBMCJsonRPC
       detailsIntent.setAction(Intent.ACTION_GET_CONTENT);
       detailsIntent.setData(Uri.parse("musicdb://albums/" + album.get("albumid").getAsString() + "/"));
 
-      return PendingIntent.getActivity(ctx, 0, detailsIntent, PendingIntent.FLAG_CANCEL_CURRENT);
+      return PendingIntent.getActivity(ctx, 0, detailsIntent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     } catch (Exception e)
     {
       e.printStackTrace();
@@ -1184,7 +1175,11 @@ public class XBMCJsonRPC
   {
     List<Media> medias = new ArrayList<Media>();
 
+    // count the number of categories with data
+    int categories = 0;
+
     JsonObject rep = request_object(RECOMMENDATION_MOVIES_JSON);
+    JsonArray movies = new JsonArray();
     if (rep != null && rep.has("result"))
     {
       try
@@ -1192,34 +1187,18 @@ public class XBMCJsonRPC
         JsonObject results = rep.getAsJsonObject("result");
         if (results.has("movies"))
         {
-          JsonArray movies = results.get("movies").getAsJsonArray();
-
-          int count = 0;
-          for (int i = 0; i < movies.size() && count < MAX_RECOMMENDATIONS; ++i)
+          movies = results.get("movies").getAsJsonArray();
+          if (movies.size() > 0)
           {
-            try
-            {
-              JsonObject details = movies.get(i).getAsJsonObject();
-              Movie med = createMovieFromJson(details);
-              if (med != null)
-              {
-                medias.add(med);
-                ++count;
-              }
-            }
-            catch (Exception e)
-            {
-              continue;
-            }
+            ++categories;
           }
         }
-      } catch (Exception e)
-      {
-        e.printStackTrace();
+      } catch (Exception e) {
       }
     }
 
     rep = request_object(RECOMMENDATIONS_SHOWS_JSON);
+    JsonArray tvshows = new JsonArray();
     if (rep != null && rep.has("result"))
     {
       try
@@ -1227,34 +1206,18 @@ public class XBMCJsonRPC
         JsonObject results = rep.getAsJsonObject("result");
         if (results.has("tvshows"))
         {
-          JsonArray tvshows = results.get("tvshows").getAsJsonArray();
-
-          int count = 0;
-          for (int i = 0; i < tvshows.size() && count < MAX_RECOMMENDATIONS; ++i)
+          tvshows = results.get("tvshows").getAsJsonArray();
+          if (tvshows.size() > 0)
           {
-            try
-            {
-              JsonObject tvshow = tvshows.get(i).getAsJsonObject();
-              TVShow med = createTVShowFromJson(tvshow);
-              if (med != null)
-              {
-                medias.add(med);
-                ++count;
-              }
-            }
-            catch (Exception e)
-            {
-              continue;
-            }
+            ++categories;
           }
         }
-      } catch (Exception e)
-      {
-        e.printStackTrace();
+      } catch (Exception e) {
       }
     }
 
     rep = request_object(RECOMMENDATIONS_ALBUMS_JSON);
+    JsonArray albums = new JsonArray();
     if (rep != null && rep.has("result"))
     {
       try
@@ -1262,30 +1225,93 @@ public class XBMCJsonRPC
         JsonObject results = rep.getAsJsonObject("result");
         if (results.has("albums"))
         {
-          JsonArray albums = results.get("albums").getAsJsonArray();
-
-          int count = 0;
-          for (int i = 0; i < albums.size() && count < MAX_RECOMMENDATIONS; ++i)
+          albums = results.get("albums").getAsJsonArray();
+          if (albums.size() > 0)
           {
-            try
-            {
-              JsonObject album = albums.get(i).getAsJsonObject();
-              Album med = createAlbumFromJson(album);
-              if (med != null)
-              {
-                medias.add(med);
-                ++count;
-              }
-            }
-            catch (Exception e)
-            {
-              continue;
-            }
+            ++categories;
           }
         }
-      } catch (Exception e)
+      } catch (Exception e) {
+      }
+    }
+
+    // distribution by the number of categories with data
+    if (categories == 1)
+    {
+      MAX_RECOMMENDATIONS = 10; // 1x10 items
+    }
+    else if (categories == 2)
+    {
+      MAX_RECOMMENDATIONS = 5; // 2x5 items
+    }
+    else
+    {
+      MAX_RECOMMENDATIONS = 3; // 3x3 items
+    }
+
+    if (movies.size() > 0)
+    {
+      int count = 0;
+      for (int i = 0; i < movies.size() && count < MAX_RECOMMENDATIONS; ++i)
       {
-        e.printStackTrace();
+        try
+        {
+          JsonObject details = movies.get(i).getAsJsonObject();
+          Movie med = createMovieFromJson(details);
+          if (med != null)
+          {
+            medias.add(med);
+            ++count;
+          }
+        }
+        catch (Exception e)
+        {
+          continue;
+        }
+      }
+    }
+
+    if (tvshows.size() > 0)
+    {
+      int count = 0;
+      for (int i = 0; i < tvshows.size() && count < MAX_RECOMMENDATIONS; ++i)
+      {
+        try
+        {
+          JsonObject tvshow = tvshows.get(i).getAsJsonObject();
+          TVShow med = createTVShowFromJson(tvshow);
+          if (med != null)
+          {
+            medias.add(med);
+            ++count;
+          }
+        }
+        catch (Exception e)
+        {
+          continue;
+        }
+      }
+    }
+
+    if (albums.size() > 0)
+    {
+      int count = 0;
+      for (int i = 0; i < albums.size() && count < MAX_RECOMMENDATIONS; ++i)
+      {
+        try
+        {
+          JsonObject album = albums.get(i).getAsJsonObject();
+          Album med = createAlbumFromJson(album);
+          if (med != null)
+          {
+            medias.add(med);
+            ++count;
+          }
+        }
+        catch (Exception e)
+        {
+          continue;
+        }
       }
     }
 

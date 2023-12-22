@@ -11,10 +11,12 @@
 #include "ServiceBroker.h"
 #include "URL.h"
 #include "addons/Webinterface.h"
+#include "addons/addoninfo/AddonType.h"
 #include "interfaces/legacy/wsgi/WsgiErrorStream.h"
 #include "interfaces/legacy/wsgi/WsgiInputStream.h"
 #include "interfaces/legacy/wsgi/WsgiResponse.h"
 #include "interfaces/python/swig.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 
 #include <utility>
@@ -73,32 +75,35 @@ PyObject* PyInit_Module_xbmcwsgi(void);
 
 using namespace PythonBindings;
 
-typedef struct
+namespace
 {
-  const char *name;
-  CPythonInvoker::PythonModuleInitialization initialization;
-} PythonModule;
-
-static PythonModule PythonModules[] =
+// clang-format off
+const _inittab PythonModules[] =
 {
   { "xbmc",           PyInit_Module_xbmc },
   { "xbmcaddon",      PyInit_Module_xbmcaddon },
-  { "xbmcwsgi",       PyInit_Module_xbmcwsgi }
+  { "xbmcwsgi",       PyInit_Module_xbmcwsgi },
+  { nullptr,          nullptr }
 };
+// clang-format on
+} // namespace
 
 CHTTPPythonWsgiInvoker::CHTTPPythonWsgiInvoker(ILanguageInvocationHandler* invocationHandler, HTTPPythonRequest* request)
   : CHTTPPythonInvoker(invocationHandler, request),
     m_wsgiResponse(NULL)
 {
-  PyImport_AppendInittab("xbmc", PyInit_Module_xbmc);
-  PyImport_AppendInittab("xbmcaddon", PyInit_Module_xbmcaddon);
-  PyImport_AppendInittab("xbmcwsgi", PyInit_Module_xbmcwsgi);
 }
 
 CHTTPPythonWsgiInvoker::~CHTTPPythonWsgiInvoker()
 {
   delete m_wsgiResponse;
   m_wsgiResponse = NULL;
+}
+
+void CHTTPPythonWsgiInvoker::GlobalInitializeModules(void)
+{
+  if (PyImport_ExtendInittab(const_cast<_inittab*>(PythonModules)))
+    CLog::Log(LOGWARNING, "CHTTPPythonWsgiInvoker(): unable to extend inittab");
 }
 
 HTTPPythonRequest* CHTTPPythonWsgiInvoker::GetRequest()
@@ -115,7 +120,7 @@ HTTPPythonRequest* CHTTPPythonWsgiInvoker::GetRequest()
 
 void CHTTPPythonWsgiInvoker::executeScript(FILE* fp, const std::string& script, PyObject* moduleDict)
 {
-  if (m_request == NULL || m_addon == NULL || m_addon->Type() != ADDON::ADDON_WEB_INTERFACE ||
+  if (m_request == NULL || m_addon == NULL || m_addon->Type() != ADDON::AddonType::WEB_INTERFACE ||
       fp == NULL || script.empty() || moduleDict == NULL)
     return;
 
@@ -207,12 +212,12 @@ void CHTTPPythonWsgiInvoker::executeScript(FILE* fp, const std::string& script, 
   catch (const XBMCAddon::WrongTypeException& e)
   {
     logger->error("failed to prepare WsgiResponse object with wrong type exception: {}",
-                  e.GetMessage());
+                  e.GetExMessage());
     goto cleanup;
   }
   catch (const XbmcCommons::Exception& e)
   {
-    logger->error("failed to prepare WsgiResponse object with exception: {}", e.GetMessage());
+    logger->error("failed to prepare WsgiResponse object with exception: {}", e.GetExMessage());
     goto cleanup;
   }
   catch (...)
@@ -254,12 +259,12 @@ void CHTTPPythonWsgiInvoker::executeScript(FILE* fp, const std::string& script, 
     catch (const XBMCAddon::WrongTypeException& e)
     {
       logger->error("failed to parse result iterable object with wrong type exception: {}",
-                    e.GetMessage());
+                    e.GetExMessage());
       goto cleanup;
     }
     catch (const XbmcCommons::Exception& e)
     {
-      logger->error("failed to parse result iterable object with exception: {}", e.GetMessage());
+      logger->error("failed to parse result iterable object with exception: {}", e.GetExMessage());
       goto cleanup;
     }
     catch (...)
@@ -299,18 +304,6 @@ cleanup:
   {
     Py_DECREF(pyModule);
   }
-}
-
-std::map<std::string, CPythonInvoker::PythonModuleInitialization> CHTTPPythonWsgiInvoker::getModules() const
-{
-  static std::map<std::string, PythonModuleInitialization> modules;
-  if (modules.empty())
-  {
-    for (const PythonModule& pythonModule : PythonModules)
-      modules.insert(std::make_pair(pythonModule.name, pythonModule.initialization));
-  }
-
-  return modules;
 }
 
 const char* CHTTPPythonWsgiInvoker::getInitializationScript() const
@@ -375,7 +368,7 @@ std::map<std::string, std::string> CHTTPPythonWsgiInvoker::createCgiEnvironment(
   environment.insert(std::make_pair("SERVER_NAME", httpRequest->hostname));
 
   // SERVER_PORT
-  environment.insert(std::make_pair("SERVER_PORT", StringUtils::Format("%hu", httpRequest->port)));
+  environment.insert(std::make_pair("SERVER_PORT", std::to_string(httpRequest->port)));
 
   // SERVER_PROTOCOL
   environment.insert(std::make_pair("SERVER_PROTOCOL", httpRequest->version));

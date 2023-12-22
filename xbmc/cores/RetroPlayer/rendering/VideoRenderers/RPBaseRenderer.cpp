@@ -71,6 +71,17 @@ bool CRPBaseRenderer::IsVisible() const
   return m_renderFrameCount <= m_lastRender + VISIBLE_DURATION_FRAME_COUNT;
 }
 
+IRenderBuffer* CRPBaseRenderer::GetRenderBuffer() const
+{
+  if (m_renderBuffer != nullptr)
+  {
+    m_renderBuffer->Acquire();
+    return m_renderBuffer;
+  }
+
+  return nullptr;
+}
+
 void CRPBaseRenderer::SetBuffer(IRenderBuffer* buffer)
 {
   if (m_renderBuffer != buffer)
@@ -121,6 +132,11 @@ void CRPBaseRenderer::SetRenderRotation(unsigned int rotationDegCCW)
   m_renderSettings.VideoSettings().SetRenderRotation(rotationDegCCW);
 }
 
+void CRPBaseRenderer::SetPixels(const std::string& pixelPath)
+{
+  m_renderSettings.VideoSettings().SetPixels(pixelPath);
+}
+
 void CRPBaseRenderer::ManageRenderArea(const IRenderBuffer& renderBuffer)
 {
   // Get texture parameters
@@ -138,6 +154,7 @@ void CRPBaseRenderer::ManageRenderArea(const IRenderBuffer& renderBuffer)
   // Get screen parameters
   float screenWidth;
   float screenHeight;
+  //! @Todo screenPixelRatio unused - Possibly due to display integer scaling according to Garbear
   float screenPixelRatio;
 
   if (scaleMode == SCALINGMETHOD::NEAREST && stretchMode == STRETCHMODE::Original &&
@@ -175,6 +192,15 @@ void CRPBaseRenderer::ManageRenderArea(const IRenderBuffer& renderBuffer)
   if (!(m_context.IsFullScreenVideo() || m_context.IsCalibrating()))
     CRenderUtils::ClipRect(viewRect, m_sourceRect, destRect);
 
+  if (stretchMode == STRETCHMODE::Zoom)
+  {
+    // Crop for zoom mode
+    CRenderUtils::CropSource(m_sourceRect, rotationDegCCW, viewRect.Width(), viewRect.Height(),
+                             static_cast<float>(sourceWidth), static_cast<float>(sourceHeight),
+                             destRect.Width(), destRect.Height());
+    destRect = viewRect;
+  }
+
   // Adapt the drawing rect points if we have to rotate
   m_rotatedDestCoords = CRenderUtils::ReorderDrawPoints(destRect, rotationDegCCW);
 }
@@ -191,7 +217,8 @@ void CRPBaseRenderer::PreRender(bool clear)
 
   // Clear screen
   if (clear)
-    m_context.Clear(m_context.UseLimitedColor() ? 0x101010 : 0);
+    m_context.Clear(m_context.UseLimitedColor() ? UTILS::COLOR::LIMITED_BLACK
+                                                : UTILS::COLOR::BLACK);
 }
 
 void CRPBaseRenderer::PostRender()

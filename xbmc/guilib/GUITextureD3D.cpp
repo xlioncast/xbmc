@@ -17,7 +17,12 @@
 
 using namespace DirectX;
 
-CGUITexture* CGUITexture::CreateTexture(
+void CGUITextureD3D::Register()
+{
+  CGUITexture::Register(CGUITextureD3D::CreateTexture, CGUITextureD3D::DrawQuad);
+}
+
+CGUITexture* CGUITextureD3D::CreateTexture(
     float posX, float posY, float width, float height, const CTextureInfo& texture)
 {
   return new CGUITextureD3D(posX, posY, width, height, texture);
@@ -34,9 +39,9 @@ CGUITextureD3D* CGUITextureD3D::Clone() const
   return new CGUITextureD3D(*this);
 }
 
-void CGUITextureD3D::Begin(UTILS::Color color)
+void CGUITextureD3D::Begin(UTILS::COLOR::Color color)
 {
-  CTexture* texture = m_texture.m_textures[m_currentFrame];
+  CTexture* texture = m_texture.m_textures[m_currentFrame].get();
   texture->LoadToGPU();
 
   if (m_diffuse.size())
@@ -113,14 +118,14 @@ void CGUITextureD3D::Draw(float *x, float *y, float *z, const CRect &texture, co
   }
   verts[3].color = xcolor;
 
-  CDXTexture* tex = (CDXTexture *)m_texture.m_textures[m_currentFrame];
+  CDXTexture* tex = static_cast<CDXTexture*>(m_texture.m_textures[m_currentFrame].get());
   CGUIShaderDX* pGUIShader = DX::Windowing()->GetGUIShader();
 
   pGUIShader->Begin(m_diffuse.size() ? SHADER_METHOD_RENDER_MULTI_TEXTURE_BLEND : SHADER_METHOD_RENDER_TEXTURE_BLEND);
 
   if (m_diffuse.size())
   {
-    CDXTexture* diff = (CDXTexture *)m_diffuse.m_textures[0];
+    CDXTexture* diff = static_cast<CDXTexture*>(m_diffuse.m_textures[0].get());
     ID3D11ShaderResourceView* resource[] = { tex->GetShaderResource(), diff->GetShaderResource() };
     pGUIShader->SetShaderViews(ARRAYSIZE(resource), resource);
   }
@@ -132,10 +137,10 @@ void CGUITextureD3D::Draw(float *x, float *y, float *z, const CRect &texture, co
   pGUIShader->DrawQuad(verts[0], verts[1], verts[2], verts[3]);
 }
 
-void CGUITexture::DrawQuad(const CRect& rect,
-                           UTILS::Color color,
-                           CTexture* texture,
-                           const CRect* texCoords)
+void CGUITextureD3D::DrawQuad(const CRect& rect,
+                              UTILS::COLOR::Color color,
+                              CTexture* texture,
+                              const CRect* texCoords)
 {
   unsigned numViews = 0;
   ID3D11ShaderResourceView* views = nullptr;

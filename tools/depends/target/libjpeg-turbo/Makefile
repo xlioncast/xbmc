@@ -1,25 +1,16 @@
-include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile 01-disable-executables.patch 02-fix-gas-preprocessor-with-ccache.patch
-
-# lib name, version
-LIBNAME=libjpeg-turbo
-VERSION=2.0.5
-SOURCE=$(LIBNAME)-$(VERSION)
-ARCHIVE=$(LIBNAME)-$(VERSION).tar.gz
+include ../../Makefile.include LIBJPEG-TURBO-VERSION ../../download-files.include
+DEPS = ../../Makefile.include LIBJPEG-TURBO-VERSION Makefile ../../download-files.include \
+                                  01-disable-executables.patch
 
 LIBDYLIB=$(PLATFORM)/build/libjpeg.a
 
 all: .installed-$(PLATFORM)
 
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); patch -p1 -i ../01-disable-executables.patch
-	cd $(PLATFORM); patch -p1 -i ../02-fix-gas-preprocessor-with-ccache.patch
-	cd $(PLATFORM); $(CMAKE) -B build -DCMAKE_ASM_NASM_COMPILER:FILEPATH=$(NATIVEPREFIX)/bin/yasm -DENABLE_SHARED:BOOL=OFF -DWITH_JPEG8:BOOL=ON
+	cd $(PLATFORM); $(CMAKE) -B build -DCMAKE_ASM_NASM_COMPILER:FILEPATH=$(NATIVEPREFIX)/bin/nasm -DENABLE_SHARED:BOOL=OFF -DWITH_JPEG8:BOOL=ON
 
 $(LIBDYLIB): $(PLATFORM)
 	$(MAKE) -C $(PLATFORM)/build

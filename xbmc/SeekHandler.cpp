@@ -8,13 +8,17 @@
 
 #include "SeekHandler.h"
 
-#include "Application.h"
 #include "FileItem.h"
 #include "ServiceBroker.h"
+#include "application/Application.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationPlayer.h"
 #include "cores/DataCacheCore.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
+#include "input/actions/Action.h"
+#include "input/actions/ActionIDs.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -27,6 +31,7 @@
 #include "windowing/GraphicContext.h"
 
 #include <cmath>
+#include <mutex>
 #include <stdlib.h>
 
 CSeekHandler::~CSeekHandler()
@@ -91,8 +96,9 @@ int CSeekHandler::GetSeekStepSize(SeekType type, int step)
 
   if (seekSteps.empty())
   {
-    CLog::Log(LOGERROR, "SeekHandler - %s - No %s %s seek steps configured.", __FUNCTION__,
-              (type == SeekType::SEEK_TYPE_VIDEO ? "video" : "music"), (step > 0 ? "forward" : "backward"));
+    CLog::Log(LOGERROR, "SeekHandler - {} - No {} {} seek steps configured.", __FUNCTION__,
+              (type == SeekType::SEEK_TYPE_VIDEO ? "video" : "music"),
+              (step > 0 ? "forward" : "backward"));
     return 0;
   }
 
@@ -109,7 +115,7 @@ int CSeekHandler::GetSeekStepSize(SeekType type, int step)
 
 void CSeekHandler::Seek(bool forward, float amount, float duration /* = 0 */, bool analogSeek /* = false */, SeekType type /* = SEEK_TYPE_VIDEO */)
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   // not yet seeking
   if (!m_requireSeek)
@@ -140,7 +146,7 @@ void CSeekHandler::Seek(bool forward, float amount, float duration /* = 0 */, bo
     if (totalTime < 0)
       totalTime = 0;
 
-    double seekSize = (amount * amount * speed) * totalTime / 100;
+    double seekSize = static_cast<double>(amount * amount * speed) * totalTime / 100.0;
     if (forward)
       SetSeekSize(m_seekSize + seekSize);
     else
@@ -170,11 +176,13 @@ void CSeekHandler::SeekSeconds(int seconds)
   if (seconds == 0)
     return;
 
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   SetSeekSize(seconds);
 
   // perform relative seek
-  g_application.GetAppPlayer().SeekTimeRelative(static_cast<int64_t>(seconds * 1000));
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  appPlayer->SeekTimeRelative(static_cast<int64_t>(seconds * 1000));
 
   Reset();
 }
@@ -186,10 +194,11 @@ int CSeekHandler::GetSeekSize() const
 
 void CSeekHandler::SetSeekSize(double seekSize)
 {
-  CApplicationPlayer& player = g_application.GetAppPlayer();
-  int64_t playTime = player.GetTime();
-  double minSeekSize = (player.GetMinTime() - playTime) / 1000.0;
-  double maxSeekSize = (player.GetMaxTime() - playTime) / 1000.0;
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  int64_t playTime = appPlayer->GetTime();
+  double minSeekSize = (appPlayer->GetMinTime() - playTime) / 1000.0;
+  double maxSeekSize = (appPlayer->GetMaxTime() - playTime) / 1000.0;
 
   m_seekSize = seekSize > 0
     ? std::min(seekSize, maxSeekSize)
@@ -205,10 +214,12 @@ void CSeekHandler::FrameMove()
 {
   if (m_timer.GetElapsedMilliseconds() >= m_seekDelay && m_requireSeek)
   {
-    CSingleLock lock(m_critSection);
+    std::unique_lock<CCriticalSection> lock(m_critSection);
 
     // perform relative seek
-    g_application.GetAppPlayer().SeekTimeRelative(static_cast<int64_t>(m_seekSize * 1000));
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+    appPlayer->SeekTimeRelative(static_cast<int64_t>(m_seekSize * 1000));
 
     m_seekChanged = true;
 
@@ -236,9 +247,9 @@ void CSeekHandler::SettingOptionsSeekStepsFiller(const SettingConstPtr& setting,
   for (int seconds : CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_seekSteps)
   {
     if (seconds > 60)
-      label = StringUtils::Format(g_localizeStrings.Get(14044).c_str(), seconds / 60);
+      label = StringUtils::Format(g_localizeStrings.Get(14044), seconds / 60);
     else
-      label = StringUtils::Format(g_localizeStrings.Get(14045).c_str(), seconds);
+      label = StringUtils::Format(g_localizeStrings.Get(14045), seconds);
 
     list.insert(list.begin(), IntegerSettingOption("-" + label, seconds * -1));
     list.emplace_back(label, seconds);
@@ -259,7 +270,9 @@ void CSeekHandler::OnSettingChanged(const std::shared_ptr<const CSetting>& setti
 
 bool CSeekHandler::OnAction(const CAction &action)
 {
-  if (!g_application.GetAppPlayer().IsPlaying() || !g_application.GetAppPlayer().CanSeek())
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (!appPlayer->IsPlaying() || !appPlayer->CanSeek())
     return false;
 
   SeekType type = g_application.CurrentFileItem().IsAudio() ? SEEK_TYPE_MUSIC : SEEK_TYPE_VIDEO;
@@ -283,23 +296,23 @@ bool CSeekHandler::OnAction(const CAction &action)
     case ACTION_BIG_STEP_BACK:
     case ACTION_CHAPTER_OR_BIG_STEP_BACK:
     {
-      g_application.GetAppPlayer().Seek(false, true, action.GetID() == ACTION_CHAPTER_OR_BIG_STEP_BACK);
+      appPlayer->Seek(false, true, action.GetID() == ACTION_CHAPTER_OR_BIG_STEP_BACK);
       return true;
     }
     case ACTION_BIG_STEP_FORWARD:
     case ACTION_CHAPTER_OR_BIG_STEP_FORWARD:
     {
-      g_application.GetAppPlayer().Seek(true, true, action.GetID() == ACTION_CHAPTER_OR_BIG_STEP_FORWARD);
+      appPlayer->Seek(true, true, action.GetID() == ACTION_CHAPTER_OR_BIG_STEP_FORWARD);
       return true;
     }
     case ACTION_NEXT_SCENE:
     {
-      g_application.GetAppPlayer().SeekScene(true);
+      appPlayer->SeekScene(true);
       return true;
     }
     case ACTION_PREV_SCENE:
     {
-      g_application.GetAppPlayer().SeekScene(false);
+      appPlayer->SeekScene(false);
       return true;
     }
     case ACTION_ANALOG_SEEK_FORWARD:
@@ -353,7 +366,7 @@ bool CSeekHandler::SeekTimeCode(const CAction &action)
     case ACTION_PLAYER_PLAY:
     case ACTION_PAUSE:
     {
-      CSingleLock lock(m_critSection);
+      std::unique_lock<CCriticalSection> lock(m_critSection);
 
       g_application.SeekTime(GetTimeCodeSeconds());
       Reset();

@@ -127,7 +127,7 @@ class TestRegExpLog : public testing::Test
 {
 protected:
   TestRegExpLog() = default;
-  ~TestRegExpLog() override { CServiceBroker::GetLogging().Uninitialize(); }
+  ~TestRegExpLog() override { CServiceBroker::GetLogging().Deinitialize(); }
 };
 
 TEST_F(TestRegExpLog, DumpOvector)
@@ -141,14 +141,13 @@ TEST_F(TestRegExpLog, DumpOvector)
   std::string appName = CCompileInfo::GetAppName();
   StringUtils::ToLower(appName);
   logfile = CSpecialProtocol::TranslatePath("special://temp/") + appName + ".log";
-  CServiceBroker::GetLogging().Initialize(
-      CSpecialProtocol::TranslatePath("special://temp/").c_str());
+  CServiceBroker::GetLogging().Initialize(CSpecialProtocol::TranslatePath("special://temp/"));
   EXPECT_TRUE(XFILE::CFile::Exists(logfile));
 
   EXPECT_TRUE(regex.RegComp("^(?<first>Test)\\s*(?<second>.*)\\."));
   EXPECT_EQ(0, regex.RegFind("Test string."));
   regex.DumpOvector(LOGDEBUG);
-  CServiceBroker::GetLogging().Uninitialize();
+  CServiceBroker::GetLogging().Deinitialize();
 
   EXPECT_TRUE(file.Open(logfile));
   while ((bytesread = file.Read(buf, sizeof(buf) - 1)) > 0)
@@ -161,7 +160,7 @@ TEST_F(TestRegExpLog, DumpOvector)
 
   EXPECT_STREQ("\xEF\xBB\xBF", logstring.substr(0, 3).c_str());
 
-  EXPECT_TRUE(regex.RegComp(".*DEBUG <general>: regexp ovector=\\{\\[0,12\\],\\[0,4\\],"
+  EXPECT_TRUE(regex.RegComp(".*(debug|DEBUG) <general>: regexp ovector=\\{\\[0,12\\],\\[0,4\\],"
                             "\\[5,11\\]\\}.*"));
   EXPECT_GE(regex.RegFind(logstring), 0);
 

@@ -16,7 +16,8 @@
 #include "settings/SettingsComponent.h"
 #include "windowing/GraphicContext.h"
 
-namespace OVERLAY {
+namespace OVERLAY
+{
 
 static uint32_t build_rgba(int a, int r, int g, int b, bool mergealpha)
 {
@@ -32,8 +33,8 @@ static uint32_t build_rgba(int a, int r, int g, int b, bool mergealpha)
          | b << PIXEL_BSHIFT;
 }
 
-#define clamp(x) (x) > 255.0 ? 255 : ((x) < 0.0 ? 0 : (int)(x+0.5f))
-static uint32_t build_rgba(int yuv[3], int alpha, bool mergealpha)
+#define clamp(x) (x) > 255.0 ? 255 : ((x) < 0.0 ? 0 : (int)(x + 0.5))
+static uint32_t build_rgba(const int yuv[3], int alpha, bool mergealpha)
 {
   int    a = alpha + ( (alpha << 4) & 0xff );
   double r = 1.164 * (yuv[0] - 16)                          + 1.596 * (yuv[2] - 128);
@@ -43,43 +44,32 @@ static uint32_t build_rgba(int yuv[3], int alpha, bool mergealpha)
 }
 #undef clamp
 
-uint32_t* convert_rgba(CDVDOverlayImage* o, bool mergealpha)
+void convert_rgba(const CDVDOverlayImage& o, bool mergealpha, std::vector<uint32_t>& rgba)
 {
-  uint32_t* rgba = (uint32_t*)malloc(o->width * o->height * sizeof(uint32_t));
+  uint32_t palette[256] = {};
+  for (size_t i = 0; i < o.palette.size(); i++)
+    palette[i] = build_rgba(
+        (o.palette[i] >> PIXEL_ASHIFT) & 0xff, (o.palette[i] >> PIXEL_RSHIFT) & 0xff,
+        (o.palette[i] >> PIXEL_GSHIFT) & 0xff, (o.palette[i] >> PIXEL_BSHIFT) & 0xff, mergealpha);
 
-  if(!rgba)
-    return NULL;
-
-  uint32_t palette[256];
-  memset(palette, 0, 256 * sizeof(palette[0]));
-  for(int i = 0; i < o->palette_colors; i++)
-    palette[i] = build_rgba((o->palette[i] >> PIXEL_ASHIFT) & 0xff
-                          , (o->palette[i] >> PIXEL_RSHIFT) & 0xff
-                          , (o->palette[i] >> PIXEL_GSHIFT) & 0xff
-                          , (o->palette[i] >> PIXEL_BSHIFT) & 0xff
-                          , mergealpha);
-
-  for(int row = 0; row < o->height; row++)
-    for(int col = 0; col < o->width; col++)
-      rgba[row * o->width + col] = palette[ o->data[row * o->linesize + col] ];
-
-  return rgba;
+  for (int row = 0; row < o.height; row++)
+    for (int col = 0; col < o.width; col++)
+      rgba[row * o.width + col] = palette[o.pixels[row * o.linesize + col]];
 }
 
-uint32_t* convert_rgba(CDVDOverlaySpu* o, bool mergealpha
-                              , int& min_x, int& max_x
-                              , int& min_y, int& max_y)
+void convert_rgba(const CDVDOverlaySpu& o,
+                  bool mergealpha,
+                  int& min_x,
+                  int& max_x,
+                  int& min_y,
+                  int& max_y,
+                  std::vector<uint32_t>& rgba)
 {
-  uint32_t* rgba = (uint32_t*)malloc(o->width * o->height * sizeof(uint32_t));
-
-  if(!rgba)
-    return NULL;
-
   uint32_t palette[8];
-  for(int i = 0; i < 4; i++)
+  for (int i = 0; i < 4; i++)
   {
-    palette[i]   = build_rgba(o->color[i]          , o->alpha[i]          , mergealpha);
-    palette[i+4] = build_rgba(o->highlight_color[i], o->highlight_alpha[i], mergealpha);
+    palette[i] = build_rgba(o.color[i], o.alpha[i], mergealpha);
+    palette[i + 4] = build_rgba(o.highlight_color[i], o.highlight_alpha[i], mergealpha);
   }
 
   uint32_t  color;
@@ -93,25 +83,25 @@ uint32_t* convert_rgba(CDVDOverlaySpu* o, bool mergealpha
     , btn_y_start = 0
     , btn_y_end   = 0;
 
-  if(o->bForced)
+  if (o.bForced)
   {
-    btn_x_start = o->crop_i_x_start - o->x;
-    btn_x_end   = o->crop_i_x_end   - o->x;
-    btn_y_start = o->crop_i_y_start - o->y;
-    btn_y_end   = o->crop_i_y_end   - o->y;
+    btn_x_start = o.crop_i_x_start - o.x;
+    btn_x_end = o.crop_i_x_end - o.x;
+    btn_y_start = o.crop_i_y_start - o.y;
+    btn_y_end = o.crop_i_y_end - o.y;
   }
 
-  min_x = o->width;
+  min_x = o.width;
   max_x = 0;
-  min_y = o->height;
+  min_y = o.height;
   max_y = 0;
 
-  trg = rgba;
-  src = (uint16_t*)o->result;
+  trg = rgba.data();
+  src = (uint16_t*)o.result;
 
-  for (int y = 0; y < o->height; y++)
+  for (int y = 0; y < o.height; y++)
   {
-    for (int x = 0; x < o->width ; x += len)
+    for (int x = 0; x < o.width; x += len)
     {
       /* Get the RLE part, then draw the line */
       idx = *src & 0x3;
@@ -157,7 +147,7 @@ uint32_t* convert_rgba(CDVDOverlaySpu* o, bool mergealpha
         x   += draw;
       }
     }
-    trg += o->width;
+    trg += o.width;
   }
 
   /* if nothing visible, just output a dummy pixel */
@@ -167,13 +157,12 @@ uint32_t* convert_rgba(CDVDOverlaySpu* o, bool mergealpha
     max_y = max_x = 1;
     min_y = min_x = 0;
   }
-
-  return rgba;
 }
 
 bool convert_quad(ASS_Image* images, SQuads& quads, int max_x)
 {
   ASS_Image* img;
+  int count = 0;
 
   if (!images)
     return false;
@@ -187,10 +176,10 @@ bool convert_quad(ASS_Image* images, SQuads& quads, int max_x)
       continue;
 
     quads.size_x += img->w + 1;
-    quads.count++;
+    count++;
   }
 
-  if (quads.count == 0)
+  if (count == 0)
     return false;
 
   if (quads.size_x > max_x)
@@ -223,21 +212,20 @@ bool convert_quad(ASS_Image* images, SQuads& quads, int max_x)
   quads.size_y += curr_y + 1;
 
   // allocate space for the glyph positions and texturedata
+  quads.quad.resize(count);
+  quads.texture.resize(quads.size_x * quads.size_y);
 
-  quads.quad = static_cast<SQuad*>(calloc(quads.count, sizeof(SQuad)));
-  quads.data = static_cast<uint8_t*>(calloc(quads.size_x * quads.size_y, 1));
-
-  SQuad*   v    = quads.quad;
-  uint8_t* data = quads.data;
+  SQuad* v = quads.quad.data();
+  uint8_t* data = quads.texture.data();
 
   int y = 0;
 
   curr_x = 0;
   curr_y = 0;
 
-  for(img = images; img; img = img->next)
+  for (img = images; img; img = img->next)
   {
-    if((img->color & 0xff) == 0xff || img->w == 0 || img->h == 0)
+    if ((img->color & 0xff) == 0xff || img->w == 0 || img->h == 0)
       continue;
 
     unsigned int color = img->color;
@@ -246,9 +234,9 @@ bool convert_quad(ASS_Image* images, SQuads& quads, int max_x)
     if (curr_x + img->w >= quads.size_x)
     {
       curr_y += y + 1;
-      curr_x  = 0;
-      y       = 0;
-      data    = quads.data + curr_y * quads.size_x;
+      curr_x = 0;
+      y = 0;
+      data = quads.texture.data() + curr_y * quads.size_x;
     }
 
     unsigned int r = ((color >> 24) & 0xff);
@@ -271,10 +259,8 @@ bool convert_quad(ASS_Image* images, SQuads& quads, int max_x)
 
     v++;
 
-    for(int i=0; i<img->h; i++)
-      memcpy(data        + quads.size_x * i
-           , img->bitmap + img->stride  * i
-           , img->w);
+    for (int i = 0; i < img->h; i++)
+      memcpy(data + quads.size_x * i, img->bitmap + img->stride * i, img->w);
 
     if (img->h > y)
       y = img->h;

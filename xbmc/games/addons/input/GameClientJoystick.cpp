@@ -9,10 +9,12 @@
 #include "GameClientJoystick.h"
 
 #include "GameClientInput.h"
+#include "GameClientTopology.h"
 #include "games/addons/GameClient.h"
 #include "games/controllers/Controller.h"
-#include "games/ports/Port.h"
+#include "games/ports/input/PortInput.h"
 #include "input/joysticks/interfaces/IInputReceiver.h"
+#include "peripherals/devices/Peripheral.h"
 #include "utils/log.h"
 
 #include <assert.h>
@@ -26,7 +28,7 @@ CGameClientJoystick::CGameClientJoystick(CGameClient& gameClient,
   : m_gameClient(gameClient),
     m_portAddress(portAddress),
     m_controller(controller),
-    m_port(new CPort(this))
+    m_portInput(new CPortInput(this))
 {
   assert(m_controller.get() != NULL);
 }
@@ -35,12 +37,12 @@ CGameClientJoystick::~CGameClientJoystick() = default;
 
 void CGameClientJoystick::RegisterInput(JOYSTICK::IInputProvider* inputProvider)
 {
-  m_port->RegisterInput(inputProvider);
+  m_portInput->RegisterInput(inputProvider);
 }
 
 void CGameClientJoystick::UnregisterInput(JOYSTICK::IInputProvider* inputProvider)
 {
-  m_port->UnregisterInput(inputProvider);
+  m_portInput->UnregisterInput(inputProvider);
 }
 
 std::string CGameClientJoystick::ControllerID(void) const
@@ -88,7 +90,6 @@ bool CGameClientJoystick::OnButtonMotion(const std::string& feature,
   event.port_address = m_portAddress.c_str();
   event.feature_name = feature.c_str();
   event.analog_button.magnitude = magnitude;
-
 
   return m_gameClient.Input().InputEvent(event);
 }
@@ -168,6 +169,34 @@ bool CGameClientJoystick::OnThrottleMotion(const std::string& feature,
   event.axis.position = position;
 
   return m_gameClient.Input().InputEvent(event);
+}
+
+std::string CGameClientJoystick::GetControllerAddress() const
+{
+  return CGameClientTopology::MakeAddress(m_portAddress, m_controller->ID());
+}
+
+std::string CGameClientJoystick::GetSourceLocation() const
+{
+  if (m_sourcePeripheral)
+    return m_sourcePeripheral->Location();
+
+  return "";
+}
+
+float CGameClientJoystick::GetActivation() const
+{
+  return m_portInput->GetActivation();
+}
+
+void CGameClientJoystick::SetSource(PERIPHERALS::PeripheralPtr sourcePeripheral)
+{
+  m_sourcePeripheral = std::move(sourcePeripheral);
+}
+
+void CGameClientJoystick::ClearSource()
+{
+  m_sourcePeripheral.reset();
 }
 
 bool CGameClientJoystick::SetRumble(const std::string& feature, float magnitude)

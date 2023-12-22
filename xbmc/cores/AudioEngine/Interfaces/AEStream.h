@@ -25,7 +25,7 @@ class IAEClockCallback
 public:
   virtual ~IAEClockCallback() = default;
   virtual double GetClock() = 0;
-  virtual double GetClockSpeed() { return 1.0; };
+  virtual double GetClockSpeed() { return 1.0; }
 };
 
 class CAESyncInfo
@@ -187,7 +187,7 @@ public:
   virtual void SetAmplification(float amplify) = 0;
 
   /**
-   * Sets the stream ffmpeg informations if present.
+   * Sets the stream ffmpeg information if present.
    + @param profile
    * @param matrix_encoding
    * @param audio_service_type

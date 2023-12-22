@@ -8,11 +8,14 @@
 
 #include "GUIWindowScreensaverDim.h"
 
-#include "Application.h"
 #include "ServiceBroker.h"
 #include "addons/AddonManager.h"
+#include "addons/IAddon.h"
+#include "addons/addoninfo/AddonType.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationPowerHandling.h"
 #include "guilib/GUITexture.h"
-#include "utils/Color.h"
+#include "utils/ColorUtils.h"
 #include "windowing/GraphicContext.h"
 
 CGUIWindowScreensaverDim::CGUIWindowScreensaverDim(void)
@@ -26,20 +29,22 @@ CGUIWindowScreensaverDim::CGUIWindowScreensaverDim(void)
 
 void CGUIWindowScreensaverDim::UpdateVisibility()
 {
-  if (g_application.IsInScreenSaver())
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appPower = components.GetComponent<CApplicationPowerHandling>();
+  if (appPower->IsInScreenSaver())
   {
     if (m_visible)
       return;
 
-    std::string usedId = g_application.ScreensaverIdInUse();
+    std::string usedId = appPower->ScreensaverIdInUse();
     if  (usedId == "screensaver.xbmc.builtin.dim" ||
          usedId == "screensaver.xbmc.builtin.black")
     {
       m_visible = true;
       ADDON::AddonPtr info;
-      CServiceBroker::GetAddonMgr().GetAddon(usedId, info, ADDON::ADDON_SCREENSAVER,
-                                             ADDON::OnlyEnabled::YES);
-      if (info && !info->GetSetting("level").empty())
+      bool success = CServiceBroker::GetAddonMgr().GetAddon(
+          usedId, info, ADDON::AddonType::SCREENSAVER, ADDON::OnlyEnabled::CHOICE_YES);
+      if (success && info && !info->GetSetting("level").empty())
         m_newDimLevel = 100.0f - (float)atof(info->GetSetting("level").c_str());
       else
         m_newDimLevel = 100.0f;
@@ -64,7 +69,7 @@ void CGUIWindowScreensaverDim::Process(unsigned int currentTime, CDirtyRegionLis
 void CGUIWindowScreensaverDim::Render()
 {
   // draw a translucent black quad - fading is handled by the window animation
-  UTILS::Color color = (static_cast<UTILS::Color>(m_dimLevel * 2.55f) & 0xff) << 24;
+  UTILS::COLOR::Color color = (static_cast<UTILS::COLOR::Color>(m_dimLevel * 2.55f) & 0xff) << 24;
   color = CServiceBroker::GetWinSystem()->GetGfxContext().MergeAlpha(color);
   CRect rect(0, 0, (float)CServiceBroker::GetWinSystem()->GetGfxContext().GetWidth(), (float)CServiceBroker::GetWinSystem()->GetGfxContext().GetHeight());
   CGUITexture::DrawQuad(rect, color);

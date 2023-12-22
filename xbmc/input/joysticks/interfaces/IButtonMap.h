@@ -41,11 +41,11 @@ public:
   virtual std::string ControllerID(void) const = 0;
 
   /*!
-   * \brief The name of the peripheral associated with this button map
+   * \brief The Location of the peripheral associated with this button map
    *
-   * \return The peripheral's name
+   * \return The peripheral's location
    */
-  virtual std::string DeviceName(void) const = 0;
+  virtual std::string Location(void) const = 0;
 
   /*!
    * \brief Load the button map into memory
@@ -65,6 +65,24 @@ public:
    * \return True if the button map is empty, false if it has features
    */
   virtual bool IsEmpty(void) const = 0;
+
+  /*!
+   * \brief Get the ID of the controller profile that best represents the
+   * appearance of the peripheral
+   *
+   * \return The controller ID, or empty if the appearance is unknown
+   */
+  virtual std::string GetAppearance() const = 0;
+
+  /*!
+  * \brief Set the ID of the controller that best represents the appearance
+  * of the peripheral
+  *
+  * \param controllerId The controller ID, or empty to unset the appearance
+  *
+  * \return True if the appearance was set, false on error
+  */
+  virtual bool SetAppearance(const std::string& controllerId) const = 0;
 
   /*!
    * \brief Get the feature associated with a driver primitive
@@ -317,7 +335,7 @@ public:
 
   /*!
    * \brief Revert changes to the button map since the last time it was loaded
-   *        or commited to disk
+   *        or committed to disk
    */
   virtual void RevertButtonMap() = 0;
 };

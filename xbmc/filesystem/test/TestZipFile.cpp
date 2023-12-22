@@ -36,8 +36,7 @@ protected:
 TEST_F(TestZipFile, Read)
 {
   XFILE::CFile file;
-  char buf[20];
-  memset(&buf, 0, sizeof(buf));
+  char buf[20] = {};
   std::string reffile, strpathinzip;
   CFileItemList itemlist;
 
@@ -125,8 +124,7 @@ TEST_F(TestZipFile, Stat)
 TEST_F(TestZipFile, CorruptedFile)
 {
   XFILE::CFile *file;
-  char buf[16];
-  memset(&buf, 0, sizeof(buf));
+  char buf[16] = {};
   std::string reffilepath, strpathinzip, str;
   CFileItemList itemlist;
   ssize_t size, i;
@@ -169,12 +167,12 @@ TEST_F(TestZipFile, CorruptedFile)
   std::cout << "File contents:" << std::endl;
   while ((size = file->Read(buf, sizeof(buf))) > 0)
   {
-    str = StringUtils::Format("  %08llX", count);
+    str = StringUtils::Format("  {:08X}", count);
     std::cout << str << "  ";
     count += size;
     for (i = 0; i < size; i++)
     {
-      str = StringUtils::Format("%02X ", buf[i]);
+      str = StringUtils::Format("{:02X} ", buf[i]);
       std::cout << str;
     }
     while (i++ < static_cast<ssize_t> (sizeof(buf)))

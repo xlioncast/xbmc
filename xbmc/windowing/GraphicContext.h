@@ -8,16 +8,17 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
-#include <stack>
-#include <map>
-#include "threads/CriticalSection.h"
-#include "utils/TransformMatrix.h"        // for the members m_guiTransform etc.
-#include "utils/Geometry.h"               // for CRect/CPoint
 #include "Resolution.h"
 #include "rendering/RenderSystem.h"
-#include "utils/Color.h"
+#include "threads/CriticalSection.h"
+#include "utils/ColorUtils.h"
+#include "utils/Geometry.h" // for CRect/CPoint
+#include "utils/TransformMatrix.h" // for the members m_guiTransform etc.
+
+#include <map>
+#include <stack>
+#include <string>
+#include <vector>
 
 // required by clients
 #include "ServiceBroker.h"
@@ -81,7 +82,7 @@ public:
 
   void Flip(bool rendered, bool videoLayer);
 
-  // gfx contect interface
+  // gfx context interface
   int GetWidth() const;
   int GetHeight() const;
   bool SetViewPort(float fx, float fy , float fwidth, float fheight, bool intersectPrevious = false);
@@ -98,7 +99,7 @@ public:
   void ResetScreenParameters(RESOLUTION res);
   void CaptureStateBlock();
   void ApplyStateBlock();
-  void Clear(UTILS::Color color = 0);
+  void Clear(UTILS::COLOR::Color color = 0);
   void GetAllowedResolutions(std::vector<RESOLUTION> &res);
 
   /* \brief Get UI scaling information from a given resolution to the screen resolution.
@@ -121,7 +122,8 @@ public:
   const TransformMatrix &GetGUIMatrix() const;
   float GetGUIScaleX() const;
   float GetGUIScaleY() const;
-  UTILS::Color MergeAlpha(UTILS::Color color) const;
+  UTILS::COLOR::Color MergeAlpha(UTILS::COLOR::Color color) const;
+  UTILS::COLOR::Color MergeColor(UTILS::COLOR::Color color) const;
   void SetOrigin(float x, float y);
   void RestoreOrigin();
   void SetCameraPosition(const CPoint &camera);
@@ -205,9 +207,16 @@ protected:
   class UITransform
   {
   public:
-    UITransform() : matrix() {};
-    UITransform(const TransformMatrix &m, const float sX = 1.0f, const float sY = 1.0f) : matrix(m), scaleX(sX), scaleY(sY) { };
-    void Reset() { matrix.Reset(); scaleX = scaleY = 1.0f; };
+    UITransform() : matrix() {}
+    UITransform(const TransformMatrix& m, const float sX = 1.0f, const float sY = 1.0f)
+      : matrix(m), scaleX(sX), scaleY(sY)
+    {
+    }
+    void Reset()
+    {
+      matrix.Reset();
+      scaleX = scaleY = 1.0f;
+    }
 
     TransformMatrix matrix;
     float scaleX = 1.0f;

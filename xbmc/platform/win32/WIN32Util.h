@@ -18,6 +18,15 @@
 
 #define BONJOUR_EVENT             ( WM_USER + 0x100 )	// Message sent to the Window when a Bonjour event occurs.
 #define BONJOUR_BROWSER_EVENT     ( WM_USER + 0x110 )
+#define TRAY_ICON_NOTIFY          ( WM_USER + 0x120 )
+
+struct VideoDriverInfo
+{
+  int majorVersion;
+  int minorVersion;
+  bool valid;
+  std::string version;
+};
 
 class CURL; // forward declaration
 
@@ -35,7 +44,7 @@ public:
   static size_t GetSystemMemorySize();
 
   static std::string GetSystemPath();
-  static std::string GetProfilePath();
+  static std::string GetProfilePath(const bool platformDirectories);
   static std::string UncToSmb(const std::string &strPath);
   static std::string SmbToUnc(const std::string &strPath);
   static bool AddExtraLongPathPrefix(std::wstring& path);
@@ -63,12 +72,31 @@ public:
 #endif // TARGET_WINDOWS_DESKTOP
   static void CropSource(CRect& src, CRect& dst, CRect target, UINT rotation = 0);
 
-  static bool IsUsbDevice(const std::wstring &strWdrive);
-
   static std::string WUSysMsg(DWORD dwError);
   static bool SetThreadLocalLocale(bool enable = true);
 
   // HDR display support
   static HDR_STATUS ToggleWindowsHDR(DXGI_MODE_DESC& modeDesc);
   static HDR_STATUS GetWindowsHDRStatus();
+  static bool GetSystemSdrWhiteLevel(const std::wstring& gdiDeviceName, float* sdrWhiteLevel);
+
+  static void PlatformSyslog();
+
+  static VideoDriverInfo GetVideoDriverInfo(const UINT vendorId, const std::wstring& driverDesc);
+  static std::wstring GetDisplayFriendlyName(const std::wstring& GdiDeviceName);
+  /*!
+   * \brief Set the thread name using SetThreadDescription when available
+   * \param handle handle of the thread
+   * \param name name of the thread
+   * \return true if the name was successfully set, false otherwise (API not supported or API failure)
+   */
+  static bool SetThreadName(const HANDLE handle, const std::string& name);
+  /*!
+   * \brief Compare two Windows driver versions (xx.xx.xx.xx string format)
+   * \param version1 First version to compare
+   * \param version2 Second version to compare
+   * \return true when version1 is greater or equal to version2.
+   * Undefined results when the strings are not formatted properly.
+  */
+  static bool IsDriverVersionAtLeast(const std::string& version1, const std::string& version2);
 };

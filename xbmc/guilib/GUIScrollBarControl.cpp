@@ -10,6 +10,7 @@
 
 #include "GUIMessage.h"
 #include "input/Key.h"
+#include "input/mouse/MouseStat.h"
 #include "utils/StringUtils.h"
 
 #define MIN_NIB_SIZE 4.0f
@@ -315,14 +316,14 @@ void GUIScrollBarControl::SetFromPosition(const CPoint &point)
 
 EVENT_RESULT GUIScrollBarControl::OnMouseEvent(const CPoint &point, const CMouseEvent &event)
 {
-  if (event.m_id == ACTION_MOUSE_DRAG)
+  if (event.m_id == ACTION_MOUSE_DRAG || event.m_id == ACTION_MOUSE_DRAG_END)
   {
-    if (event.m_state == 1)
+    if (static_cast<HoldAction>(event.m_state) == HoldAction::DRAG)
     { // we want exclusive access
       CGUIMessage msg(GUI_MSG_EXCLUSIVE_MOUSE, GetID(), GetParentID());
       SendWindowMessage(msg);
     }
-    else if (event.m_state == 3)
+    else if (static_cast<HoldAction>(event.m_state) == HoldAction::DRAG_END)
     { // we're done with exclusive access
       CGUIMessage msg(GUI_MSG_EXCLUSIVE_MOUSE, 0, GetParentID());
       SendWindowMessage(msg);
@@ -372,12 +373,12 @@ EVENT_RESULT GUIScrollBarControl::OnMouseEvent(const CPoint &point, const CMouse
 
 std::string GUIScrollBarControl::GetDescription() const
 {
-  return StringUtils::Format("%i/%i", m_offset, m_numItems);
+  return StringUtils::Format("{}/{}", m_offset, m_numItems);
 }
 
-bool GUIScrollBarControl::UpdateColors()
+bool GUIScrollBarControl::UpdateColors(const CGUIListItem* item)
 {
-  bool changed = CGUIControl::UpdateColors();
+  bool changed = CGUIControl::UpdateColors(nullptr);
   changed |= m_guiBackground->SetDiffuseColor(m_diffuseColor);
   changed |= m_guiBarNoFocus->SetDiffuseColor(m_diffuseColor);
   changed |= m_guiBarFocus->SetDiffuseColor(m_diffuseColor);

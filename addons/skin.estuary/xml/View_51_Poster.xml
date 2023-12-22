@@ -15,9 +15,9 @@
 			<height>720</height>
 			<control type="image">
 				<left>0</left>
-				<top>4</top>
+				<top>8</top>
 				<width>100%</width>
-				<height>410</height>
+				<height>415</height>
 				<animation effect="fade" start="0" end="100" time="300">WindowOpen</animation>
 				<animation effect="fade" start="100" end="0" time="300">WindowClose</animation>
 				<animation effect="fade" time="200">VisibleChange</animation>
@@ -88,15 +88,8 @@
 							<param name="font" value="font13" />
 						</include>
 					</control>
-					<control type="image">
-						<left>645</left>
-						<top>415</top>
-						<width>32</width>
-						<height>32</height>
-						<texture>$VAR[ListWatchedIconVar]</texture>
-					</control>
 					<control type="label">
-						<left>695</left>
+						<left>645</left>
 						<top>400</top>
 						<right>50</right>
 						<height>40</height>
@@ -131,7 +124,7 @@
 				<width>516</width>
 				<height>756</height>
 				<texture>colors/black.png</texture>
-				<bordertexture border="21">overlays/shadow.png</bordertexture>
+				<bordertexture border="21" infill="false">overlays/shadow.png</bordertexture>
 				<bordersize>20</bordersize>
 			</control>
 			<control type="image">
@@ -142,6 +135,58 @@
 				<fadetime>200</fadetime>
 				<aspectratio>scale</aspectratio>
 				<texture fallback="DefaultMovies.png" background="true">$VAR[PosterThumbVar]</texture>
+			</control>
+			<control type="group">
+				<visible>String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBType,season) | ListItem.IsRecording | ListItem.HasReminder | ListItem.HasTimer | ListItem.IsCollection | ListItem.HasVideoVersions | ListItem.IsPlaying | ListItem.IsResumable | ListItem.HasArchive | Integer.IsGreater(ListItem.Playcount,0)</visible>
+				<control type="image">
+					<left>4</left>
+					<top>670</top>
+					<width>476</width>
+					<height>50</height>
+					<texture colordiffuse="CCFFFFFF">overlays/overlayfade.png</texture>
+					<visible>!String.IsEmpty(ListItem.Art(poster))</visible>
+				</control>
+				<control type="image">
+					<left>6</left>
+					<top>684</top>
+					<width>32</width>
+					<height>32</height>
+					<texture>$VAR[WallWatchedIconVar]</texture>
+					<align>right</align>
+					<aligny>center</aligny>
+				</control>
+				<control type="label">
+					<left>0</left>
+					<top>690</top>
+					<width>435</width>
+					<height>24</height>
+					<label>$VAR[WatchedStatusVar]</label>
+					<font>font20_title</font>
+					<shadowcolor>text_shadow</shadowcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<visible>String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,set) | String.IsEqual(ListItem.DBType,season)</visible>
+				</control>
+				<control type="image">
+					<left>445</left>
+					<top>690</top>
+					<width>24</width>
+					<height>24</height>
+					<texture>lists/played-total.png</texture>
+					<align>right</align>
+					<aligny>center</aligny>
+					<visible>String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,set) | String.IsEqual(ListItem.DBType,season)</visible>
+				</control>
+			</control>
+			<control type="progress">
+				<left>4</left>
+				<top>702</top>
+				<width>476</width>
+				<height>1</height>
+				<texturebg></texturebg>
+				<midtexture colordiffuse="button_focus" border="3">progress/texturebg_alt_white.png</midtexture>
+				<info>ListItem.PercentPlayed</info>
+				<visible>!Integer.IsEqual(ListItem.PercentPlayed,0)</visible>
 			</control>
 			<control type="image">
 				<left>1</left>

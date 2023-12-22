@@ -7,9 +7,6 @@
         <setting id="screensaver.mode">
           <default></default>
         </setting>
-        <setting id="screensaver.usemusicvisinstead">
-          <default>false</default>
-        </setting>
         <setting id="screensaver.usedimonpause">
           <default>false</default>
         </setting>
@@ -35,6 +32,7 @@
           <visible>false</visible>
         </setting>
       </group>
+      <!-- Apple Remote -->
       <group id="3">
         <setting id="input.appleremotemode">
           <visible>false</visible>
@@ -42,17 +40,16 @@
         <setting id="input.appleremotesequencetime">
           <visible>false</visible>
         </setting>
-        <setting id="input.applesiri" type="boolean" label="24163" help="24153">
-          <level>1</level>
-          <default>false</default>
-          <control type="toggle" />
-        </setting>
-        <setting id="input.applesiritimeoutenabled" type="boolean" label="24160" help="24161">
+      </group>
+      <!-- Apple TV -->
+      <group id="4" label="13601">
+        <!-- Siri remote idle timer -->
+        <setting id="input.siriremoteidletimerenabled" type="boolean" label="24160" help="24161">
           <level>1</level>
           <default>true</default>
           <control type="toggle" />
         </setting>
-        <setting id="input.applesiritimeout" type="integer" label="24154" help="24155">
+        <setting id="input.siriremoteidletime" type="integer" label="24154" help="24155">
           <level>1</level>
           <default>60</default>
           <constraints>
@@ -65,10 +62,31 @@
           </constraints>
           <control type="list" format="integer" />
           <dependencies>
-            <dependency type="enable" setting="input.applesiritimeoutenabled">true</dependency>
+            <dependency type="enable" setting="input.siriremoteidletimerenabled">true</dependency>
           </dependencies>
         </setting>
-        <setting id="input.appleusekodikeyboard" type="boolean" label="24162">
+        <!-- Siri remote sensitivity -->
+        <setting id="input.siriremotehorizontalsensitivity" type="integer" label="34009" help="24163">
+          <level>2</level>
+          <default>500</default>
+          <constraints>
+            <minimum>50</minimum>
+            <step>50</step>
+            <maximum>1450</maximum>
+          </constraints>
+          <control type="spinner" format="integer" delayed="false"/>
+        </setting>
+        <setting id="input.siriremoteverticalsensitivity" type="integer" label="34010" help="24163">
+          <level>2</level>
+          <default>650</default>
+          <constraints>
+            <minimum>50</minimum>
+            <step>50</step>
+            <maximum>1450</maximum>
+          </constraints>
+          <control type="spinner" format="integer" delayed="false"/>
+        </setting>
+        <setting id="input.tvosusekodikeyboard" type="boolean" label="24162" help="34008">
           <level>1</level>
           <default>false</default>
           <control type="toggle" />
@@ -126,8 +144,8 @@
           <visible>false</visible>
         </setting>
         <setting id="audiooutput.supportdtshdcpudecoding" type="boolean">
-            <default>false</default>
-            <visible>false</visible>
+          <default>false</default>
+          <visible>false</visible>
         </setting>
       </group>
     </category>

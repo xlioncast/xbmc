@@ -9,7 +9,7 @@
 #pragma once
 
 #include "GUITexture.h"
-#include "utils/Color.h"
+#include "utils/ColorUtils.h"
 
 #include <array>
 #include <vector>
@@ -29,13 +29,22 @@ class CRenderSystemGLES;
 class CGUITextureGLES : public CGUITexture
 {
 public:
+  static void Register();
+  static CGUITexture* CreateTexture(
+      float posX, float posY, float width, float height, const CTextureInfo& texture);
+
+  static void DrawQuad(const CRect& coords,
+                       UTILS::COLOR::Color color,
+                       CTexture* texture = nullptr,
+                       const CRect* texCoords = nullptr);
+
   CGUITextureGLES(float posX, float posY, float width, float height, const CTextureInfo& texture);
   ~CGUITextureGLES() override = default;
 
   CGUITextureGLES* Clone() const override;
 
 protected:
-  void Begin(UTILS::Color color) override;
+  void Begin(UTILS::COLOR::Color color) override;
   void Draw(float* x, float* y, float* z, const CRect& texture, const CRect& diffuse, int orientation) override;
   void End() override;
 

@@ -15,7 +15,6 @@
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SingleLock.h"
 #include "utils/FileExtensionProvider.h"
 #include "utils/HTMLUtil.h"
 #include "utils/StringUtils.h"
@@ -26,6 +25,7 @@
 #include "video/VideoInfoTag.h"
 
 #include <climits>
+#include <mutex>
 #include <utility>
 
 using namespace XFILE;
@@ -84,7 +84,7 @@ static bool IsPathToThumbnail(const std::string& strPath )
 
 static time_t ParseDate(const std::string & strDate)
 {
-  struct tm pubDate = {0};
+  struct tm pubDate = {};
   //! @todo Handle time zone
   strptime(strDate.c_str(), "%a, %d %b %Y %H:%M:%S", &pubDate);
   // Check the difference between the time of last check and time of the item
@@ -175,7 +175,7 @@ static void ParseItemMRSS(CFileItem* item, SResources& resources, TiXmlElement* 
     else if(scheme == "urn:boxee:season")
       vtag->m_iSeason  = atoi(text.c_str());
     else if(scheme == "urn:boxee:show-title")
-      vtag->m_strShowTitle = text.c_str();
+      vtag->m_strShowTitle = text;
     else if(scheme == "urn:boxee:view-count")
       vtag->SetPlayCount(atoi(text.c_str()));
     else if(scheme == "urn:boxee:source")
@@ -454,7 +454,7 @@ static void ParseItem(CFileItem* item, TiXmlElement* root, const std::string& pa
   SResources::iterator best = resources.end();
   for(const char** type = prio; *type && best == resources.end(); type++)
   {
-    for(SResources::iterator it = resources.begin(); it != resources.end(); it++)
+    for (SResources::iterator it = resources.begin(); it != resources.end(); ++it)
     {
       if(!StringUtils::StartsWith(it->mime, mime))
         continue;
@@ -547,7 +547,7 @@ bool CRSSDirectory::GetDirectory(const CURL& url, CFileItemList &items)
   URIUtils::RemoveSlashAtEnd(strPath);
   std::map<std::string,CDateTime>::iterator it;
   items.SetPath(strPath);
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
   if ((it=m_cache.find(strPath)) != m_cache.end())
   {
     if (it->second > CDateTime::GetCurrentDateTime() &&
@@ -555,17 +555,17 @@ bool CRSSDirectory::GetDirectory(const CURL& url, CFileItemList &items)
       return true;
     m_cache.erase(it);
   }
-  lock.Leave();
+  lock.unlock();
 
   CXBMCTinyXML xmlDoc;
   if (!xmlDoc.LoadFile(strPath))
   {
-    CLog::Log(LOGERROR,"failed to load xml from <%s>. error: <%d>", strPath.c_str(), xmlDoc.ErrorId());
+    CLog::Log(LOGERROR, "failed to load xml from <{}>. error: <{}>", strPath, xmlDoc.ErrorId());
     return false;
   }
   if (xmlDoc.Error())
   {
-    CLog::Log(LOGERROR,"error parsing xml doc from <%s>. error: <%d>", strPath.c_str(), xmlDoc.ErrorId());
+    CLog::Log(LOGERROR, "error parsing xml doc from <{}>. error: <{}>", strPath, xmlDoc.ErrorId());
     return false;
   }
 
@@ -610,7 +610,7 @@ bool CRSSDirectory::GetDirectory(const CURL& url, CFileItemList &items)
   time += CDateTimeSpan(0,0,mins,0);
   items.SetPath(strPath);
   items.Save();
-  CSingleLock lock2(m_section);
+  std::unique_lock<CCriticalSection> lock2(m_section);
   m_cache.insert(make_pair(strPath,time));
 
   return true;

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "RenderSystemTypes.h"
-#include "utils/Color.h"
+#include "utils/ColorUtils.h"
 #include "utils/Geometry.h"
 
 #include <memory>
@@ -37,12 +37,12 @@ public:
   virtual bool BeginRender() = 0;
   virtual bool EndRender() = 0;
   virtual void PresentRender(bool rendered, bool videoLayer) = 0;
-  virtual bool ClearBuffers(UTILS::Color color) = 0;
+  virtual bool ClearBuffers(UTILS::COLOR::Color color) = 0;
   virtual bool IsExtSupported(const char* extension) const = 0;
 
   virtual void SetViewPort(const CRect& viewPort) = 0;
   virtual void GetViewPort(CRect& viewPort) = 0;
-  virtual void RestoreViewPort() {};
+  virtual void RestoreViewPort() {}
 
   virtual bool ScissorsCanEffectClipping() { return false; }
   virtual CRect ClipRectToScissorRect(const CRect &rect) { return CRect(); }

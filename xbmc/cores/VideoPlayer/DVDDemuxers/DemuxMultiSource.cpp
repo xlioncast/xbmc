@@ -138,7 +138,7 @@ bool CDemuxMultiSource::Open(const std::shared_ptr<CDVDInputStream>& pInput)
 
       m_demuxerMap[demuxer->GetDemuxerId()] = demuxer;
       m_DemuxerToInputStreamMap[demuxer] = *iter;
-      m_demuxerQueue.push(std::make_pair(-1.0, demuxer));
+      m_demuxerQueue.emplace(-1.0, demuxer);
       ++iter;
     }
   }
@@ -175,7 +175,7 @@ DemuxPacket* CDemuxMultiSource::Read()
       readTime = packet->dts;
     else
       readTime = packet->pts;
-    m_demuxerQueue.push(std::make_pair(readTime, currentDemuxer));
+    m_demuxerQueue.emplace(readTime, currentDemuxer);
   }
   else
   {
@@ -184,11 +184,11 @@ DemuxPacket* CDemuxMultiSource::Read()
     {
       if (input->second->IsEOF())
       {
-        CLog::Log(LOGDEBUG, "%s - Demuxer for file %s is at eof, removed it from the queue",
-          __FUNCTION__, CURL::GetRedacted(currentDemuxer->GetFileName()).c_str());
+        CLog::Log(LOGDEBUG, "{} - Demuxer for file {} is at eof, removed it from the queue",
+                  __FUNCTION__, CURL::GetRedacted(currentDemuxer->GetFileName()));
       }
       else    //maybe add an error counter?
-        m_demuxerQueue.push(std::make_pair(-1.0, currentDemuxer));
+        m_demuxerQueue.emplace(-1.0, currentDemuxer);
     }
   }
 
@@ -203,13 +203,13 @@ bool CDemuxMultiSource::SeekTime(double time, bool backwards, double* startpts)
   {
     if (iter.second->SeekTime(time, false, startpts))
     {
-      demuxerQueue.push(std::make_pair(*startpts, iter.second));
-      CLog::Log(LOGDEBUG, "%s - starting demuxer from: %f", __FUNCTION__, time);
+      demuxerQueue.emplace(*startpts, iter.second);
+      CLog::Log(LOGDEBUG, "{} - starting demuxer from: {:f}", __FUNCTION__, time);
       ret = true;
     }
     else
     {
-      CLog::Log(LOGDEBUG, "%s - failed to start demuxing from: %f", __FUNCTION__, time);
+      CLog::Log(LOGDEBUG, "{} - failed to start demuxing from: {:f}", __FUNCTION__, time);
     }
   }
   m_demuxerQueue = demuxerQueue;

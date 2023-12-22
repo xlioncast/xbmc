@@ -23,9 +23,9 @@
 
 bool CWin32StorageProvider::xbevent = false;
 
-IStorageProvider* IStorageProvider::CreateInstance()
+std::unique_ptr<IStorageProvider> IStorageProvider::CreateInstance()
 {
-  return new CWin32StorageProvider();
+  return std::make_unique<CWin32StorageProvider>();
 }
 
 void CWin32StorageProvider::Initialize()
@@ -36,13 +36,14 @@ void CWin32StorageProvider::Initialize()
   if(!vShare.empty())
     CServiceBroker::GetMediaManager().SetHasOpticalDrive(true);
   else
-    CLog::Log(LOGDEBUG, "%s: No optical drive found.", __FUNCTION__);
+    CLog::Log(LOGDEBUG, "{}: No optical drive found.", __FUNCTION__);
 
-#ifdef HAS_DVD_DRIVE
+#ifdef HAS_OPTICAL_DRIVE
   // Can be removed once the StorageHandler supports optical media
   for (const auto& it : vShare)
-    if (CServiceBroker::GetMediaManager().GetDriveStatus(it.strPath) == DRIVE_CLOSED_MEDIA_PRESENT)
-      CJobManager::GetInstance().AddJob(new CDetectDisc(it.strPath, false), NULL);
+    if (CServiceBroker::GetMediaManager().GetDriveStatus(it.strPath) ==
+        DriveState::CLOSED_MEDIA_PRESENT)
+      CServiceBroker::GetJobManager()->AddJob(new CDetectDisc(it.strPath, false), nullptr);
       // remove end
 #endif
 }
@@ -92,7 +93,7 @@ bool CWin32StorageProvider::Eject(const std::string& mountpath)
   if( !mountpath[0] )
     return false;
 
-  auto strVolFormat = ToW(StringUtils::Format("\\\\.\\%c:", mountpath[0]));
+  auto strVolFormat = ToW(StringUtils::Format("\\\\.\\{}:", mountpath[0]));
 
   long DiskNumber = -1;
 
@@ -156,7 +157,9 @@ std::vector<std::string > CWin32StorageProvider::GetDiskUsage()
       if( DRIVE_FIXED == GetDriveType( strDrive.c_str()  ) &&
         GetDiskFreeSpaceEx( ( strDrive.c_str() ), nullptr, &ULTotal, &ULTotalFree ) )
       {
-        strRet = KODI::PLATFORM::WINDOWS::FromW(StringUtils::Format(L"%s %d MB %s",strDrive.c_str(), int(ULTotalFree.QuadPart/(1024*1024)), KODI::PLATFORM::WINDOWS::ToW(g_localizeStrings.Get(160).c_str())));
+        strRet = KODI::PLATFORM::WINDOWS::FromW(
+            StringUtils::Format(L"{} {} MB {}", strDrive, int(ULTotalFree.QuadPart / (1024 * 1024)),
+                                KODI::PLATFORM::WINDOWS::ToW(g_localizeStrings.Get(160))));
         result.push_back(strRet);
       }
       iPos += (wcslen( pcBuffer.get() + iPos) + 1 );
@@ -187,31 +190,13 @@ void CWin32StorageProvider::GetDrivesByType(VECSOURCES &localDrives, Drive_Types
     GetLogicalDriveStringsW( dwStrLength, pcBuffer.get() );
 
     int iPos= 0;
-    WCHAR cVolumeName[100];
     do{
-      int nResult = 0;
-      cVolumeName[0]= L'\0';
-
       std::wstring strWdrive = pcBuffer.get() + iPos;
+      std::wstring letter;
+      if (strWdrive.size() >= 2)
+        letter = strWdrive.substr(0, 2);
 
-      UINT uDriveType= GetDriveTypeW( strWdrive.c_str()  );
-      // don't use GetVolumeInformation on fdd's as the floppy controller may be enabled in Bios but
-      // no floppy HW is attached which causes huge delays.
-      if(strWdrive.size() >= 2 && strWdrive.substr(0,2) != L"A:" && strWdrive.substr(0,2) != L"B:")
-        nResult= GetVolumeInformationW( strWdrive.c_str() , cVolumeName, 100, 0, 0, 0, NULL, 25);
-      if(nResult == 0 && bonlywithmedia)
-      {
-        iPos += (wcslen( pcBuffer.get() + iPos) + 1 );
-        continue;
-      }
-
-      // usb hard drives are reported as DRIVE_FIXED and won't be returned by queries with REMOVABLE_DRIVES set
-      // so test for usb hard drives
-      /*if(uDriveType == DRIVE_FIXED)
-      {
-        if(IsUsbDevice(strWdrive))
-          uDriveType = DRIVE_REMOVABLE;
-      }*/
+      UINT uDriveType = GetDriveTypeW(strWdrive.c_str());
 
       share.strPath= share.strName= "";
 
@@ -222,9 +207,42 @@ void CWin32StorageProvider::GetDrivesByType(VECSOURCES &localDrives, Drive_Types
          ( eDriveType == REMOVABLE_DRIVES && ( uDriveType == DRIVE_REMOVABLE )) ||
          ( eDriveType == DVD_DRIVES && ( uDriveType == DRIVE_CDROM ))))
       {
+        std::wstring remoteName;
+        // for remote drives (mapped network shares) use "remote name" instead of "volume name"
+        // GetVolumeInformation fails on inaccessible network drive letters and cause delays
+        if (uDriveType == DRIVE_REMOTE)
+        {
+          wchar_t cRemoteName[MAX_PATH] = {};
+          DWORD len = sizeof(cRemoteName) / sizeof(wchar_t);
+          if (NO_ERROR != WNetGetConnectionW(letter.c_str(), cRemoteName, &len))
+          {
+            iPos += (wcslen(pcBuffer.get() + iPos) + 1);
+            continue;
+          }
+          remoteName = cRemoteName;
+        }
+        wchar_t cVolumeName[100] = {};
+        int nResult = 0;
+        // don't use GetVolumeInformation on fdd's as the floppy controller may be enabled in Bios but
+        // no floppy HW is attached which causes huge delays.
+        if (uDriveType != DRIVE_REMOTE && !letter.empty() && letter != L"A:" && letter != L"B:")
+        {
+          DWORD len = sizeof(cVolumeName) / sizeof(wchar_t);
+          nResult = GetVolumeInformationW(strWdrive.c_str(), cVolumeName, len, 0, 0, 0, nullptr, 0);
+        }
+        if (nResult == 0 && bonlywithmedia)
+        {
+          iPos += (wcslen(pcBuffer.get() + iPos) + 1);
+          continue;
+        }
+
         share.strPath = FromW(strWdrive);
-        if( cVolumeName[0] != L'\0' )
+
+        if (uDriveType == DRIVE_REMOTE)
+          share.strName = FromW(remoteName);
+        else if (cVolumeName[0] != L'\0')
           share.strName = FromW(cVolumeName);
+
         if( uDriveType == DRIVE_CDROM && nResult)
         {
           // Has to be the same as auto mounted devices
@@ -240,17 +258,19 @@ void CWin32StorageProvider::GetDrivesByType(VECSOURCES &localDrives, Drive_Types
           switch(uDriveType)
           {
           case DRIVE_CDROM:
-            share.strName = StringUtils::Format( "%s (%s)", share.strPath.c_str(), g_localizeStrings.Get(218).c_str());
+            share.strName =
+                StringUtils::Format("{} ({})", share.strPath, g_localizeStrings.Get(218));
             break;
           case DRIVE_REMOVABLE:
             if(share.strName.empty())
-              share.strName = StringUtils::Format( "%s (%s)", g_localizeStrings.Get(437).c_str(), share.strPath.c_str());
+              share.strName =
+                  StringUtils::Format("{} ({})", g_localizeStrings.Get(437), share.strPath);
             break;
           default:
             if(share.strName.empty())
               share.strName = share.strPath;
             else
-              share.strName = StringUtils::Format( "%s (%s)", share.strPath.c_str(), share.strName.c_str());
+              share.strName = StringUtils::Format("{} ({})", share.strPath, share.strName);
             break;
           }
         }
@@ -291,7 +311,7 @@ DEVINST CWin32StorageProvider::GetDrivesDevInstByDiskNumber(long DiskNumber)
   // Retrieve a context structure for a device interface of a device
   // information set.
   DWORD dwIndex = 0;
-  SP_DEVICE_INTERFACE_DATA devInterfaceData = { 0 };
+  SP_DEVICE_INTERFACE_DATA devInterfaceData = {};
   devInterfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
   BOOL bRet = FALSE;
 
@@ -320,7 +340,7 @@ DEVINST CWin32StorageProvider::GetDrivesDevInstByDiskNumber(long DiskNumber)
         continue;
 
       pspdidd->cbSize = sizeof(*pspdidd);
-      ZeroMemory((PVOID)&spdd, sizeof(spdd));
+      memset(&spdd, 0, sizeof(spdd));
       spdd.cbSize = sizeof(spdd);
 
       long res = SetupDiGetDeviceInterfaceDetail(hDevInfo, &spdid,
@@ -360,8 +380,8 @@ CDetectDisc::CDetectDisc(const std::string &strPath, const bool bautorun)
 
 bool CDetectDisc::DoWork()
 {
-#ifdef HAS_DVD_DRIVE
-  CLog::Log(LOGDEBUG, "%s: Optical media found in drive %s", __FUNCTION__, m_strPath.c_str());
+#ifdef HAS_OPTICAL_DRIVE
+  CLog::Log(LOGDEBUG, "{}: Optical media found in drive {}", __FUNCTION__, m_strPath);
   CMediaSource share;
   share.strPath = m_strPath;
   share.strStatus = CServiceBroker::GetMediaManager().GetDiskLabel(share.strPath);

@@ -52,6 +52,7 @@
       <m>Menu</m>
       <n mod="ctrl">ActivateWindow(PlayerControls)</n>
       <s>ActivateWindow(ShutdownMenu)</s>
+      <s mod="alt">ActivateWindow(Settings)</s>
       <escape>PreviousMenu</escape>
       <escape mod="longpress">Back</escape>
       <i>Info</i>
@@ -114,8 +115,8 @@
       <browser_refresh/>
       <browser_stop/>
       <browser_search/>
-      <browser_favorites>ActivateWindow(Favourites)</browser_favorites>
-      <favorites>ActivateWindow(Favourites)</favorites>
+      <browser_favorites>ActivateWindow(FavouritesBrowser)</browser_favorites>
+      <favorites>ActivateWindow(FavouritesBrowser)</favorites>
       <config>ActivateWindow(Settings)</config>
       <browser_home>ActivateWindow(Home)</browser_home>
       <homepage>ActivateWindow(Home)</homepage>
@@ -251,8 +252,6 @@
       <epg>PreviousMenu</epg>
       <g>NextChannelGroup</g>
       <n>ActivateWindow(PVRGuideControls)</n>
-      <enter mod="longpress">ActivateWindow(PVRGuideControls)</enter>
-      <return mod="longpress">ActivateWindow(PVRGuideControls)</return>
       <backspace mod="longpress">Number0</backspace> <!-- 0 key goes to "now" on EPG timeline -->
       <browser_back mod="longpress">Number0</browser_back> <!-- 0 key goes to "now" on EPG timeline -->
       <period mod="longpress">ChannelNumberSeparator</period>
@@ -305,8 +304,6 @@
       <epg>PreviousMenu</epg>
       <g>NextChannelGroup</g>
       <n>ActivateWindow(PVRGuideControls)</n>
-      <enter mod="longpress">ActivateWindow(PVRGuideControls)</enter>
-      <return mod="longpress">ActivateWindow(PVRGuideControls)</return>
       <backspace mod="longpress">Number0</backspace> <!-- 0 key goes to "now" on EPG timeline -->
       <browser_back mod="longpress">Number0</browser_back> <!-- 0 key goes to "now" on EPG timeline -->
       <period mod="longpress">ChannelNumberSeparator</period>
@@ -369,6 +366,7 @@
       <i>Info</i>
       <o>PlayerProcessInfo</o>
       <o mod="ctrl,shift">PlayerDebug</o>
+      <o mod="alt">PlayerDebugVideo</o>
       <z>AspectRatio</z>
       <zoom>AspectRatio</zoom>
       <t>ShowSubtitles</t>
@@ -426,6 +424,16 @@
       <menu>OSD</menu>
     </keyboard>
   </GameOSD>
+  <GameSaves>
+    <keyboard>
+      <delete>delete</delete>
+    </keyboard>
+  </GameSaves>
+  <InGameSaves>
+    <keyboard>
+      <delete>delete</delete>
+    </keyboard>
+  </InGameSaves>
   <VideoTimeSeek>
     <keyboard>
       <return>Select</return>
@@ -664,15 +672,14 @@
       <blue>Blue</blue>
     </keyboard>
   </Teletext>
-  <Favourites>
+  <FavouritesBrowser>
     <keyboard>
-      <backspace>Close</backspace>
-      <browser_back>Close</browser_back>
       <u>MoveItemUp</u>
       <d>MoveItemDown</d>
+      <delete>Delete</delete>
       <backspace mod="longpress">ActivateWindow(Home)</backspace>
     </keyboard>
-  </Favourites>
+  </FavouritesBrowser>
   <NumericInput>
     <keyboard>
       <backspace>Close</backspace>

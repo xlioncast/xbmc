@@ -41,18 +41,12 @@ protected:
   typedef struct ConnectionHandler
   {
     std::string fullUri;
-    bool isNew;
+    bool isNew = true;
     std::shared_ptr<IHTTPRequestHandler> requestHandler;
-    struct MHD_PostProcessor *postprocessor;
-    int errorStatus;
+    struct MHD_PostProcessor* postprocessor = nullptr;
+    int errorStatus = MHD_HTTP_OK;
 
-    explicit ConnectionHandler(const std::string& uri)
-      : fullUri(uri)
-      , isNew(true)
-      , requestHandler(nullptr)
-      , postprocessor(nullptr)
-      , errorStatus(MHD_HTTP_OK)
-    { }
+    explicit ConnectionHandler(const std::string& uri) : fullUri(uri), requestHandler(nullptr) {}
   } ConnectionHandler;
 
   virtual void LogRequest(const char* uri) const;
@@ -112,6 +106,8 @@ private:
 
   bool LoadCert(std::string &skey, std::string &scert);
 
+  static Logger GetLogger();
+
   uint16_t m_port = 0;
   struct MHD_Daemon *m_daemon_ip6 = nullptr;
   struct MHD_Daemon *m_daemon_ip4 = nullptr;
@@ -126,5 +122,4 @@ private:
   std::vector<IHTTPRequestHandler *> m_requestHandlers;
 
   Logger m_logger;
-  static Logger s_logger;
 };

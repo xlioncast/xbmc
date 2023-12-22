@@ -15,7 +15,6 @@
 
 #include "LockType.h"
 #include "XBDateTime.h"
-#include "addons/IAddon.h"
 #include "guilib/GUIListItem.h"
 #include "threads/CriticalSection.h"
 #include "utils/IArchivable.h"
@@ -28,6 +27,13 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+enum class VideoDbContentType;
+
+namespace ADDON
+{
+class IAddon;
+}
 
 namespace MUSIC_INFO
 {
@@ -47,7 +53,9 @@ namespace GAME
 namespace PVR
 {
 class CPVRChannel;
+class CPVRChannelGroupMember;
 class CPVREpgInfoTag;
+class CPVREpgSearchFilter;
 class CPVRRecording;
 class CPVRTimerInfoTag;
 }
@@ -111,7 +119,8 @@ public:
   explicit CFileItem(const MUSIC_INFO::CMusicInfoTag& music);
   explicit CFileItem(const CVideoInfoTag& movie);
   explicit CFileItem(const std::shared_ptr<PVR::CPVREpgInfoTag>& tag);
-  explicit CFileItem(const std::shared_ptr<PVR::CPVRChannel>& channel);
+  explicit CFileItem(const std::shared_ptr<PVR::CPVREpgSearchFilter>& filter);
+  explicit CFileItem(const std::shared_ptr<PVR::CPVRChannelGroupMember>& channelGroupMember);
   explicit CFileItem(const std::shared_ptr<PVR::CPVRRecording>& record);
   explicit CFileItem(const std::shared_ptr<PVR::CPVRTimerInfoTag>& timer);
   explicit CFileItem(const CMediaSource& share);
@@ -119,13 +128,13 @@ public:
   explicit CFileItem(const EventPtr& eventLogEntry);
 
   ~CFileItem(void) override;
-  CGUIListItem *Clone() const override { return new CFileItem(*this); };
+  CGUIListItem* Clone() const override { return new CFileItem(*this); }
 
   const CURL GetURL() const;
   void SetURL(const CURL& url);
   bool IsURL(const CURL& url) const;
-  const std::string &GetPath() const { return m_strPath; };
-  void SetPath(const std::string &path) { m_strPath = path; };
+  const std::string& GetPath() const { return m_strPath; }
+  void SetPath(const std::string& path) { m_strPath = path; }
   bool IsPath(const std::string& path, bool ignoreURLOptions = false) const;
 
   const CURL GetDynURL() const;
@@ -143,7 +152,7 @@ public:
   void Serialize(CVariant& value) const override;
   void ToSortable(SortItem &sortable, Field field) const override;
   void ToSortable(SortItem &sortable, const Fields &fields) const;
-  bool IsFileItem() const override { return true; };
+  bool IsFileItem() const override { return true; }
 
   bool Exists(bool bUseCache = true) const;
 
@@ -195,6 +204,7 @@ public:
   bool IsGame() const;
   bool IsCUESheet() const;
   bool IsInternetStream(const bool bStrictCheck = false) const;
+  bool IsStreamedFilesystem() const;
   bool IsPlayList() const;
   bool IsSmartPlayList() const;
   bool IsLibraryFolder() const;
@@ -204,6 +214,7 @@ public:
   bool IsAddonsPath() const;
   bool IsSourcesPath() const;
   bool IsNFO() const;
+  bool IsVideoExtras() const;
   bool IsDiscImage() const;
   bool IsOpticalMediaFile() const;
   bool IsDVDFile(bool bVobs = true, bool bIfos = true) const;
@@ -226,6 +237,7 @@ public:
   bool IsSmb() const;
   bool IsURL() const;
   bool IsStack() const;
+  bool IsFavourite() const;
   bool IsMultiPath() const;
   bool IsMusicDb() const;
   bool IsVideoDb() const;
@@ -250,12 +262,13 @@ public:
   bool IsRSS() const;
   bool IsAndroidApp() const;
 
+  bool HasVideoVersions() const;
   void RemoveExtension();
   void CleanString();
   void FillInDefaultIcon();
   void SetFileSizeLabel();
   void SetLabel(const std::string &strLabel) override;
-  int GetVideoContentType() const; /* return VIDEODB_CONTENT_TYPE, but don't want to include videodb in this header */
+  VideoDbContentType GetVideoContentType() const;
   bool IsLabelPreformatted() const { return m_bLabelPreformatted; }
   void SetLabelPreformatted(bool bYesNo) { m_bLabelPreformatted=bYesNo; }
   bool SortsOnTop() const { return m_specialSort == SortSpecialOnTop; }
@@ -290,20 +303,25 @@ public:
     return m_epgInfoTag;
   }
 
-  inline void SetEPGInfoTag(const std::shared_ptr<PVR::CPVREpgInfoTag>& tag)
+  bool HasEPGSearchFilter() const { return m_epgSearchFilter != nullptr; }
+
+  const std::shared_ptr<PVR::CPVREpgSearchFilter> GetEPGSearchFilter() const
   {
-    m_epgInfoTag = tag;
+    return m_epgSearchFilter;
   }
 
-  inline bool HasPVRChannelInfoTag() const
+  inline bool HasPVRChannelGroupMemberInfoTag() const
   {
-    return m_pvrChannelInfoTag.get() != NULL;
+    return m_pvrChannelGroupMemberInfoTag.get() != nullptr;
   }
 
-  inline const std::shared_ptr<PVR::CPVRChannel> GetPVRChannelInfoTag() const
+  inline const std::shared_ptr<PVR::CPVRChannelGroupMember> GetPVRChannelGroupMemberInfoTag() const
   {
-    return m_pvrChannelInfoTag;
+    return m_pvrChannelGroupMemberInfoTag;
   }
+
+  bool HasPVRChannelInfoTag() const;
+  const std::shared_ptr<PVR::CPVRChannel> GetPVRChannelInfoTag() const;
 
   inline bool HasPVRRecordingInfoTag() const
   {
@@ -350,6 +368,40 @@ public:
    \return True if the item has a resume point set, false otherwise.
    */
   bool GetCurrentResumeTimeAndPartNumber(int64_t& startOffset, int& partNumber) const;
+
+  /*!
+   * \brief Test if this item type can be resumed.
+   * \return True if this item is a folder and has at least one child with a partway resume bookmark
+   * or at least one unwatched child or if it is not a folder, if it has a partway resume bookmark,
+   * false otherwise.
+   */
+  bool IsResumable() const;
+
+  /*!
+   * \brief Get the offset where start the playback.
+   * \return The offset value as ms.
+   *         Can return also special value -1, see define STARTOFFSET_RESUME.
+   */
+  int64_t GetStartOffset() const { return m_lStartOffset; }
+
+  /*!
+   * \brief Set the offset where start the playback.
+   * \param offset Set the offset value as ms,
+                   or the special value STARTOFFSET_RESUME.
+   */
+  void SetStartOffset(const int64_t offset) { m_lStartOffset = offset; }
+
+  /*!
+   * \brief Get the end offset.
+   * \return The offset value as ms.
+   */
+  int64_t GetEndOffset() const { return m_lEndOffset; }
+
+  /*!
+   * \brief Set the end offset.
+   * \param offset Set the offset as ms.
+   */
+  void SetEndOffset(const int64_t offset) { m_lEndOffset = offset; }
 
   inline bool HasPictureInfoTag() const
   {
@@ -426,6 +478,13 @@ public:
    */
   bool SkipLocalArt() const;
 
+  /*! \brief Get the thumb for the item, but hide it to prevent spoilers if
+             the user has set 'Show information for unwatched items' appropriately.
+   \param item the item to get the thumb image for.
+   \return fanart or spoiler overlay if item is an unwatched episode, thumb art otherwise.
+   */
+  std::string GetThumbHideIfUnwatched(const CFileItem* item) const;
+
   // Gets the .tbn file associated with this item
   std::string GetTBNFile() const;
   // Gets the folder image associated with this item (defaults to folder.jpg)
@@ -462,8 +521,15 @@ public:
   // finds a matching local trailer file
   std::string FindTrailer() const;
 
-  virtual bool LoadMusicTag();
-  virtual bool LoadGameTag();
+  bool LoadMusicTag();
+  bool LoadGameTag();
+
+  /*! \brief Load detailed data for an item constructed with only a path and a folder flag
+   Fills item's video info tag, sets item properties.
+
+   \return true on success, false otherwise.
+   */
+  bool LoadDetails();
 
   /* Returns the content type of this item if known */
   const std::string& GetMimeType() const { return m_mimetype; }
@@ -482,7 +548,7 @@ public:
   \brief Some sources do not support HTTP HEAD request to determine i.e. mime type
   \return false if HEAD requests have to be avoided
   */
-  bool ContentLookup() { return m_doContentLookup; };
+  bool ContentLookup() { return m_doContentLookup; }
 
   /*!
    \brief (Re)set the mime-type for internet files if allowed (m_doContentLookup)
@@ -494,11 +560,11 @@ public:
    *\brief Lookup via HTTP HEAD request might not be needed, use this setter to
    * disable ContentLookup.
    */
-  void SetContentLookup(bool enable) { m_doContentLookup = enable; };
+  void SetContentLookup(bool enable) { m_doContentLookup = enable; }
 
   /* general extra info about the contents of the item, not for display */
-  void SetExtraInfo(const std::string& info) { m_extrainfo = info; };
-  const std::string& GetExtraInfo() const { return m_extrainfo; };
+  void SetExtraInfo(const std::string& info) { m_extrainfo = info; }
+  const std::string& GetExtraInfo() const { return m_extrainfo; }
 
   /*! \brief Update an item with information from another item
    We take metadata information from the given item and supplement the current item
@@ -555,9 +621,7 @@ public:
   std::string m_strTitle;
   int m_iprogramCount;
   int m_idepth;
-  int64_t m_lStartOffset;
   int m_lStartPartNumber;
-  int64_t m_lEndOffset;
   LockType m_iLockMode;
   std::string m_strLockCode;
   int m_iHasLock; // 0 - no lock 1 - lock, but unlocked 2 - locked
@@ -574,6 +638,12 @@ private:
    */
   void Initialize();
 
+  /*! \brief Recalculate item's MIME type if it is not set or is set to "application/octet-stream".
+   Resolve the MIME type based on file extension or a web lookup.
+   \sa FillInMimeType
+   */
+  void UpdateMimeType(bool lookup = true);
+
   /*!
    \brief Return the current resume point for this item.
    \return The resume point.
@@ -581,9 +651,9 @@ private:
   CBookmark GetResumePoint() const;
 
   /*!
-   \brief If given channel is radio, fill item's music tag from given epg tag and channel info.
+   \brief Fill item's music tag from given epg tag.
    */
-  void FillMusicInfoTag(const std::shared_ptr<PVR::CPVRChannel>& channel, const std::shared_ptr<PVR::CPVREpgInfoTag>& tag);
+  void FillMusicInfoTag(const std::shared_ptr<const PVR::CPVREpgInfoTag>& tag);
 
   std::string m_strPath;            ///< complete path to item
   std::string m_strDynPath;
@@ -598,14 +668,17 @@ private:
   MUSIC_INFO::CMusicInfoTag* m_musicInfoTag;
   CVideoInfoTag* m_videoInfoTag;
   std::shared_ptr<PVR::CPVREpgInfoTag> m_epgInfoTag;
-  std::shared_ptr<PVR::CPVRChannel> m_pvrChannelInfoTag;
+  std::shared_ptr<PVR::CPVREpgSearchFilter> m_epgSearchFilter;
   std::shared_ptr<PVR::CPVRRecording> m_pvrRecordingInfoTag;
   std::shared_ptr<PVR::CPVRTimerInfoTag> m_pvrTimerInfoTag;
+  std::shared_ptr<PVR::CPVRChannelGroupMember> m_pvrChannelGroupMemberInfoTag;
   CPictureInfoTag* m_pictureInfoTag;
   std::shared_ptr<const ADDON::IAddon> m_addonInfo;
   KODI::GAME::CGameInfoTag* m_gameInfoTag;
   EventPtr m_eventLogEntry;
   bool m_bIsAlbum;
+  int64_t m_lStartOffset;
+  int64_t m_lEndOffset;
 
   CCueDocumentPtr m_cueDocument;
 };
@@ -633,12 +706,6 @@ typedef std::vector< CFileItemPtr >::iterator IVECFILEITEMS;
   \sa CFileItem
   */
 typedef std::map<std::string, CFileItemPtr > MAPFILEITEMS;
-
-/*!
-  \brief Iterator for MAPFILEITEMS
-  \sa MAPFILEITEMS
-  */
-typedef std::map<std::string, CFileItemPtr >::iterator IMAPFILEITEMS;
 
 /*!
   \brief Pair for MAPFILEITEMS
@@ -673,11 +740,9 @@ public:
   void AddFront(const CFileItemPtr &pItem, int itemPosition);
   void Remove(CFileItem* pItem);
   void Remove(int iItem);
-  CFileItemPtr Get(int iItem);
-  const CFileItemPtr Get(int iItem) const;
+  CFileItemPtr Get(int iItem) const;
   const VECFILEITEMS& GetList() const { return m_items; }
-  CFileItemPtr Get(const std::string& strPath);
-  const CFileItemPtr Get(const std::string& strPath) const;
+  CFileItemPtr Get(const std::string& strPath) const;
   int Size() const;
   bool IsEmpty() const;
   void Append(const CFileItemList& itemlist);
@@ -704,7 +769,7 @@ public:
   void SetIgnoreURLOptions(bool ignoreURLOptions);
   void SetFastLookup(bool fastLookup);
   bool Contains(const std::string& fileName) const;
-  bool GetFastLookup() const { return m_fastLookup; };
+  bool GetFastLookup() const { return m_fastLookup; }
 
   /*! \brief stack a CFileItemList
    By default we stack all items (files and folders) in a CFileItemList
@@ -778,20 +843,24 @@ public:
    With this set the folder state will be ignored, allowing folders and files to sort interleaved.
    \param sort whether to ignore the folder state.
    */
-  void SetSortIgnoreFolders(bool sort) { m_sortIgnoreFolders = sort; };
-  bool GetReplaceListing() const { return m_replaceListing; };
+  void SetSortIgnoreFolders(bool sort) { m_sortIgnoreFolders = sort; }
+  bool GetReplaceListing() const { return m_replaceListing; }
   void SetReplaceListing(bool replace);
-  void SetContent(const std::string &content) { m_content = content; };
-  const std::string &GetContent() const { return m_content; };
+  void SetContent(const std::string& content) { m_content = content; }
+  const std::string& GetContent() const { return m_content; }
 
   void ClearSortState();
 
   VECFILEITEMS::iterator begin() { return m_items.begin(); }
   VECFILEITEMS::iterator end() { return m_items.end(); }
+  VECFILEITEMS::iterator erase(VECFILEITEMS::iterator first, VECFILEITEMS::iterator last);
   VECFILEITEMS::const_iterator begin() const { return m_items.begin(); }
   VECFILEITEMS::const_iterator end() const { return m_items.end(); }
   VECFILEITEMS::const_iterator cbegin() const { return m_items.cbegin(); }
   VECFILEITEMS::const_iterator cend() const { return m_items.cend(); }
+  std::reverse_iterator<VECFILEITEMS::const_iterator> rbegin() const { return m_items.rbegin(); }
+  std::reverse_iterator<VECFILEITEMS::const_iterator> rend() const { return m_items.rend(); }
+
 private:
   void Sort(FILEITEMLISTCOMPARISONFUNC func);
   void FillSortFields(FILEITEMFILLFUNC func);

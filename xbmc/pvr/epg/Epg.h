@@ -126,7 +126,7 @@ namespace PVR
      * @brief Get the event that is occurring now
      * @return The current event or NULL if it wasn't found.
      */
-    std::shared_ptr<CPVREpgInfoTag> GetTagNow(bool bUpdateIfNeeded = true) const;
+    std::shared_ptr<CPVREpgInfoTag> GetTagNow() const;
 
     /*!
      * @brief Get the event that will occur next
@@ -225,16 +225,10 @@ namespace PVR
     bool QueueDeleteQueries(const std::shared_ptr<CPVREpgDatabase>& database);
 
     /*!
-     * @brief Get the start time of the first entry in this table.
-     * @return The first date in UTC.
+     * @brief Get the start and end time of the last not yet commited entry in this table.
+     * @return The times; first: start time, second: end time.
      */
-    CDateTime GetFirstDate() const;
-
-    /*!
-     * @brief Get the end time of the last entry in this table.
-     * @return The last date in UTC.
-     */
-    CDateTime GetLastDate() const;
+    std::pair<CDateTime, CDateTime> GetFirstAndLastUncommitedEPGDate() const;
 
     /*!
      * @brief Notify observers when the currently active tag changed.
@@ -281,6 +275,13 @@ namespace PVR
      * @brief Called to inform the EPG that it has been removed from the EPG container.
      */
     void RemovedFromContainer();
+
+    /*!
+     * @brief Erase stale texture db entries and image files.
+     * @param database The EPG database
+     * @return number of cleaned up images.
+     */
+    int CleanupCachedImages(const std::shared_ptr<const CPVREpgDatabase>& database);
 
   private:
     CPVREpg() = delete;

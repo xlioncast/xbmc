@@ -29,8 +29,7 @@ TEST(TestFile, Read)
   const std::string fifthBuf = "multimedia jukebox." + newLine;
 
   XFILE::CFile file;
-  char buf[23];
-  memset(buf, 0, sizeof(buf));
+  char buf[23] = {};
 
   size_t currentPos;
   ASSERT_TRUE(file.Open(
@@ -89,8 +88,7 @@ TEST(TestFile, Write)
 {
   XFILE::CFile *file;
   const char str[] = "TestFile.Write test string\n";
-  char buf[30];
-  memset(buf, 0, sizeof(buf));
+  char buf[30] = {};
 
   ASSERT_NE(nullptr, file = XBMC_CREATETEMPFILE(""));
   file->Close();
@@ -148,19 +146,20 @@ TEST(TestFile, Delete)
   EXPECT_TRUE(XFILE::CFile::Exists(path));
   EXPECT_TRUE(XFILE::CFile::Delete(path));
   EXPECT_FALSE(XFILE::CFile::Exists(path));
+  EXPECT_FALSE(XBMC_DELETETEMPFILE(file));
 }
 
 TEST(TestFile, Rename)
 {
-  XFILE::CFile *file;
+  XFILE::CFile *file1, *file2;
   std::string path1, path2;
 
-  ASSERT_NE(nullptr, file = XBMC_CREATETEMPFILE(""));
-  file->Close();
-  path1 = XBMC_TEMPFILEPATH(file);
-  ASSERT_NE(nullptr, file = XBMC_CREATETEMPFILE(""));
-  file->Close();
-  path2 = XBMC_TEMPFILEPATH(file);
+  ASSERT_NE(nullptr, file1 = XBMC_CREATETEMPFILE(""));
+  file1->Close();
+  path1 = XBMC_TEMPFILEPATH(file1);
+  ASSERT_NE(nullptr, file2 = XBMC_CREATETEMPFILE(""));
+  file2->Close();
+  path2 = XBMC_TEMPFILEPATH(file2);
   EXPECT_TRUE(XFILE::CFile::Delete(path1));
   EXPECT_FALSE(XFILE::CFile::Exists(path1));
   EXPECT_TRUE(XFILE::CFile::Exists(path2));
@@ -168,19 +167,21 @@ TEST(TestFile, Rename)
   EXPECT_TRUE(XFILE::CFile::Exists(path1));
   EXPECT_FALSE(XFILE::CFile::Exists(path2));
   EXPECT_TRUE(XFILE::CFile::Delete(path1));
+  EXPECT_FALSE(XBMC_DELETETEMPFILE(file1));
+  EXPECT_FALSE(XBMC_DELETETEMPFILE(file2));
 }
 
 TEST(TestFile, Copy)
 {
-  XFILE::CFile *file;
+  XFILE::CFile *file1, *file2;
   std::string path1, path2;
 
-  ASSERT_NE(nullptr, file = XBMC_CREATETEMPFILE(""));
-  file->Close();
-  path1 = XBMC_TEMPFILEPATH(file);
-  ASSERT_NE(nullptr, file = XBMC_CREATETEMPFILE(""));
-  file->Close();
-  path2 = XBMC_TEMPFILEPATH(file);
+  ASSERT_NE(nullptr, file1 = XBMC_CREATETEMPFILE(""));
+  file1->Close();
+  path1 = XBMC_TEMPFILEPATH(file1);
+  ASSERT_NE(nullptr, file2 = XBMC_CREATETEMPFILE(""));
+  file2->Close();
+  path2 = XBMC_TEMPFILEPATH(file2);
   EXPECT_TRUE(XFILE::CFile::Delete(path1));
   EXPECT_FALSE(XFILE::CFile::Exists(path1));
   EXPECT_TRUE(XFILE::CFile::Exists(path2));
@@ -189,6 +190,8 @@ TEST(TestFile, Copy)
   EXPECT_TRUE(XFILE::CFile::Exists(path2));
   EXPECT_TRUE(XFILE::CFile::Delete(path1));
   EXPECT_TRUE(XFILE::CFile::Delete(path2));
+  EXPECT_FALSE(XBMC_DELETETEMPFILE(file1));
+  EXPECT_FALSE(XBMC_DELETETEMPFILE(file2));
 }
 
 TEST(TestFile, SetHidden)

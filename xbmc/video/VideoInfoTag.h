@@ -24,6 +24,8 @@ class TiXmlNode;
 class TiXmlElement;
 class CVariant;
 
+enum class VideoVersionItemType;
+
 struct SActorInfo
 {
   bool operator<(const SActorInfo &right) const
@@ -51,7 +53,7 @@ typedef std::map<std::string, CRating> RatingMap;
 class CVideoInfoTag : public IArchivable, public ISerializable, public ISortable
 {
 public:
-  CVideoInfoTag() { Reset(); };
+  CVideoInfoTag() { Reset(); }
   virtual ~CVideoInfoTag() = default;
   void Reset();
   /* \brief Load information to a videoinfotag from an XML element
@@ -89,6 +91,7 @@ public:
   const std::string GetCast(bool bIncludeRole = false) const;
   bool HasStreamDetails() const;
   bool IsEmpty() const;
+  bool HasVideoVersions() const;
 
   const std::string& GetPath() const
   {
@@ -135,7 +138,7 @@ public:
   void SetRating(CRating rating, const std::string& type = "", bool def = false);
   void SetRating(float rating, const std::string& type = "", bool def = false);
   void RemoveRating(const std::string& type);
-  void SetRatings(RatingMap ratings);
+  void SetRatings(RatingMap ratings, const std::string& defaultRating = "");
   void SetVotes(int votes, const std::string& type = "");
   void SetUniqueIDs(std::map<std::string, std::string> uniqueIDs);
   void SetPremiered(const CDateTime& premiered);
@@ -145,6 +148,7 @@ public:
   void SetSet(std::string set);
   void SetSetOverview(std::string setOverview);
   void SetTags(std::vector<std::string> tags);
+  void SetVideoVersion(std::string typeVideoVersion);
   void SetFile(std::string file);
   void SetPath(std::string path);
   void SetMPAARating(std::string mpaaRating);
@@ -205,6 +209,8 @@ public:
    */
   virtual bool SetResumePoint(const CBookmark &resumePoint);
 
+  bool IsVideoExtras() const;
+
   /*!
    * @brief Set this videos's resume point.
    * @param timeInSeconds the time of the resume point
@@ -238,6 +244,10 @@ public:
   };
   SetInfo m_set; //!< Assigned movie set
   std::vector<std::string> m_tags;
+  std::string m_typeVideoVersion;
+  int m_idVideoVersion{-1};
+  bool m_hasVideoVersions{false};
+  VideoVersionItemType m_videoVersionItemType{-1};
   std::string m_strFile;
   std::string m_strPath;
   std::string m_strMPAARating;

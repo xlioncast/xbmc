@@ -8,6 +8,7 @@
 
 #include "DirectoryNodeTitleTvShows.h"
 
+#include "FileItem.h"
 #include "QueryParams.h"
 #include "video/VideoDatabase.h"
 
@@ -41,7 +42,13 @@ bool CDirectoryNodeTitleTvShows::GetContent(CFileItemList& items) const
   CQueryParams params;
   CollectQueryParams(params);
 
-  bool bSuccess=videodatabase.GetTvShowsNav(BuildPath(), items, params.GetGenreId(), params.GetYear(), params.GetActorId(), params.GetDirectorId(), params.GetStudioId(), params.GetTagId());
+  int details = items.HasProperty("set_videodb_details")
+                    ? items.GetProperty("set_videodb_details").asInteger32()
+                    : VideoDbDetailsNone;
+
+  bool bSuccess = videodatabase.GetTvShowsNav(
+      BuildPath(), items, params.GetGenreId(), params.GetYear(), params.GetActorId(),
+      params.GetDirectorId(), params.GetStudioId(), params.GetTagId(), SortDescription(), details);
 
   videodatabase.Close();
 

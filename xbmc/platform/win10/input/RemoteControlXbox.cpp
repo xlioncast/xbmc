@@ -8,12 +8,11 @@
 
 #include "RemoteControlXbox.h"
 
-#include "AppInboundProtocol.h"
 #include "ServiceBroker.h"
+#include "application/AppInboundProtocol.h"
 #include "input/remote/IRRemote.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SystemClock.h"
 #include "utils/log.h"
 
 #define XBOX_REMOTE_DEVICE_ID L"GIP:0000F50000000001"
@@ -29,7 +28,6 @@ using namespace winrt::Windows::UI::Core;
 
 CRemoteControlXbox::CRemoteControlXbox()
   : m_bInitialized(false)
-  , m_firstClickTime(0)
   , m_repeatCount(0)
 {
 }
@@ -89,7 +87,7 @@ void CRemoteControlXbox::HandleAcceleratorKey(const CoreDispatcher& sender, cons
   if (!button)
     return;
 
-  XBMC_Event newEvent;
+  XBMC_Event newEvent = {};
   newEvent.type = XBMC_BUTTON;
   newEvent.keybutton.button = button;
   newEvent.keybutton.holdtime = 0;
@@ -103,7 +101,7 @@ void CRemoteControlXbox::HandleAcceleratorKey(const CoreDispatcher& sender, cons
   {
     if (!args.KeyStatus().WasKeyDown) // first occurrence
     {
-      m_firstClickTime = XbmcThreads::SystemClockMillis();
+      m_firstClickTime = std::chrono::steady_clock::now();
       if (appPort)
         appPort->OnEvent(newEvent);
     }
@@ -112,7 +110,11 @@ void CRemoteControlXbox::HandleAcceleratorKey(const CoreDispatcher& sender, cons
       m_repeatCount++;
       if (m_repeatCount > CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_remoteDelay)
       {
-        newEvent.keybutton.holdtime = XbmcThreads::SystemClockMillis() - m_firstClickTime;
+        auto now = std::chrono::steady_clock::now();
+        auto duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - m_firstClickTime);
+
+        newEvent.keybutton.holdtime = duration.count();
         if (appPort)
           appPort->OnEvent(newEvent);
       }
@@ -138,7 +140,7 @@ void CRemoteControlXbox::HandleAcceleratorKey(const CoreDispatcher& sender, cons
 
 void CRemoteControlXbox::HandleMediaButton(const SystemMediaTransportControlsButtonPressedEventArgs& args)
 {
-  XBMC_Event newEvent;
+  XBMC_Event newEvent = {};
   newEvent.type = XBMC_BUTTON;
   newEvent.keybutton.button = TranslateMediaKey(args.Button());
   newEvent.keybutton.holdtime = 0;
@@ -200,7 +202,7 @@ int32_t CRemoteControlXbox::TranslateVirtualKey(VirtualKey vk)
   case VirtualKey::GamepadMenu:
     return XINPUT_IR_REMOTE_MENU;
   default:
-    CLog::LogFunction(LOGDEBUG, __FUNCTION__, "unknown vrtual key %d", static_cast<int>(vk));
+    CLog::LogF(LOGDEBUG, "unknown vrtual key {}", static_cast<int>(vk));
     return 0;
   }
 }

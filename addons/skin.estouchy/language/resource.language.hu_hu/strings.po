@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Hungarian (Hungary) (http://www.transifex.com/projects/p/kodi-main/language/hu_HU/)\n"
+"PO-Revision-Date: 2023-09-10 02:41+0000\n"
+"Last-Translator: Frodo19 <bilbohu@gmail.com>\n"
+"Language-Team: Hungarian <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/hu_hu/>\n"
+"Language: hu_hu\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: hu_HU\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 4.18.2\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "Felület érintőképernyős eszközöknek"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "Egy érintőképernyős eszközökre, például táblagépekre és okostelefonokra tervezett felület"
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -64,22 +73,27 @@ msgctxt "#31016"
 msgid "Albums"
 msgstr "Albumok"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "PVR információ"
+msgid "PVR"
+msgstr "PVR"
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "Feldolgozási információ"
+msgid "Player"
+msgstr "Lejátszó"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "Videó dekóder"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "Képpont formátum"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
 msgstr "Rendszer memóriahasználata"
@@ -134,15 +148,15 @@ msgstr "Befejezés időpontja"
 
 msgctxt "#31050"
 msgid "Sort: Ascending"
-msgstr "Rendezés : növekvő"
+msgstr "Sorrend: Növekvő"
 
 msgctxt "#31051"
 msgid "Sort: Descending"
-msgstr "Rendezés : csökkenő"
+msgstr "Sorrend: Csökkenő"
 
 msgctxt "#31055"
 msgid "Open playlist"
-msgstr "Játszási lista megnyitása"
+msgstr "Lejátszási lista megnyitása"
 
 msgctxt "#31056"
 msgid "Save playlist"
@@ -150,7 +164,7 @@ msgstr "Játszási lista mentése"
 
 msgctxt "#31057"
 msgid "Close playlist"
-msgstr "Játszási lista törlése"
+msgstr "Lejátszási lista bezárása"
 
 msgctxt "#31058"
 msgid "System music files"
@@ -194,7 +208,7 @@ msgstr "Utoljára bejelentkezve"
 
 msgctxt "#31322"
 msgid "Aired"
-msgstr "Sugárzott"
+msgstr "Játszva"
 
 msgctxt "#31355"
 msgid "Video Menu"
@@ -225,7 +239,7 @@ msgid "Configure & manage media sharing services · Configure & manage the weath
 msgstr "Médiamegosztási szolgáltatások beállítása és kezelése · Időjárási szolgáltatás beállítása és kezelése"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+msgid "Configure display · Configure audio · Configure internet access · Configure power saving · Configure logging"
 msgstr "Kijelző beállítása · Hang beállítása · Internetelérés beállítása · Energiagazdálkodás beállítása · Naplózás beállítása"
 
 msgctxt "#31407"
@@ -328,6 +342,67 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "Töröltek megjelenítése"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Videó kodek"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Felbontás"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Videó képarány"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr "Video bitráta"
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Hang kodek"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Hangcsatornák"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr "Audió bitráta"
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Képernyő felbontása"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr "A rendszer renderelési sebessége"
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Rendszer CPU használat"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Média"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Rendszer"
+
 msgctxt "#31900"
 msgid "First Run"
 msgstr "Első indítás"
@@ -347,3 +422,15 @@ msgstr "Amikor hangot vagy videót játszol le, az elem címe a képernyő tetej
 msgctxt "#31904"
 msgid "Now Playing Title..."
 msgstr "Most játszott cím…"
+
+#~ msgctxt "#31406"
+#~ msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+#~ msgstr "Kijelző beállítása · Hang beállítása · Internetelérés beállítása · Energiagazdálkodás beállítása · Naplózás beállítása"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "PVR információ"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "Feldolgozási információ"

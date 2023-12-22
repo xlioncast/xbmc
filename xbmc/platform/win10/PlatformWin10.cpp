@@ -22,14 +22,12 @@ CPlatform* CPlatform::CreateInstance()
   return new CPlatformWin10();
 }
 
-bool CPlatformWin10::Init()
+bool CPlatformWin10::InitStageOne()
 {
-  if (!CPlatform::Init())
+  if (!CPlatform::InitStageOne())
     return false;
 
-  CEnvironment::setenv("SSL_CERT_FILE", CSpecialProtocol::TranslatePath("special://xbmc/system/certs/cacert.pem").c_str(), 1);
-
-  CEnvironment::setenv("OS", "win32"); // for python scripts that check the OS
+  CEnvironment::setenv("OS", "win10"); // for python scripts that check the OS
 
   // enable independent locale for each thread, see https://connect.microsoft.com/VisualStudio/feedback/details/794122
   CWIN32Util::SetThreadLocalLocale(true);
@@ -39,4 +37,14 @@ bool CPlatformWin10::Init()
   CPowerSyscall::Register();
 
   return true;
+}
+
+void CPlatformWin10::PlatformSyslog()
+{
+  CWIN32Util::PlatformSyslog();
+}
+
+bool CPlatformWin10::SupportsUserInstalledBinaryAddons()
+{
+  return false;
 }

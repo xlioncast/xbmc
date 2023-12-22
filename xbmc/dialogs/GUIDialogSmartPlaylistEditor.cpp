@@ -226,7 +226,7 @@ void CGUIDialogSmartPlaylistEditor::OnOK()
     if (CGUIKeyboardFactory::ShowAndGetInput(filename, CVariant{g_localizeStrings.Get(16013)}, false))
     {
       path = URIUtils::AddFileToFolder(systemPlaylistsPath, m_playlist.GetSaveLocation(),
-                                        CUtil::MakeLegalFileName(filename));
+                                       CUtil::MakeLegalFileName(std::move(filename)));
     }
     else
       return;
@@ -297,7 +297,7 @@ void CGUIDialogSmartPlaylistEditor::OnLimit()
     if (*limit == 0)
       dialog->Add(g_localizeStrings.Get(21428));
     else
-      dialog->Add(StringUtils::Format(g_localizeStrings.Get(21436).c_str(), *limit));
+      dialog->Add(StringUtils::Format(g_localizeStrings.Get(21436), *limit));
   }
   dialog->SetHeading(CVariant{ 21427 });
   dialog->SetSelected(selected);
@@ -414,7 +414,8 @@ void CGUIDialogSmartPlaylistEditor::UpdateButtons()
   if (m_playlist.m_limit == 0)
     SET_CONTROL_LABEL2(CONTROL_LIMIT, g_localizeStrings.Get(21428)); // no limit
   else
-    SET_CONTROL_LABEL2(CONTROL_LIMIT, StringUtils::Format(g_localizeStrings.Get(21436).c_str(), m_playlist.m_limit));
+    SET_CONTROL_LABEL2(CONTROL_LIMIT,
+                       StringUtils::Format(g_localizeStrings.Get(21436), m_playlist.m_limit));
   int currentItem = GetSelectedItem();
   CGUIMessage msgReset(GUI_MSG_LABEL_RESET, GetID(), CONTROL_RULE_LIST);
   OnMessage(msgReset);

@@ -70,7 +70,7 @@ protected:
   CSettingControlFormattedRange() = default;
 
   int m_formatLabel = -1;
-  std::string m_formatString = "%i";
+  std::string m_formatString = "{}";
   int m_minimumLabel = -1;
 };
 
@@ -196,12 +196,16 @@ public:
   SettingControlListValueFormatter GetFormatter() const { return m_formatter; }
   void SetFormatter(SettingControlListValueFormatter formatter) { m_formatter = formatter; }
 
+  bool UseDetails() const { return m_useDetails; }
+  void SetUseDetails(bool useDetails) { m_useDetails = useDetails; }
+
 protected:
   int m_heading = -1;
   bool m_multiselect = false;
   bool m_hideValue = false;
   int m_addButtonLabel = -1;
   SettingControlListValueFormatter m_formatter = nullptr;
+  bool m_useDetails{false};
 };
 
 class CSettingControlSlider;
@@ -265,7 +269,7 @@ public:
 protected:
   int m_formatLabel = 21469;
   int m_valueFormatLabel = -1;
-  std::string m_valueFormat = "%s";
+  std::string m_valueFormat = "{}";
 };
 
 class CSettingControlTitle : public ISettingControl
@@ -296,4 +300,15 @@ public:
 
   // implementation of ISettingControl
   std::string GetType() const override { return "label"; }
+};
+
+class CSettingControlColorButton : public ISettingControl
+{
+public:
+  CSettingControlColorButton() { m_format = "string"; }
+  ~CSettingControlColorButton() override = default;
+
+  // implementation of ISettingControl
+  std::string GetType() const override { return "colorbutton"; }
+  bool SetFormat(const std::string& format) override;
 };

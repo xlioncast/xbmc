@@ -8,14 +8,18 @@
 
 #pragma once
 
-#include "XBDateTime.h"
 #include "guilib/guiinfo/GUIInfoProvider.h"
+#include "utils/EventStream.h"
+#include "utils/TimeFormat.h"
 
 #include <atomic>
+#include <ctime>
 #include <memory>
 #include <utility>
 #include <vector>
 
+class CApplicationPlayer;
+class CApplicationVolumeHandling;
 class CDataCacheCore;
 
 namespace KODI
@@ -27,11 +31,21 @@ namespace GUIINFO
 
 class CGUIInfo;
 
+struct PlayerShowInfoChangedEvent
+{
+  explicit PlayerShowInfoChangedEvent(bool showInfo) : m_showInfo(showInfo) {}
+  virtual ~PlayerShowInfoChangedEvent() = default;
+
+  bool m_showInfo{false};
+};
+
 class CPlayerGUIInfo : public CGUIInfoProvider
 {
 public:
   CPlayerGUIInfo();
   ~CPlayerGUIInfo() override;
+
+  CEventStream<PlayerShowInfoChangedEvent>& Events() { return m_events; }
 
   // KODI::GUILIB::GUIINFO::IGUIInfoProvider implementation
   bool InitCurrentItem(CFileItem *item) override;
@@ -39,21 +53,12 @@ public:
   bool GetInt(int& value, const CGUIListItem *item, int contextWindow, const CGUIInfo &info) const override;
   bool GetBool(bool& value, const CGUIListItem *item, int contextWindow, const CGUIInfo &info) const override;
 
-  bool GetDisplayAfterSeek() const;
-  void SetDisplayAfterSeek(unsigned int timeOut = 2500, int seekOffset = 0);
-  void SetShowTime(bool showtime) { m_playerShowTime = showtime; };
+  void SetShowTime(bool showtime) { m_playerShowTime = showtime; }
   void SetShowInfo(bool showinfo);
   bool GetShowInfo() const { return m_playerShowInfo; }
   bool ToggleShowInfo();
 
 private:
-  std::unique_ptr<CFileItem> m_currentItem;
-
-  unsigned int m_AfterSeekTimeout = 0;
-  mutable int m_seekOffset = 0;
-  std::atomic_bool m_playerShowTime;
-  std::atomic_bool m_playerShowInfo;
-
   int GetTotalPlayTime() const;
   int GetPlayTime() const;
   int GetPlayTimeRemaining() const;
@@ -66,8 +71,21 @@ private:
   std::string GetSeekTime(TIME_FORMAT format) const;
 
   std::string GetContentRanges(int iInfo) const;
-  std::vector<std::pair<float, float>> GetCutList(CDataCacheCore& data, time_t duration) const;
-  std::vector<std::pair<float, float>> GetChapters(CDataCacheCore& data, time_t duration) const;
+  std::vector<std::pair<float, float>> GetEditList(const CDataCacheCore& data,
+                                                   std::time_t duration) const;
+  std::vector<std::pair<float, float>> GetCuts(const CDataCacheCore& data,
+                                               std::time_t duration) const;
+  std::vector<std::pair<float, float>> GetSceneMarkers(const CDataCacheCore& data,
+                                                       std::time_t duration) const;
+  std::vector<std::pair<float, float>> GetChapters(const CDataCacheCore& data,
+                                                   std::time_t duration) const;
+
+  std::unique_ptr<CFileItem> m_currentItem;
+  std::atomic_bool m_playerShowTime{false};
+  std::atomic_bool m_playerShowInfo{false};
+  const std::shared_ptr<CApplicationPlayer> m_appPlayer;
+  const std::shared_ptr<CApplicationVolumeHandling> m_appVolume;
+  CEventSource<PlayerShowInfoChangedEvent> m_events;
 };
 
 } // namespace GUIINFO

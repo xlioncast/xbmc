@@ -10,6 +10,7 @@
 
 #include "games/controllers/ControllerTypes.h"
 #include "input/joysticks/interfaces/IInputHandler.h"
+#include "peripherals/PeripheralTypes.h"
 
 #include <memory>
 
@@ -23,10 +24,11 @@ class IInputProvider;
 namespace GAME
 {
 class CGameClient;
-class CPort;
+class CPortInput;
 
 /*!
  * \ingroup games
+ *
  * \brief Handles game controller events for games.
  *
  * Listens to game controller events and forwards them to the games (as game_input_event).
@@ -70,7 +72,21 @@ public:
   bool OnThrottleMotion(const std::string& feature,
                         float position,
                         unsigned int motionTimeMs) override;
+  void OnInputFrame() override {}
 
+  // Input accessors
+  const std::string& GetPortAddress() const { return m_portAddress; }
+  ControllerPtr GetController() const { return m_controller; }
+  std::string GetControllerAddress() const;
+  PERIPHERALS::PeripheralPtr GetSource() const { return m_sourcePeripheral; }
+  std::string GetSourceLocation() const;
+  float GetActivation() const;
+
+  // Input mutators
+  void SetSource(PERIPHERALS::PeripheralPtr sourcePeripheral);
+  void ClearSource();
+
+  // Input handlers
   bool SetRumble(const std::string& feature, float magnitude);
 
 private:
@@ -80,7 +96,8 @@ private:
   const ControllerPtr m_controller;
 
   // Input parameters
-  std::unique_ptr<CPort> m_port;
+  std::unique_ptr<CPortInput> m_portInput;
+  PERIPHERALS::PeripheralPtr m_sourcePeripheral;
 };
 } // namespace GAME
 } // namespace KODI

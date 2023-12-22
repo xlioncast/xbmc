@@ -31,7 +31,7 @@ public:
                        const CTextureInfo& nibTexture, const CTextureInfo& nibTextureFocus,
                        ORIENTATION orientation, bool showOnePage);
   ~GUIScrollBarControl() override = default;
-  GUIScrollBarControl *Clone() const override { return new GUIScrollBarControl(*this); };
+  GUIScrollBarControl* Clone() const override { return new GUIScrollBarControl(*this); }
 
   void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
   void Render() override;
@@ -48,7 +48,7 @@ public:
   bool IsVisible() const override;
 protected:
   EVENT_RESULT OnMouseEvent(const CPoint &point, const CMouseEvent &event) override;
-  bool UpdateColors() override;
+  bool UpdateColors(const CGUIListItem* item) override;
   bool UpdateBarSize();
   bool Move(int iNumSteps);
   virtual void SetFromPosition(const CPoint &point);

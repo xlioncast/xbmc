@@ -22,6 +22,9 @@ class IRetroPlayerStream;
 namespace GAME
 {
 
+/*!
+ * \ingroup games
+ */
 class IGameClientStream
 {
 public:
@@ -61,7 +64,7 @@ public:
   /*!
    * \brief Free an allocated buffer
    *
-   * \param buffer The buffer returned from GetStreamBuffer()
+   * \param buffer The buffer returned from GetBuffer()
    */
   virtual void ReleaseBuffer(game_stream_buffer& buffer) {}
 

@@ -19,8 +19,6 @@ using namespace KODI::WINDOWING::X11;
 CGLContextGLX::CGLContextGLX(Display *dpy) : CGLContext(dpy)
 {
   m_extPrefix = "GLX_";
-  m_glxWindow = 0;
-  m_glxContext = 0;
   m_vsyncMode = 0;
 }
 
@@ -58,11 +56,12 @@ bool CGLContextGLX::Refresh(bool force, int screen, Window glWindow, bool &newCo
     vMask.visualid = XVisualIDFromVisual(winAttr.visual);
     vInfo = XGetVisualInfo(m_dpy, VisualScreenMask | VisualIDMask, &vMask, &availableVisuals);
     if (!vInfo)
-      CLog::Log(LOGWARNING, "Failed to get VisualInfo of visual 0x%x", (unsigned) vMask.visualid);
+      CLog::Log(LOGWARNING, "Failed to get VisualInfo of visual 0x{:x}", (unsigned)vMask.visualid);
     else if(!IsSuitableVisual(vInfo))
     {
-      CLog::Log(LOGWARNING, "Visual 0x%x of the window is not suitable, looking for another one...",
-                (unsigned) vInfo->visualid);
+      CLog::Log(LOGWARNING,
+                "Visual 0x{:x} of the window is not suitable, looking for another one...",
+                (unsigned)vInfo->visualid);
       vMask.depth = vInfo->depth;
       XFree(vInfo);
       vInfo = NULL;
@@ -92,7 +91,7 @@ bool CGLContextGLX::Refresh(bool force, int screen, Window glWindow, bool &newCo
 
   if (vInfo)
   {
-    CLog::Log(LOGINFO, "Using visual 0x%x", (unsigned)vInfo->visualid);
+    CLog::Log(LOGINFO, "Using visual 0x{:x}", (unsigned)vInfo->visualid);
     if (m_glxContext)
     {
       glXMakeCurrent(m_dpy, None, NULL);
@@ -175,7 +174,7 @@ void CGLContextGLX::SetVSync(bool enable)
     if(m_glXSwapIntervalMESA(1) == 0)
       m_vsyncMode = 2;
     else
-      CLog::Log(LOGWARNING, "%s - glXSwapIntervalMESA failed", __FUNCTION__);
+      CLog::Log(LOGWARNING, "{} - glXSwapIntervalMESA failed", __FUNCTION__);
   }
   if (m_glXWaitVideoSyncSGI && m_glXGetVideoSyncSGI && !m_vsyncMode)
   {
@@ -183,7 +182,8 @@ void CGLContextGLX::SetVSync(bool enable)
     if(m_glXGetVideoSyncSGI(&count) == 0)
       m_vsyncMode = 3;
     else
-      CLog::Log(LOGWARNING, "%s - glXGetVideoSyncSGI failed, glcontext probably not direct", __FUNCTION__);
+      CLog::Log(LOGWARNING, "{} - glXGetVideoSyncSGI failed, glcontext probably not direct",
+                __FUNCTION__);
   }
 }
 
@@ -194,13 +194,15 @@ void CGLContextGLX::SwapBuffers()
     glFinish();
     unsigned int before = 0, after = 0;
     if (m_glXGetVideoSyncSGI(&before) != 0)
-      CLog::Log(LOGERROR, "%s - glXGetVideoSyncSGI - Failed to get current retrace count", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - glXGetVideoSyncSGI - Failed to get current retrace count",
+                __FUNCTION__);
 
     glXSwapBuffers(m_dpy, m_glxWindow);
     glFinish();
 
     if(m_glXGetVideoSyncSGI(&after) != 0)
-      CLog::Log(LOGERROR, "%s - glXGetVideoSyncSGI - Failed to get current retrace count", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - glXGetVideoSyncSGI - Failed to get current retrace count",
+                __FUNCTION__);
 
     if (after == before)
       m_iVSyncErrors = 1;
@@ -216,7 +218,10 @@ void CGLContextGLX::SwapBuffers()
 
     if (m_iVSyncErrors < -200)
     {
-      CLog::Log(LOGINFO, "GL: retrace count change for %d consecutive buffer swap, switching to vsync mode 2", -m_iVSyncErrors);
+      CLog::Log(
+          LOGINFO,
+          "GL: retrace count change for {} consecutive buffer swap, switching to vsync mode 2",
+          -m_iVSyncErrors);
       m_iVSyncErrors = 0;
       m_vsyncMode = 2;
     }
@@ -226,19 +231,21 @@ void CGLContextGLX::SwapBuffers()
     glFinish();
     unsigned int before = 0, swap = 0, after = 0;
     if (m_glXGetVideoSyncSGI(&before) != 0)
-      CLog::Log(LOGERROR, "%s - glXGetVideoSyncSGI - Failed to get current retrace count", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - glXGetVideoSyncSGI - Failed to get current retrace count",
+                __FUNCTION__);
 
     if(m_glXWaitVideoSyncSGI(2, (before+1)%2, &swap) != 0)
-      CLog::Log(LOGERROR, "%s - glXWaitVideoSyncSGI - Returned error", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - glXWaitVideoSyncSGI - Returned error", __FUNCTION__);
 
     glXSwapBuffers(m_dpy, m_glxWindow);
     glFinish();
 
     if (m_glXGetVideoSyncSGI(&after) != 0)
-      CLog::Log(LOGERROR, "%s - glXGetVideoSyncSGI - Failed to get current retrace count", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - glXGetVideoSyncSGI - Failed to get current retrace count",
+                __FUNCTION__);
 
     if (after == before)
-      CLog::Log(LOGERROR, "%s - glXWaitVideoSyncSGI - Woke up early", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - glXWaitVideoSyncSGI - Woke up early", __FUNCTION__);
 
     if (after > before + 1)
       m_iVSyncErrors++;
@@ -262,7 +269,7 @@ void CGLContextGLX::QueryExtensions()
   m_extensions += glXQueryExtensionsString(m_dpy, m_nScreen);
   m_extensions += " ";
 
-  CLog::Log(LOGDEBUG, "GLX_EXTENSIONS:%s", m_extensions.c_str());
+  CLog::Log(LOGDEBUG, "GLX_EXTENSIONS:{}", m_extensions);
 
   if (IsExtSupported("GLX_SGI_video_sync"))
     m_glXWaitVideoSyncSGI = (int (*)(int, int, unsigned int*))glXGetProcAddress((const GLubyte*)"glXWaitVideoSyncSGI");

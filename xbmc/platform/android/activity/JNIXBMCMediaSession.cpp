@@ -9,9 +9,12 @@
 #include "JNIXBMCMediaSession.h"
 
 #include "AndroidKey.h"
-#include "Application.h"
 #include "CompileInfo.h"
+#include "ServiceBroker.h"
 #include "XBMCApp.h"
+#include "application/Application.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationPlayer.h"
 #include "input/Key.h"
 #include "messaging/ApplicationMessenger.h"
 
@@ -99,56 +102,79 @@ void CJNIXBMCMediaSession::updateIntent(const CJNIIntent& intent)
 
 void CJNIXBMCMediaSession::OnPlayRequested()
 {
-  if (g_application.GetAppPlayer().IsPlaying())
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsPlaying())
   {
-    if (g_application.GetAppPlayer().IsPaused())
-      KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1, static_cast<void*>(new CAction(ACTION_PAUSE)));
+    if (appPlayer->IsPaused())
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1,
+                                                 static_cast<void*>(new CAction(ACTION_PAUSE)));
   }
 }
 
 void CJNIXBMCMediaSession::OnPauseRequested()
 {
-  if (g_application.GetAppPlayer().IsPlaying())
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsPlaying())
   {
-    if (!g_application.GetAppPlayer().IsPaused())
-      KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1, static_cast<void*>(new CAction(ACTION_PAUSE)));
+    if (!appPlayer->IsPaused())
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1,
+                                                 static_cast<void*>(new CAction(ACTION_PAUSE)));
   }
 }
 
 void CJNIXBMCMediaSession::OnNextRequested()
 {
-  if (g_application.GetAppPlayer().IsPlaying())
-    KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1, static_cast<void*>(new CAction(ACTION_NEXT_ITEM)));
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsPlaying())
+    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1,
+                                               static_cast<void*>(new CAction(ACTION_NEXT_ITEM)));
 }
 
 void CJNIXBMCMediaSession::OnPreviousRequested()
 {
-  if (g_application.GetAppPlayer().IsPlaying())
-    KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1, static_cast<void*>(new CAction(ACTION_PREV_ITEM)));
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsPlaying())
+    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1,
+                                               static_cast<void*>(new CAction(ACTION_PREV_ITEM)));
 }
 
 void CJNIXBMCMediaSession::OnForwardRequested()
 {
-  if (g_application.GetAppPlayer().IsPlaying())
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsPlaying())
   {
-    if (!g_application.GetAppPlayer().IsPaused())
-      KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1, static_cast<void*>(new CAction(ACTION_PLAYER_FORWARD)));
+    if (!appPlayer->IsPaused())
+      CServiceBroker::GetAppMessenger()->PostMsg(
+          TMSG_GUI_ACTION, WINDOW_INVALID, -1,
+          static_cast<void*>(new CAction(ACTION_PLAYER_FORWARD)));
   }
 }
 
 void CJNIXBMCMediaSession::OnRewindRequested()
 {
-  if (g_application.GetAppPlayer().IsPlaying())
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsPlaying())
   {
-    if (!g_application.GetAppPlayer().IsPaused())
-      KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1, static_cast<void*>(new CAction(ACTION_PLAYER_REWIND)));
+    if (!appPlayer->IsPaused())
+      CServiceBroker::GetAppMessenger()->PostMsg(
+          TMSG_GUI_ACTION, WINDOW_INVALID, -1,
+          static_cast<void*>(new CAction(ACTION_PLAYER_REWIND)));
   }
 }
 
 void CJNIXBMCMediaSession::OnStopRequested()
 {
-  if (g_application.GetAppPlayer().IsPlaying())
-    KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1, static_cast<void*>(new CAction(ACTION_STOP)));
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsPlaying())
+    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1,
+                                               static_cast<void*>(new CAction(ACTION_STOP)));
 }
 
 void CJNIXBMCMediaSession::OnSeekRequested(int64_t pos)
@@ -158,9 +184,9 @@ void CJNIXBMCMediaSession::OnSeekRequested(int64_t pos)
 
 bool CJNIXBMCMediaSession::OnMediaButtonEvent(const CJNIIntent& intent)
 {
-  if (CXBMCApp::HasFocus())
+  if (CXBMCApp::Get().HasFocus())
   {
-    CXBMCApp::get()->onReceive(intent);
+    CXBMCApp::Get().onReceive(intent);
     return true;
   }
   return false;

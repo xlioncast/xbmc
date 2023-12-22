@@ -63,8 +63,8 @@ public:
     m_deviceResources->Unregister(resource);
   };
 
-  void Register(IDispResource *resource) override { CWinSystemWin32::Register(resource); };
-  void Unregister(IDispResource *resource) override { CWinSystemWin32::Unregister(resource); };
+  void Register(IDispResource* resource) override { CWinSystemWin32::Register(resource); }
+  void Unregister(IDispResource* resource) override { CWinSystemWin32::Unregister(resource); }
 
   void FixRefreshRateIfNecessary(const D3D10DDIARG_CREATERESOURCE* pResource) const;
 
@@ -78,6 +78,11 @@ public:
   bool IsTransferPQ() const;
   void SetHdrMetaData(DXGI_HDR_METADATA_HDR10& hdr10) const;
   void SetHdrColorSpace(const DXGI_COLOR_SPACE_TYPE colorSpace) const;
+
+  // Get debug info from swapchain
+  DEBUG_INFO_RENDER GetDebugInfo() override;
+
+  bool SupportsVideoSuperResolution() override;
 
 protected:
   void SetDeviceFullScreen(bool fullScreen, RESOLUTION_INFO& res) override;

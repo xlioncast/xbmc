@@ -9,6 +9,8 @@
 
 #include "ServiceBroker.h"
 #include "addons/AddonManager.h"
+#include "addons/IAddonManagerCallback.h"
+#include "addons/addoninfo/AddonInfo.h"
 #include "addons/gui/GUIDialogAddonSettings.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "dialogs/GUIDialogYesNo.h"
@@ -16,11 +18,11 @@
 #include "guilib/GUIWindowManager.h"
 #include "messaging/ApplicationMessenger.h"
 #include "messaging/helpers/DialogOKHelper.h"
-#include "threads/SingleLock.h"
 #include "utils/StringUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
 
+#include <mutex>
 #include <utility>
 
 using namespace KODI::MESSAGING;
@@ -38,19 +40,24 @@ namespace ADDON
 
 CCriticalSection CAddonStatusHandler::m_critSection;
 
-CAddonStatusHandler::CAddonStatusHandler(const std::string &addonID, ADDON_STATUS status, std::string message, bool sameThread)
-  : CThread(("AddonStatus " + addonID).c_str()),
-    m_status(ADDON_STATUS_UNKNOWN)
+CAddonStatusHandler::CAddonStatusHandler(const std::string& addonID,
+                                         AddonInstanceId instanceId,
+                                         ADDON_STATUS status,
+                                         bool sameThread)
+  : CThread(("AddonStatus " + std::to_string(instanceId) + "@" + addonID).c_str()),
+    m_instanceId(instanceId)
 {
   //! @todo The status handled CAddonStatusHandler by is related to the class, not the instance
   //! having CAddonMgr construct an instance makes no sense
-  if (!CServiceBroker::GetAddonMgr().GetAddon(addonID, m_addon, ADDON_UNKNOWN, OnlyEnabled::YES))
+  if (!CServiceBroker::GetAddonMgr().GetAddon(addonID, m_addon, OnlyEnabled::CHOICE_YES))
     return;
 
-  CLog::Log(LOGINFO, "Called Add-on status handler for '%u' of clientName:%s, clientID:%s (same Thread=%s)", status, m_addon->Name().c_str(), m_addon->ID().c_str(), sameThread ? "yes" : "no");
+  CLog::Log(LOGINFO,
+            "Called Add-on status handler for '{}' of clientName:{}, clientID:{}, instanceID:{} "
+            "(same Thread={})",
+            status, m_addon->Name(), m_addon->ID(), m_instanceId, sameThread ? "yes" : "no");
 
-  m_status  = status;
-  m_message = std::move(message);
+  m_status = status;
 
   if (sameThread)
   {
@@ -69,7 +76,7 @@ CAddonStatusHandler::~CAddonStatusHandler()
 
 void CAddonStatusHandler::OnStartup()
 {
-  SetPriority(GetMinPriority());
+  SetPriority(ThreadPriority::LOWEST);
 }
 
 void CAddonStatusHandler::OnExit()
@@ -78,15 +85,18 @@ void CAddonStatusHandler::OnExit()
 
 void CAddonStatusHandler::Process()
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
-  std::string heading = StringUtils::Format("%s: %s", CAddonInfo::TranslateType(m_addon->Type(), true).c_str(), m_addon->Name().c_str());
+  std::string heading = StringUtils::Format(
+      "{}: {}", CAddonInfo::TranslateType(m_addon->Type(), true), m_addon->Name());
 
   /* Request to restart the AddOn and data structures need updated */
   if (m_status == ADDON_STATUS_NEED_RESTART)
   {
     HELPERS::ShowOKDialogLines(CVariant{heading}, CVariant{24074});
-    CServiceBroker::GetAddonMgr().GetCallbackForType(m_addon->Type())->RequestRestart(m_addon->ID(), true);
+    CServiceBroker::GetAddonMgr()
+        .GetCallbackForType(m_addon->Type())
+        ->RequestRestart(m_addon->ID(), m_instanceId, true);
   }
   /* Some required settings are missing/invalid */
   else if (m_status == ADDON_STATUS_NEED_SETTINGS)
@@ -97,19 +107,20 @@ void CAddonStatusHandler::Process()
     pDialogYesNo->SetHeading(CVariant{heading});
     pDialogYesNo->SetLine(1, CVariant{24070});
     pDialogYesNo->SetLine(2, CVariant{24072});
-    pDialogYesNo->SetLine(3, CVariant{m_message});
     pDialogYesNo->Open();
 
     if (!pDialogYesNo->IsConfirmed()) return;
 
-    if (!m_addon->HasSettings())
+    if (!m_addon->HasSettings(m_instanceId))
       return;
 
     if (CGUIDialogAddonSettings::ShowForAddon(m_addon))
     {
       //! @todo Doesn't dialogaddonsettings save these automatically? It should do this.
-      m_addon->SaveSettings();
-      CServiceBroker::GetAddonMgr().GetCallbackForType(m_addon->Type())->RequestRestart(m_addon->ID(), true);
+      m_addon->SaveSettings(m_instanceId);
+      CServiceBroker::GetAddonMgr()
+          .GetCallbackForType(m_addon->Type())
+          ->RequestRestart(m_addon->ID(), m_instanceId, true);
     }
   }
 }

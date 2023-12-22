@@ -6,12 +6,12 @@
  *  See LICENSES/README.md for more information.
  */
 
-
 #import "TVOSTopShelf.h"
 
-#include "Application.h"
 #include "DatabaseManager.h"
 #include "FileItem.h"
+#include "ServiceBroker.h"
+#include "application/Application.h"
 #include "filesystem/File.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
@@ -34,8 +34,6 @@
 #import <UIKit/UIKit.h>
 #import <mach/mach_host.h>
 #import <sys/sysctl.h>
-
-#import "system.h"
 
 static const int MaxItems = 5;
 
@@ -131,7 +129,7 @@ void CTVOSTopShelf::SetTopShelfItems(CFileItemList& items, TVOSTopShelfItemsCate
                 auto itemTitle = getTitleForItem(item);
                 
                 // Add item object in categoryItems
-                CLog::Log(LOGDEBUG, "[TopShelf] Adding item '{}' in category '{}'", itemTitle.c_str(),
+                CLog::Log(LOGDEBUG, "[TopShelf] Adding item '{}' in category '{}'", itemTitle,
                           categoryKey.UTF8String);
                 [categoryItems addObject:@{
                   @"title" : @(itemTitle.c_str()),
@@ -173,14 +171,16 @@ void CTVOSTopShelf::SetTopShelfItems(CFileItemList& items, TVOSTopShelfItemsCate
         videoDb.Open();
         fillSharedDicts(
             items, @"tvshows", @(g_localizeStrings.Get(20387).c_str()),
-            [&videoDb](const CFileItemPtr& videoItem) {
+            [&videoDb](const CFileItemPtr& videoItem)
+            {
               int season = videoItem->GetVideoInfoTag()->m_iIdSeason;
               return season > 0 ? videoDb.GetArtForItem(season, MediaTypeSeason, "poster")
                                 : std::string{};
             },
-            [](const CFileItemPtr& videoItem) {
-              return StringUtils::Format("%s s%02de%02d",
-                                         videoItem->GetVideoInfoTag()->m_strShowTitle.c_str(),
+            [](const CFileItemPtr& videoItem)
+            {
+              return StringUtils::Format("{} s{:02}e{:02}",
+                                         videoItem->GetVideoInfoTag()->m_strShowTitle,
                                          videoItem->GetVideoInfoTag()->m_iSeason,
                                          videoItem->GetVideoInfoTag()->m_iEpisode);
             });
@@ -212,10 +212,8 @@ void CTVOSTopShelf::RunTopShelf()
   //  check split[2] for url type (display or play)
 
   // its a bit ugly, but only way to get resume window to show
-  std::string cmd =
-      StringUtils::Format("PlayMedia(%s)", StringUtils::Paramify(url.c_str()).c_str());
-  KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_EXECUTE_BUILT_IN, -1, -1,
-                                                                nullptr, cmd);
+  std::string cmd = StringUtils::Format("PlayMedia({})", StringUtils::Paramify(url));
+  CServiceBroker::GetAppMessenger()->PostMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr, cmd);
 }
 
 void CTVOSTopShelf::HandleTopShelfUrl(const std::string& url, const bool run)

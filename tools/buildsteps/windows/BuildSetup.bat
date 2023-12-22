@@ -3,28 +3,9 @@ REM setup all paths
 PUSHD %~dp0\..\..\..
 SET base_dir=%CD%
 POPD
-SET builddeps_dir=%base_dir%\project\BuildDependencies
-SET bin_dir=%builddeps_dir%\bin
-SET msys_dir=%builddeps_dir%\msys64
-IF NOT EXIST %msys_dir% (SET msys_dir=%builddeps_dir%\msys32)
-SET sed_exe=%msys_dir%\usr\bin\sed.exe
 
 REM read the version values from version.txt
-SET version_props=^
-APP_NAME ^
-COMPANY_NAME ^
-PACKAGE_DESCRIPTION ^
-PACKAGE_IDENTITY ^
-PACKAGE_PUBLISHER ^
-VERSION_MAJOR ^
-VERSION_MINOR ^
-VERSION_TAG ^
-VERSION_CODE ^
-WEBSITE
-
-FOR %%p IN (%version_props%) DO (
-  FOR /f "delims=" %%v IN ('%sed_exe% -n "/%%p/ s/%%p *//p" %base_dir%\version.txt') DO SET %%p=%%v
-)
+FOR /f "tokens=1,*" %%i IN (%base_dir%\version.txt) DO SET %%i=%%j
 
 SET APP_VERSION=%VERSION_MAJOR%.%VERSION_MINOR%
 IF NOT [%VERSION_TAG%] == [] (
@@ -39,7 +20,6 @@ rem noprompt to avoid all prompts
 rem nobinaryaddons to skip building binary addons
 rem sh to use sh shell instead rxvt
 CLS
-COLOR 1B
 TITLE %APP_NAME% for Windows Build Script
 rem ----PURPOSE----
 rem - Create a working application build with a single click
@@ -98,7 +78,6 @@ set WORKSPACE=%base_dir%\kodi-build.%TARGET_PLATFORM%
 
   set EXE="%WORKSPACE%\%buildconfig%\%APP_NAME%.exe"
   set PDB="%WORKSPACE%\%buildconfig%\%APP_NAME%.pdb"
-  set D3D="%WORKSPACE%\D3DCompile*.DLL"
 
   POPD
   ECHO Done!
@@ -121,6 +100,11 @@ set WORKSPACE=%base_dir%\kodi-build.%TARGET_PLATFORM%
   Echo xbmc.old.log>>exclude.txt
   Echo kodi.log>>exclude.txt
   Echo kodi.old.log>>exclude.txt
+  Echo .so\>>exclude.txt
+  Echo .h\>>exclude.txt
+  Echo .cpp\>>exclude.txt
+  Echo .exp\>>exclude.txt
+  Echo .lib\>>exclude.txt
   rem Exclude userdata files
   Echo userdata\advancedsettings.xml>>exclude.txt
   Echo userdata\guisettings.xml>>exclude.txt
@@ -143,28 +127,27 @@ set WORKSPACE=%base_dir%\kodi-build.%TARGET_PLATFORM%
   md BUILD_WIN32\application
 
   xcopy %EXE% BUILD_WIN32\application > NUL
-  xcopy %D3D% BUILD_WIN32\application > NUL
   xcopy %base_dir%\userdata BUILD_WIN32\application\userdata /E /Q /I /Y /EXCLUDE:exclude.txt > NUL
   copy %base_dir%\LICENSE.md BUILD_WIN32\application > NUL
   copy %base_dir%\privacy-policy.txt BUILD_WIN32\application > NUL
   copy %base_dir%\known_issues.txt BUILD_WIN32\application > NUL
 
-  xcopy %WORKSPACE%\addons BUILD_WIN32\application\addons /E /Q /I /Y /EXCLUDE:exclude.txt > NUL
-  xcopy %WORKSPACE%\*.dll BUILD_WIN32\application /Q /I /Y > NUL
-  xcopy %WORKSPACE%\libbluray-*.jar BUILD_WIN32\application /Q /I /Y > NUL
-  xcopy %WORKSPACE%\system BUILD_WIN32\application\system /E /Q /I /Y /EXCLUDE:exclude.txt+exclude_dll.txt  > NUL
-  xcopy %WORKSPACE%\media BUILD_WIN32\application\media /E /Q /I /Y /EXCLUDE:exclude.txt  > NUL
+  xcopy %WORKSPACE%\%buildconfig%\addons BUILD_WIN32\application\addons /E /Q /I /Y /EXCLUDE:exclude.txt > NUL
+  xcopy %WORKSPACE%\%buildconfig%\*.dll BUILD_WIN32\application /Q /I /Y > NUL
+  xcopy %WORKSPACE%\%buildconfig%\libbluray-*.jar BUILD_WIN32\application /Q /I /Y > NUL
+  xcopy %WORKSPACE%\%buildconfig%\system BUILD_WIN32\application\system /E /Q /I /Y /EXCLUDE:exclude.txt+exclude_dll.txt  > NUL
+  xcopy %WORKSPACE%\%buildconfig%\media BUILD_WIN32\application\media /E /Q /I /Y /EXCLUDE:exclude.txt  > NUL
 
   REM create AppxManifest.xml
-  "%sed_exe%" ^
-    -e 's/@APP_NAME@/%APP_NAME%/g' ^
-    -e 's/@COMPANY_NAME@/%COMPANY_NAME%/g' ^
-    -e 's/@TARGET_ARCHITECTURE@/%TARGET_ARCHITECTURE%/g' ^
-    -e 's/@VERSION_CODE@/%VERSION_CODE%/g' ^
-    -e 's/@PACKAGE_IDENTITY@/%PACKAGE_IDENTITY%/g' ^
-    -e 's/@PACKAGE_PUBLISHER@/%PACKAGE_PUBLISHER%/g' ^
-    -e 's/@PACKAGE_DESCRIPTION@/%PACKAGE_DESCRIPTION%/g' ^
-    "AppxManifest.xml.in" > "BUILD_WIN32\application\AppxManifest.xml"
+  @PowerShell "(GC .\AppxManifest.xml.in)|%%{$_" ^
+    " -Replace '@APP_NAME@', '%APP_NAME%'" ^
+    " -Replace '@COMPANY_NAME@', '%COMPANY_NAME%'" ^
+    " -Replace '@TARGET_ARCHITECTURE@', '%TARGET_ARCHITECTURE%'" ^
+    " -Replace '@VERSION_CODE@', '%VERSION_CODE%'" ^
+    " -Replace '@PACKAGE_IDENTITY@', '%PACKAGE_IDENTITY%'" ^
+    " -Replace '@PACKAGE_PUBLISHER@', '%PACKAGE_PUBLISHER%'" ^
+    " -Replace '@PACKAGE_DESCRIPTION@', '%PACKAGE_DESCRIPTION%'" ^
+    "}|SC .\BUILD_WIN32\application\AppxManifest.xml"
 
   SET build_path=%CD%
   IF %buildbinaryaddons%==true (
@@ -185,17 +168,11 @@ set WORKSPACE=%base_dir%\kodi-build.%TARGET_PLATFORM%
     IF EXIST error.log del error.log > NUL
   )
 
-  rem restore color and title, some scripts mess these up
-  COLOR 1B
+  rem restore title, some scripts mess these up
   TITLE %APP_NAME% for Windows Build Script
 
-  IF EXIST exclude.txt del exclude.txt  > NUL
-  IF EXIST exclude_dll.txt del exclude_dll.txt  > NUL
-  del /s /q /f BUILD_WIN32\application\*.so  > NUL
-  del /s /q /f BUILD_WIN32\application\*.h  > NUL
-  del /s /q /f BUILD_WIN32\application\*.cpp  > NUL
-  del /s /q /f BUILD_WIN32\application\*.exp  > NUL
-  del /s /q /f BUILD_WIN32\application\*.lib  > NUL
+  IF EXIST exclude.txt del exclude.txt > NUL
+  IF EXIST exclude_dll.txt del exclude_dll.txt > NUL
   POPD
 
   ECHO ------------------------------------------------------------
@@ -214,39 +191,33 @@ set WORKSPACE=%base_dir%\kodi-build.%TARGET_PLATFORM%
   SET APP_PDBFILE=%APP_NAME%Setup-%GIT_REV%-%BRANCH%-%TARGET_ARCHITECTURE%.pdb
   ECHO Creating installer %APP_SETUPFILE%...
   IF EXIST %APP_SETUPFILE% del %APP_SETUPFILE% > NUL
+
+  rem determine if current system is 32 or 64 bits
+  SET HOST_BITS=32
+  IF %PROCESSOR_ARCHITECTURE% == AMD64 SET HOST_BITS=64
+  IF %PROCESSOR_ARCHITECTURE% == ARM64 SET HOST_BITS=64
+
+  IF %HOST_BITS% == 64 (
+    SET NSIS_REG_KEY=HKLM\Software\Wow6432Node\NSIS
+  ) ELSE (
+    SET NSIS_REG_KEY=HKLM\Software\NSIS
+  )
+
   rem get path to makensis.exe from registry, first try tab delim
-  FOR /F "tokens=2* delims=  " %%A IN ('REG QUERY "HKLM\Software\NSIS" /ve') DO SET NSISExePath=%%B
+  FOR /F "tokens=2* delims=  " %%A IN ('REG QUERY "%NSIS_REG_KEY%" /ve') DO SET NSISExePath=%%B
 
   IF NOT EXIST "%NSISExePath%" (
     rem try with space delim instead of tab
-    FOR /F "tokens=2* delims= " %%A IN ('REG QUERY "HKLM\Software\NSIS" /ve') DO SET NSISExePath=%%B
+    FOR /F "tokens=2* delims= " %%A IN ('REG QUERY "%NSIS_REG_KEY%" /ve') DO SET NSISExePath=%%B
   )
 
   IF NOT EXIST "%NSISExePath%" (
     rem fails on localized windows (Default) becomes (Par D�faut)
-    FOR /F "tokens=3* delims=  " %%A IN ('REG QUERY "HKLM\Software\NSIS" /ve') DO SET NSISExePath=%%B
+    FOR /F "tokens=3* delims=  " %%A IN ('REG QUERY "%NSIS_REG_KEY%" /ve') DO SET NSISExePath=%%B
   )
 
   IF NOT EXIST "%NSISExePath%" (
-    FOR /F "tokens=3* delims= " %%A IN ('REG QUERY "HKLM\Software\NSIS" /ve') DO SET NSISExePath=%%B
-  )
-
-  rem proper x64 registry checks
-  IF NOT EXIST "%NSISExePath%" (
-    ECHO using x64 registry entries
-    FOR /F "tokens=2* delims=  " %%A IN ('REG QUERY "HKLM\Software\Wow6432Node\NSIS" /ve') DO SET NSISExePath=%%B
-  )
-  IF NOT EXIST "%NSISExePath%" (
-    rem try with space delim instead of tab
-    FOR /F "tokens=2* delims= " %%A IN ('REG QUERY "HKLM\Software\Wow6432Node\NSIS" /ve') DO SET NSISExePath=%%B
-  )
-  IF NOT EXIST "%NSISExePath%" (
-    rem on win 7 x64, the previous fails
-    FOR /F "tokens=3* delims=  " %%A IN ('REG QUERY "HKLM\Software\Wow6432Node\NSIS" /ve') DO SET NSISExePath=%%B
-  )
-  IF NOT EXIST "%NSISExePath%" (
-    rem try with space delim instead of tab
-    FOR /F "tokens=3* delims= " %%A IN ('REG QUERY "HKLM\Software\Wow6432Node\NSIS" /ve') DO SET NSISExePath=%%B
+    FOR /F "tokens=3* delims= " %%A IN ('REG QUERY "%NSIS_REG_KEY%" /ve') DO SET NSISExePath=%%B
   )
 
   SET NSISExe=%NSISExePath%\makensis.exe
@@ -257,11 +228,11 @@ set WORKSPACE=%base_dir%\kodi-build.%TARGET_PLATFORM%
     goto DIE
   )
   copy %PDB% %APP_PDBFILE% > nul
-  POPD
   ECHO ------------------------------------------------------------
   ECHO Done!
   ECHO Setup is located at %CD%\%APP_SETUPFILE%
   ECHO ------------------------------------------------------------
+  POPD
   GOTO END
 
 :MAKE_APPX

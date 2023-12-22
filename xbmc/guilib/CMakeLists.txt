@@ -7,6 +7,7 @@ set(SOURCES DDSImage.cpp
             GUIBaseContainer.cpp
             GUIBorderedImage.cpp
             GUIButtonControl.cpp
+            GUIColorButtonControl.cpp
             GUIColorManager.cpp
             GUIComponent.cpp
             GUIControl.cpp
@@ -82,6 +83,7 @@ set(HEADERS DDSImage.h
             GUIBaseContainer.h
             GUIBorderedImage.h
             GUIButtonControl.h
+            GUIColorButtonControl.h
             GUIColorManager.h
             GUIComponent.h
             GUIControl.h
@@ -155,26 +157,26 @@ set(HEADERS DDSImage.h
             XBTF.h
             XBTFReader.h)
 
-if(OPENGL_FOUND)
-  list(APPEND SOURCES GUIFontTTFGL.cpp
-                      GUITextureGL.cpp
-                      Shader.cpp
+if(TARGET OpenGL::GL OR TARGET OpenGL::GLES)
+  list(APPEND SOURCES Shader.cpp
                       TextureGL.cpp)
-  list(APPEND HEADERS GUIFontTTFGL.h
-                      GUITextureGL.h
-                      Shader.h
+  list(APPEND HEADERS Shader.h
                       TextureGL.h)
-endif()
 
-if(OPENGLES_FOUND)
-  list(APPEND SOURCES GUIFontTTFGL.cpp
-                      GUITextureGLES.cpp
-                      Shader.cpp
-                      TextureGL.cpp)
-  list(APPEND HEADERS GUIFontTTFGL.h
-                      GUITextureGLES.h
-                      Shader.h
-                      TextureGL.h)
+  if(TARGET OpenGL::GL)
+    list(APPEND SOURCES GUIFontTTFGL.cpp
+                        GUITextureGL.cpp)
+    list(APPEND HEADERS GUIFontTTFGL.h
+                        GUITextureGL.h)
+  endif()
+
+  if(TARGET OpenGL::GLES)
+    list(APPEND SOURCES GUIFontTTFGLES.cpp
+                        GUITextureGLES.cpp)
+    list(APPEND HEADERS GUIFontTTFGLES.h
+                        GUITextureGLES.h)
+  endif()
+
 endif()
 
 if(CORE_SYSTEM_NAME STREQUAL windows OR CORE_SYSTEM_NAME STREQUAL windowsstore)

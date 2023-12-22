@@ -8,7 +8,6 @@
 
 #include "MediaSettings.h"
 
-#include "Application.h"
 #include "PlayListPlayer.h"
 #include "ServiceBroker.h"
 #include "cores/RetroPlayer/RetroPlayerUtils.h"
@@ -17,20 +16,22 @@
 #include "interfaces/AnnouncementManager.h"
 #include "interfaces/builtins/Builtins.h"
 #include "messaging/helpers/DialogHelper.h"
+#include "messaging/helpers/DialogOKHelper.h"
 #include "music/MusicLibraryQueue.h"
 #include "settings/Settings.h"
 #include "settings/dialogs/GUIDialogLibExportSettings.h"
 #include "settings/lib/Setting.h"
 #include "storage/MediaManager.h"
-#include "threads/SingleLock.h"
 #include "utils/StringUtils.h"
 #include "utils/Variant.h"
 #include "utils/XBMCTinyXML.h"
 #include "utils/XMLUtils.h"
 #include "utils/log.h"
 #include "video/VideoDatabase.h"
+#include "video/VideoLibraryQueue.h"
 
 #include <limits.h>
+#include <mutex>
 #include <string>
 
 using namespace KODI;
@@ -71,7 +72,7 @@ bool CMediaSettings::Load(const TiXmlNode *settings)
   if (settings == NULL)
     return false;
 
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   const TiXmlElement *pElement = settings->FirstChildElement("defaultvideosettings");
   if (pElement != NULL)
   {
@@ -114,8 +115,13 @@ bool CMediaSettings::Load(const TiXmlNode *settings)
       m_defaultVideoSettings.m_StereoMode = 0;
     if (!XMLUtils::GetInt(pElement, "centermixlevel", m_defaultVideoSettings.m_CenterMixLevel))
       m_defaultVideoSettings.m_CenterMixLevel = 0;
-    if (!XMLUtils::GetInt(pElement, "tonemapmethod", m_defaultVideoSettings.m_ToneMapMethod))
-      m_defaultVideoSettings.m_ToneMapMethod = VS_TONEMAPMETHOD_REINHARD;
+
+    int toneMapMethod;
+    if (!XMLUtils::GetInt(pElement, "tonemapmethod", toneMapMethod, VS_TONEMAPMETHOD_OFF,
+                          VS_TONEMAPMETHOD_MAX))
+      toneMapMethod = VS_TONEMAPMETHOD_REINHARD;
+    m_defaultVideoSettings.m_ToneMapMethod = static_cast<ETONEMAPMETHOD>(toneMapMethod);
+
     if (!XMLUtils::GetFloat(pElement, "tonemapparam", m_defaultVideoSettings.m_ToneMapParam, 0.1f, 5.0f))
       m_defaultVideoSettings.m_ToneMapParam = 1.0f;
   }
@@ -156,10 +162,11 @@ bool CMediaSettings::Load(const TiXmlNode *settings)
 
   // Set music playlist player repeat and shuffle from loaded settings
   if (m_musicPlaylistRepeat)
-    CServiceBroker::GetPlaylistPlayer().SetRepeat(PLAYLIST_MUSIC, PLAYLIST::REPEAT_ALL);
+    CServiceBroker::GetPlaylistPlayer().SetRepeat(PLAYLIST::TYPE_MUSIC, PLAYLIST::RepeatState::ALL);
   else
-    CServiceBroker::GetPlaylistPlayer().SetRepeat(PLAYLIST_MUSIC, PLAYLIST::REPEAT_NONE);
-  CServiceBroker::GetPlaylistPlayer().SetShuffle(PLAYLIST_MUSIC, m_musicPlaylistShuffle);
+    CServiceBroker::GetPlaylistPlayer().SetRepeat(PLAYLIST::TYPE_MUSIC,
+                                                  PLAYLIST::RepeatState::NONE);
+  CServiceBroker::GetPlaylistPlayer().SetShuffle(PLAYLIST::TYPE_MUSIC, m_musicPlaylistShuffle);
 
   // Read the watchmode settings for the various media views
   pElement = settings->FirstChildElement("myvideos");
@@ -187,10 +194,11 @@ bool CMediaSettings::Load(const TiXmlNode *settings)
 
   // Set video playlist player repeat and shuffle from loaded settings
   if (m_videoPlaylistRepeat)
-    CServiceBroker::GetPlaylistPlayer().SetRepeat(PLAYLIST_VIDEO, PLAYLIST::REPEAT_ALL);
+    CServiceBroker::GetPlaylistPlayer().SetRepeat(PLAYLIST::TYPE_VIDEO, PLAYLIST::RepeatState::ALL);
   else
-    CServiceBroker::GetPlaylistPlayer().SetRepeat(PLAYLIST_VIDEO, PLAYLIST::REPEAT_NONE);
-  CServiceBroker::GetPlaylistPlayer().SetShuffle(PLAYLIST_VIDEO, m_videoPlaylistShuffle);
+    CServiceBroker::GetPlaylistPlayer().SetRepeat(PLAYLIST::TYPE_VIDEO,
+                                                  PLAYLIST::RepeatState::NONE);
+  CServiceBroker::GetPlaylistPlayer().SetShuffle(PLAYLIST::TYPE_VIDEO, m_videoPlaylistShuffle);
 
   return true;
 }
@@ -200,7 +208,7 @@ bool CMediaSettings::Save(TiXmlNode *settings) const
   if (settings == NULL)
     return false;
 
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   // default video settings
   TiXmlElement videoSettingsNode("defaultvideosettings");
   TiXmlNode *pNode = settings->InsertEndChild(videoSettingsNode);
@@ -300,8 +308,13 @@ void CMediaSettings::OnSettingAction(const std::shared_ptr<const CSetting>& sett
   const std::string &settingId = setting->GetId();
   if (settingId == CSettings::SETTING_MUSICLIBRARY_CLEANUP)
   {
-    if (HELPERS::ShowYesNoDialogText(CVariant{313}, CVariant{333}) == DialogResponse::YES)
-      g_application.StartMusicCleanup(true);
+    if (HELPERS::ShowYesNoDialogText(CVariant{313}, CVariant{333}) == DialogResponse::CHOICE_YES)
+    {
+      if (CMusicLibraryQueue::GetInstance().IsRunning())
+        HELPERS::ShowOKDialogText(CVariant{700}, CVariant{703});
+      else
+        CMusicLibraryQueue::GetInstance().CleanLibrary(true);
+    }
   }
   else if (settingId == CSettings::SETTING_MUSICLIBRARY_EXPORT)
   {
@@ -328,8 +341,11 @@ void CMediaSettings::OnSettingAction(const std::shared_ptr<const CSetting>& sett
   }
   else if (settingId == CSettings::SETTING_VIDEOLIBRARY_CLEANUP)
   {
-    if (HELPERS::ShowYesNoDialogText(CVariant{313}, CVariant{333}) == DialogResponse::YES)
-      g_application.StartVideoCleanup(true);
+    if (HELPERS::ShowYesNoDialogText(CVariant{313}, CVariant{333}) == DialogResponse::CHOICE_YES)
+    {
+      if (!CVideoLibraryQueue::GetInstance().CleanLibraryModal())
+        HELPERS::ShowOKDialogText(CVariant{700}, CVariant{703});
+    }
   }
   else if (settingId == CSettings::SETTING_VIDEOLIBRARY_EXPORT)
     CBuiltins::GetInstance().Execute("exportlibrary(video)");
@@ -362,7 +378,7 @@ void CMediaSettings::OnSettingChanged(const std::shared_ptr<const CSetting>& set
 
 int CMediaSettings::GetWatchedMode(const std::string &content) const
 {
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   WatchedModes::const_iterator it = m_watchedModes.find(GetWatchedContent(content));
   if (it != m_watchedModes.end())
     return it->second;
@@ -372,7 +388,7 @@ int CMediaSettings::GetWatchedMode(const std::string &content) const
 
 void CMediaSettings::SetWatchedMode(const std::string &content, WatchedMode mode)
 {
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   WatchedModes::iterator it = m_watchedModes.find(GetWatchedContent(content));
   if (it != m_watchedModes.end())
     it->second = mode;
@@ -380,7 +396,7 @@ void CMediaSettings::SetWatchedMode(const std::string &content, WatchedMode mode
 
 void CMediaSettings::CycleWatchedMode(const std::string &content)
 {
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   WatchedModes::iterator it = m_watchedModes.find(GetWatchedContent(content));
   if (it != m_watchedModes.end())
   {

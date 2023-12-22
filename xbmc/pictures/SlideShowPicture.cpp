@@ -7,34 +7,22 @@
  */
 
 #include "SlideShowPicture.h"
+
 #include "ServiceBroker.h"
-#include "windowing/GraphicContext.h"
 #include "guilib/Texture.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SingleLock.h"
+#include "windowing/GraphicContext.h"
 #include "windowing/WinSystem.h"
+
+#include <mutex>
+
 #ifndef _USE_MATH_DEFINES
 #define _USE_MATH_DEFINES
 #endif
-#include <math.h>
-
-#if defined(HAS_GL)
-#include "rendering/gl/RenderSystemGL.h"
-#elif defined(HAS_GLES)
-#include "rendering/gles/RenderSystemGLES.h"
-#elif defined(TARGET_WINDOWS)
-#include "guilib/TextureDX.h"
-#include "rendering/dx/DeviceResources.h"
-#include "rendering/dx/RenderContext.h"
-
-#include <DirectXMath.h>
-using namespace DirectX;
-using namespace Microsoft::WRL;
-#endif
-
 #include <cstddef>
+#include <math.h>
 
 #define IMMEDIATE_TRANSITION_TIME          20
 
@@ -47,9 +35,8 @@ using namespace Microsoft::WRL;
 
 static float zoomamount[10] = { 1.0f, 1.2f, 1.5f, 2.0f, 2.8f, 4.0f, 6.0f, 9.0f, 13.5f, 20.0f };
 
-CSlideShowPic::CSlideShowPic()
+CSlideShowPic::CSlideShowPic() : m_pImage(nullptr)
 {
-  m_pImage = NULL;
   m_bIsLoaded = false;
   m_bIsFinished = false;
   m_bDrawNextImage = false;
@@ -66,28 +53,21 @@ CSlideShowPic::~CSlideShowPic()
 
 void CSlideShowPic::Close()
 {
-  CSingleLock lock(m_textureAccess);
-  if (m_pImage)
-  {
-    delete m_pImage;
-    m_pImage = nullptr;
-  }
+  std::unique_lock<CCriticalSection> lock(m_textureAccess);
+  m_pImage.reset();
   m_bIsLoaded = false;
   m_bIsFinished = false;
   m_bDrawNextImage = false;
   m_bTransitionImmediately = false;
   m_bIsDirty = true;
   m_alpha = 0;
-#ifdef HAS_DX
-  m_vb = nullptr;
-#endif
 }
 
 void CSlideShowPic::Reset(DISPLAY_EFFECT dispEffect, TRANSITION_EFFECT transEffect)
 {
-  CSingleLock lock(m_textureAccess);
+  std::unique_lock<CCriticalSection> lock(m_textureAccess);
   if (m_pImage)
-    SetTexture_Internal(m_iSlideNumber, m_pImage, dispEffect, transEffect);
+    SetTexture_Internal(m_iSlideNumber, std::move(m_pImage), dispEffect, transEffect);
   else
     Close();
 }
@@ -102,33 +82,33 @@ bool CSlideShowPic::DisplayEffectNeedChange(DISPLAY_EFFECT newDispEffect) const
 }
 
 void CSlideShowPic::SetTexture(int iSlideNumber,
-                               CTexture* pTexture,
+                               std::unique_ptr<CTexture> pTexture,
                                DISPLAY_EFFECT dispEffect,
                                TRANSITION_EFFECT transEffect)
 {
-  CSingleLock lock(m_textureAccess);
+  std::unique_lock<CCriticalSection> lock(m_textureAccess);
   Close();
-  SetTexture_Internal(iSlideNumber, pTexture, dispEffect, transEffect);
+  SetTexture_Internal(iSlideNumber, std::move(pTexture), dispEffect, transEffect);
 }
 
 void CSlideShowPic::SetTexture_Internal(int iSlideNumber,
-                                        CTexture* pTexture,
+                                        std::unique_ptr<CTexture> pTexture,
                                         DISPLAY_EFFECT dispEffect,
                                         TRANSITION_EFFECT transEffect)
 {
-  CSingleLock lock(m_textureAccess);
+  std::unique_lock<CCriticalSection> lock(m_textureAccess);
   m_bPause = false;
   m_bNoEffect = false;
   m_bTransitionImmediately = false;
   m_iSlideNumber = iSlideNumber;
 
   m_bIsDirty = true;
-  m_pImage = pTexture;
-  m_fWidth = (float)pTexture->GetWidth();
-  m_fHeight = (float)pTexture->GetHeight();
+  m_pImage = std::move(pTexture);
+  m_fWidth = static_cast<float>(m_pImage->GetWidth());
+  m_fHeight = static_cast<float>(m_pImage->GetHeight());
   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_SLIDESHOW_HIGHQUALITYDOWNSCALING))
   { // activate mipmapping when high quality downscaling is 'on'
-    pTexture->SetMipmapping();
+    m_pImage->SetMipmapping();
   }
   // reset our counter
   m_iCounter = 0;
@@ -139,7 +119,7 @@ void CSlideShowPic::SetTexture_Internal(int iSlideNumber,
   // initialize our display effect
   if (dispEffect == EFFECT_RANDOM)
   {
-    if (((m_fWidth / m_fHeight) > 1.9) || ((m_fHeight / m_fWidth) > 1.9))
+    if (((m_fWidth / m_fHeight) > 1.9f) || ((m_fHeight / m_fWidth) > 1.9f))
       m_displayEffect = EFFECT_PANORAMA;
     else
       m_displayEffect = (DISPLAY_EFFECT)((rand() % (EFFECT_RANDOM - 1)) + 1);
@@ -158,15 +138,15 @@ void CSlideShowPic::SetTexture_Internal(int iSlideNumber,
   m_fTransitionAngle = 0;
   m_fTransitionZoom = 0;
   m_fAngle = 0.0f;
-  if (pTexture->GetOrientation() == 7)
+  if (m_pImage->GetOrientation() == 7)
   { // rotate to 270 degrees
     m_fAngle = 270.0f;
   }
-  if (pTexture->GetOrientation() == 2)
+  if (m_pImage->GetOrientation() == 2)
   { // rotate to 180 degrees
       m_fAngle = 180.0f;
   }
-  if (pTexture->GetOrientation() == 5)
+  if (m_pImage->GetOrientation() == 5)
   { // rotate to 90 degrees
     m_fAngle = 90.0f;
   }
@@ -257,17 +237,12 @@ int CSlideShowPic::GetOriginalHeight()
     return m_iOriginalHeight;
 }
 
-void CSlideShowPic::UpdateTexture(CTexture* pTexture)
+void CSlideShowPic::UpdateTexture(std::unique_ptr<CTexture> pTexture)
 {
-  CSingleLock lock(m_textureAccess);
-  if (m_pImage)
-  {
-    delete m_pImage;
-    m_pImage = nullptr;
-  }
-  m_pImage = pTexture;
-  m_fWidth = (float)pTexture->GetWidth();
-  m_fHeight = (float)pTexture->GetHeight();
+  std::unique_lock<CCriticalSection> lock(m_textureAccess);
+  m_pImage = std::move(pTexture);
+  m_fWidth = static_cast<float>(m_pImage->GetWidth());
+  m_fHeight = static_cast<float>(m_pImage->GetHeight());
   m_bIsDirty = true;
 }
 
@@ -288,8 +263,8 @@ void CSlideShowPic::UpdateVertices(float cur_x[4], float cur_y[4], const float n
   || memcmp(cur_y, new_y, count)
   || m_bIsDirty)
   {
-    dirtyregions.push_back(CDirtyRegion(GetRectangle(cur_x, cur_y)));
-    dirtyregions.push_back(CDirtyRegion(GetRectangle(new_x, new_y)));
+    dirtyregions.emplace_back(GetRectangle(cur_x, cur_y));
+    dirtyregions.emplace_back(GetRectangle(new_x, new_y));
     memcpy(cur_x, new_x, count);
     memcpy(cur_y, new_y, count);
   }
@@ -298,16 +273,17 @@ void CSlideShowPic::UpdateVertices(float cur_x[4], float cur_y[4], const float n
 void CSlideShowPic::Process(unsigned int currentTime, CDirtyRegionList &dirtyregions)
 {
   if (!m_pImage || !m_bIsLoaded || m_bIsFinished) return ;
-  UTILS::Color alpha = m_alpha;
+  UTILS::COLOR::Color alpha = m_alpha;
   if (m_iCounter <= m_transitionStart.length)
   { // do start transition
     if (m_transitionStart.type == CROSSFADE)
     { // fade in at 1x speed
-      alpha = (UTILS::Color)((float)m_iCounter / (float)m_transitionStart.length * 255.0f);
+      alpha = (UTILS::COLOR::Color)((float)m_iCounter / (float)m_transitionStart.length * 255.0f);
     }
     else if (m_transitionStart.type == FADEIN_FADEOUT)
     { // fade in at 2x speed, then keep solid
-      alpha = (UTILS::Color)((float)m_iCounter / (float)m_transitionStart.length * 255.0f * 2);
+      alpha =
+          (UTILS::COLOR::Color)((float)m_iCounter / (float)m_transitionStart.length * 255.0f * 2);
       if (alpha > 255) alpha = 255;
     }
     else // m_transitionEffect == TRANSITION_NONE
@@ -329,7 +305,7 @@ void CSlideShowPic::Process(unsigned int currentTime, CDirtyRegionList &dirtyreg
           int i;
           for (i = 0; i < 10; i++)
           {
-            if (fabs(m_fZoomAmount - zoomamount[i]) < 0.01*zoomamount[i])
+            if (fabs(m_fZoomAmount - zoomamount[i]) < 0.01f * zoomamount[i])
             {
               m_fZoomAmount = zoomamount[i];
               break;
@@ -407,11 +383,14 @@ void CSlideShowPic::Process(unsigned int currentTime, CDirtyRegionList &dirtyreg
     m_bDrawNextImage = true;
     if (m_transitionEnd.type == CROSSFADE)
     { // fade out at 1x speed
-      alpha = 255 - (UTILS::Color)((float)(m_iCounter - m_transitionEnd.start) / (float)m_transitionEnd.length * 255.0f);
+      alpha = 255 - (UTILS::COLOR::Color)((float)(m_iCounter - m_transitionEnd.start) /
+                                          (float)m_transitionEnd.length * 255.0f);
     }
     else if (m_transitionEnd.type == FADEIN_FADEOUT)
     { // keep solid, then fade out at 2x speed
-      alpha = (UTILS::Color)((float)(m_transitionEnd.length - m_iCounter + m_transitionEnd.start) / (float)m_transitionEnd.length * 255.0f * 2);
+      alpha = (UTILS::COLOR::Color)(
+          (float)(m_transitionEnd.length - m_iCounter + m_transitionEnd.start) /
+          (float)m_transitionEnd.length * 255.0f * 2);
       if (alpha > 255) alpha = 255;
     }
     else // m_transitionEffect == TRANSITION_NONE
@@ -428,7 +407,7 @@ void CSlideShowPic::Process(unsigned int currentTime, CDirtyRegionList &dirtyreg
   {
     /* this really annoying.  there's non-stop logging when viewing a pic outside of the slideshow
     if (m_displayEffect == EFFECT_NO_TIMEOUT)
-      CLog::Log(LOGDEBUG, "Incrementing counter (%i) while not in slideshow (startlength=%i,endstart=%i,endlength=%i)", m_iCounter, m_transitionStart.length, m_transitionEnd.start, m_transitionEnd.length);
+      CLog::Log(LOGDEBUG, "Incrementing counter ({}) while not in slideshow (startlength={},endstart={},endlength={})", m_iCounter, m_transitionStart.length, m_transitionEnd.start, m_transitionEnd.length);
     */
     m_iCounter++;
   }
@@ -448,8 +427,8 @@ void CSlideShowPic::Process(unsigned int currentTime, CDirtyRegionList &dirtyreg
   // Rotate the image as needed
   float x[4];
   float y[4];
-  float si = (float)sin(m_fAngle / 180.0f * M_PI);
-  float co = (float)cos(m_fAngle / 180.0f * M_PI);
+  float si = sin(m_fAngle / 180.0f * static_cast<float>(M_PI));
+  float co = cos(m_fAngle / 180.0f * static_cast<float>(M_PI));
   x[0] = -m_fWidth * co + m_fHeight * si;
   y[0] = -m_fWidth * si - m_fHeight * co;
   x[1] = m_fWidth * co + m_fHeight * si;
@@ -475,12 +454,12 @@ void CSlideShowPic::Process(unsigned int currentTime, CDirtyRegionList &dirtyreg
   // work out if we should be compensating the zoom to minimize blackbars
   // we should compute this based on the % of black bars on screen perhaps??
   //! @todo change m_displayEffect != EFFECT_NO_TIMEOUT to whether we're running the slideshow
-  if (m_displayEffect != EFFECT_NO_TIMEOUT && fScreenRatio < fSourceAR * fComp && fSourceAR < fScreenRatio * fComp)
+  if (m_displayEffect != EFFECT_NO_TIMEOUT && m_displayEffect != EFFECT_NONE && fScreenRatio < fSourceAR * fComp && fSourceAR < fScreenRatio * fComp)
     bFillScreen = true;
   if ((!bFillScreen && fScreenWidth*fPixelRatio > fScreenHeight*fSourceAR) || (bFillScreen && fScreenWidth*fPixelRatio < fScreenHeight*fSourceAR))
     fScaleNorm = fScreenHeight / (m_fHeight * fPixelRatio);
   bFillScreen = false;
-  if (m_displayEffect != EFFECT_NO_TIMEOUT && fScreenRatio < fSourceInvAR * fComp && fSourceInvAR < fScreenRatio * fComp)
+  if (m_displayEffect != EFFECT_NO_TIMEOUT && m_displayEffect != EFFECT_NONE && fScreenRatio < fSourceInvAR * fComp && fSourceInvAR < fScreenRatio * fComp)
     bFillScreen = true;
   if ((!bFillScreen && fScreenWidth*fPixelRatio > fScreenHeight*fSourceInvAR) || (bFillScreen && fScreenWidth*fPixelRatio < fScreenHeight*fSourceInvAR))
     fScaleInv = fScreenHeight / (m_fWidth * fPixelRatio);
@@ -748,270 +727,14 @@ void CSlideShowPic::Move(float fDeltaX, float fDeltaY)
 
 void CSlideShowPic::Render()
 {
-  CSingleLock lock(m_textureAccess);
+  std::unique_lock<CCriticalSection> lock(m_textureAccess);
 
-  Render(m_ax, m_ay, m_pImage, (m_alpha << 24) | 0xFFFFFF);
+  Render(m_ax, m_ay, m_pImage.get(), (m_alpha << 24) | 0xFFFFFF);
 
   // now render the image in the top right corner if we're zooming
   if (m_fZoomAmount == 1.0f || m_bIsComic) return ;
 
   Render(m_bx, m_by, NULL, PICTURE_VIEW_BOX_BACKGROUND);
-  Render(m_sx, m_sy, m_pImage, 0xFFFFFFFF);
+  Render(m_sx, m_sy, m_pImage.get(), 0xFFFFFFFF);
   Render(m_ox, m_oy, NULL, PICTURE_VIEW_BOX_COLOR);
-}
-
-#ifdef HAS_DX
-bool CSlideShowPic::UpdateVertexBuffer(Vertex* vertices)
-{
-  if (!m_vb) // create new
-  {
-    CD3D11_BUFFER_DESC desc(sizeof(Vertex) * 5, D3D11_BIND_VERTEX_BUFFER, D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE);
-    D3D11_SUBRESOURCE_DATA initData = {};
-    initData.pSysMem = vertices;
-    initData.SysMemPitch = sizeof(Vertex) * 5;
-    if (SUCCEEDED(DX::DeviceResources::Get()->GetD3DDevice()->CreateBuffer(&desc, &initData, m_vb.ReleaseAndGetAddressOf())))
-      return true;
-  }
-  else // update
-  {
-    ID3D11DeviceContext* pContext = DX::DeviceResources::Get()->GetD3DContext();
-    D3D11_MAPPED_SUBRESOURCE res;
-    if (SUCCEEDED(pContext->Map(m_vb.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &res)))
-    {
-      memcpy(res.pData, vertices, sizeof(Vertex) * 5);
-      pContext->Unmap(m_vb.Get(), 0);
-      return true;
-    }
-  }
-
-  return false;
-}
-#endif
-
-void CSlideShowPic::Render(float* x, float* y, CTexture* pTexture, UTILS::Color color)
-{
-#ifdef HAS_DX
-  Vertex vertex[5];
-  for (int i = 0; i < 4; i++)
-  {
-    vertex[i].pos = XMFLOAT3( x[i], y[i], 0);
-    CD3DHelper::XMStoreColor(&vertex[i].color, color);
-    vertex[i].texCoord = XMFLOAT2(0.0f, 0.0f);
-    vertex[i].texCoord2 = XMFLOAT2(0.0f, 0.0f);
-  }
-
-  if (pTexture)
-  {
-    vertex[1].texCoord.x = vertex[2].texCoord.x = (float) pTexture->GetWidth() / pTexture->GetTextureWidth();
-    vertex[2].texCoord.y = vertex[3].texCoord.y = (float) pTexture->GetHeight() / pTexture->GetTextureHeight();
-  }
-  else
-  {
-    vertex[1].texCoord.x = vertex[2].texCoord.x = 1.0f;
-    vertex[2].texCoord.y = vertex[3].texCoord.y = 1.0f;
-  }
-  vertex[4] = vertex[0]; // Not used when pTexture != NULL
-
-  CGUIShaderDX* pGUIShader = DX::Windowing()->GetGUIShader();
-  pGUIShader->Begin(SHADER_METHOD_RENDER_TEXTURE_BLEND);
-
-  // Set state to render the image
-  if (pTexture)
-  {
-    pTexture->LoadToGPU();
-    CDXTexture* dxTexture = reinterpret_cast<CDXTexture*>(pTexture);
-    ID3D11ShaderResourceView* shaderRes = dxTexture->GetShaderResource();
-    pGUIShader->SetShaderViews(1, &shaderRes);
-    pGUIShader->DrawQuad(vertex[0], vertex[1], vertex[2], vertex[3]);
-  }
-  else
-  {
-    if (!UpdateVertexBuffer(vertex))
-      return;
-
-    ComPtr<ID3D11DeviceContext> pContext = DX::DeviceResources::Get()->GetD3DContext();
-
-    unsigned stride = sizeof(Vertex);
-    unsigned offset = 0;
-    pContext->IASetVertexBuffers(0, 1, m_vb.GetAddressOf(), &stride, &offset);
-    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
-
-    pGUIShader->Draw(5, 0);
-    pGUIShader->RestoreBuffers();
-  }
-
-#elif defined(HAS_GL)
-  CRenderSystemGL *renderSystem = dynamic_cast<CRenderSystemGL*>(CServiceBroker::GetRenderSystem());
-  if (pTexture)
-  {
-    pTexture->LoadToGPU();
-    pTexture->BindToUnit(0);
-
-    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_BLEND);
-
-    renderSystem->EnableShader(SM_TEXTURE);
-  }
-  else
-  {
-    renderSystem->EnableShader(SM_DEFAULT);
-  }
-
-  float u1 = 0, u2 = 1, v1 = 0, v2 = 1;
-  if (pTexture)
-  {
-    u2 = (float)pTexture->GetWidth() / pTexture->GetTextureWidth();
-    v2 = (float)pTexture->GetHeight() / pTexture->GetTextureHeight();
-  }
-
-  GLubyte colour[4];
-  GLubyte idx[4] = {0, 1, 3, 2};  //determines order of the vertices
-  GLuint vertexVBO;
-  GLuint indexVBO;
-  struct PackedVertex
-  {
-    float x, y, z;
-    float u1, v1;
-  } vertex[4];
-
-  // Setup vertex position values
-  vertex[0].x = x[0];
-  vertex[0].y = y[0];
-  vertex[0].z = 0;
-  vertex[0].u1 = u1;
-  vertex[0].v1 = v1;
-
-  vertex[1].x = x[1];
-  vertex[1].y = y[1];
-  vertex[1].z = 0;
-  vertex[1].u1 = u2;
-  vertex[1].v1 = v1;
-
-  vertex[2].x = x[2];
-  vertex[2].y = y[2];
-  vertex[2].z = 0;
-  vertex[2].u1 = u2;
-  vertex[2].v1 = v2;
-
-  vertex[3].x = x[3];
-  vertex[3].y = y[3];
-  vertex[3].z = 0;
-  vertex[3].u1 = u1;
-  vertex[3].v1 = v2;
-
-  GLint posLoc  = renderSystem->ShaderGetPos();
-  GLint tex0Loc = renderSystem->ShaderGetCoord0();
-  GLint uniColLoc= renderSystem->ShaderGetUniCol();
-
-  glGenBuffers(1, &vertexVBO);
-  glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(PackedVertex)*4, &vertex[0], GL_STATIC_DRAW);
-
-  glVertexAttribPointer(posLoc, 3, GL_FLOAT, 0, sizeof(PackedVertex),
-                        reinterpret_cast<const GLvoid*>(offsetof(PackedVertex, x)));
-  glVertexAttribPointer(tex0Loc, 2, GL_FLOAT, 0, sizeof(PackedVertex),
-                        reinterpret_cast<const GLvoid*>(offsetof(PackedVertex, u1)));
-
-  glEnableVertexAttribArray(posLoc);
-  glEnableVertexAttribArray(tex0Loc);
-
-  // Setup Colour values
-  colour[0] = (GLubyte)GET_R(color);
-  colour[1] = (GLubyte)GET_G(color);
-  colour[2] = (GLubyte)GET_B(color);
-  colour[3] = (GLubyte)GET_A(color);
-
-  glUniform4f(uniColLoc,(colour[0] / 255.0f), (colour[1] / 255.0f),
-                        (colour[2] / 255.0f), (colour[3] / 255.0f));
-
-  glGenBuffers(1, &indexVBO);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexVBO);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLubyte)*4, idx, GL_STATIC_DRAW);
-
-  glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, 0);
-
-  glDisableVertexAttribArray(posLoc);
-  glDisableVertexAttribArray(tex0Loc);
-
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-  glDeleteBuffers(1, &vertexVBO);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-  glDeleteBuffers(1, &indexVBO);
-
-  renderSystem->DisableShader();
-
-#elif defined(HAS_GLES)
-  CRenderSystemGLES *renderSystem = dynamic_cast<CRenderSystemGLES*>(CServiceBroker::GetRenderSystem());
-  if (pTexture)
-  {
-    pTexture->LoadToGPU();
-    pTexture->BindToUnit(0);
-
-    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_BLEND);          // Turn Blending On
-
-    renderSystem->EnableGUIShader(SM_TEXTURE);
-  }
-  else
-  {
-    renderSystem->EnableGUIShader(SM_DEFAULT);
-  }
-
-  float u1 = 0, u2 = 1, v1 = 0, v2 = 1;
-  if (pTexture)
-  {
-    u2 = (float)pTexture->GetWidth() / pTexture->GetTextureWidth();
-    v2 = (float)pTexture->GetHeight() / pTexture->GetTextureHeight();
-  }
-
-  GLubyte col[4];
-  GLfloat ver[4][3];
-  GLfloat tex[4][2];
-  GLubyte idx[4] = {0, 1, 3, 2};        //determines order of triangle strip
-
-  GLint posLoc  = renderSystem->GUIShaderGetPos();
-  GLint tex0Loc = renderSystem->GUIShaderGetCoord0();
-  GLint uniColLoc= renderSystem->GUIShaderGetUniCol();
-
-  glVertexAttribPointer(posLoc,  3, GL_FLOAT, 0, 0, ver);
-  glVertexAttribPointer(tex0Loc, 2, GL_FLOAT, 0, 0, tex);
-
-  glEnableVertexAttribArray(posLoc);
-  glEnableVertexAttribArray(tex0Loc);
-
-  // Setup Colour values
-  col[0] = (GLubyte)GET_R(color);
-  col[1] = (GLubyte)GET_G(color);
-  col[2] = (GLubyte)GET_B(color);
-  col[3] = (GLubyte)GET_A(color);
-
-  if (CServiceBroker::GetWinSystem()->UseLimitedColor())
-  {
-    col[0] = (235 - 16) * col[0] / 255 + 16;
-    col[1] = (235 - 16) * col[1] / 255 + 16;
-    col[2] = (235 - 16) * col[2] / 255 + 16;
-  }
-
-  for (int i=0; i<4; i++)
-  {
-    // Setup vertex position values
-    ver[i][0] = x[i];
-    ver[i][1] = y[i];
-    ver[i][2] = 0.0f;
-  }
-  // Setup texture coordinates
-  tex[0][0] = tex[3][0] = u1;
-  tex[0][1] = tex[1][1] = v1;
-  tex[1][0] = tex[2][0] = u2;
-  tex[2][1] = tex[3][1] = v2;
-
-  glUniform4f(uniColLoc,(col[0] / 255.0f), (col[1] / 255.0f), (col[2] / 255.0f), (col[3] / 255.0f));
-  glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, idx);
-
-  glDisableVertexAttribArray(posLoc);
-  glDisableVertexAttribArray(tex0Loc);
-
-  renderSystem->DisableGUIShader();
-
-#endif
 }

@@ -11,13 +11,17 @@
 #include "ServiceBroker.h"
 #include "VideoSyncAndroid.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
-#include "settings/Settings.h"
-#include "settings/SettingsComponent.h"
 #include "threads/SingleLock.h"
 #include "utils/log.h"
 #include "windowing/WindowSystemFactory.h"
 
 #include "platform/android/activity/XBMCApp.h"
+
+#include <memory>
+
+#include <unistd.h>
+
+#include "PlatformDefs.h"
 
 #include <EGL/eglext.h>
 
@@ -55,11 +59,16 @@ bool CWinSystemAndroidGLESContext::InitWindowSystem()
 
   m_hasHDRConfig = m_pGLContext.ChooseConfig(EGL_OPENGL_ES2_BIT, 0, true);
 
-  m_hasEGLHDRExtensions = CEGLUtils::HasExtension(m_pGLContext.GetEGLDisplay(), "EGL_EXT_gl_colorspace_bt2020_pq")
-    && CEGLUtils::HasExtension(m_pGLContext.GetEGLDisplay(), "EGL_EXT_surface_SMPTE2086_metadata");
+  m_hasEGL_BT2020_PQ_Colorspace_Extension =
+      CEGLUtils::HasExtension(m_pGLContext.GetEGLDisplay(), "EGL_EXT_gl_colorspace_bt2020_pq");
+  m_hasEGL_ST2086_Extension =
+      CEGLUtils::HasExtension(m_pGLContext.GetEGLDisplay(), "EGL_EXT_surface_SMPTE2086_metadata");
 
-  CLog::Log(LOGDEBUG, "CWinSystemAndroidGLESContext::InitWindowSystem: HDRConfig: %d, HDRExtensions: %d",
-    static_cast<int>(m_hasHDRConfig), static_cast<int>(m_hasEGLHDRExtensions));
+  bool hasEGLHDRExtensions = m_hasEGL_BT2020_PQ_Colorspace_Extension && m_hasEGL_ST2086_Extension;
+
+  CLog::Log(LOGDEBUG,
+            "CWinSystemAndroidGLESContext::InitWindowSystem: HDRConfig: {}, HDRExtensions: {}",
+            static_cast<int>(m_hasHDRConfig), static_cast<int>(hasEGLHDRExtensions));
 
   CEGLAttributesVec contextAttribs;
   contextAttribs.Add({{EGL_CONTEXT_CLIENT_VERSION, 2}});
@@ -131,12 +140,13 @@ void CWinSystemAndroidGLESContext::PresentRenderImpl(bool rendered)
   // we can't actually do anything about it
   if (rendered && !m_pGLContext.TrySwapBuffers())
     CEGLUtils::Log(LOGERROR, "eglSwapBuffers failed");
-  CXBMCApp::get()->WaitVSync(1000);
+
+  CXBMCApp::Get().WaitVSync(1000);
 }
 
 float CWinSystemAndroidGLESContext::GetFrameLatencyAdjustment()
 {
-  return CXBMCApp::GetFrameLatencyMs();
+  return CXBMCApp::Get().GetFrameLatencyMs();
 }
 
 EGLDisplay CWinSystemAndroidGLESContext::GetEGLDisplay() const
@@ -159,7 +169,7 @@ EGLConfig  CWinSystemAndroidGLESContext::GetEGLConfig() const
   return m_pGLContext.GetEGLConfig();
 }
 
-std::unique_ptr<CVideoSync> CWinSystemAndroidGLESContext::GetVideoSync(void *clock)
+std::unique_ptr<CVideoSync> CWinSystemAndroidGLESContext::GetVideoSync(CVideoReferenceClock* clock)
 {
   std::unique_ptr<CVideoSync> pVSync(new CVideoSyncAndroid(clock));
   return pVSync;
@@ -167,14 +177,15 @@ std::unique_ptr<CVideoSync> CWinSystemAndroidGLESContext::GetVideoSync(void *clo
 
 bool CWinSystemAndroidGLESContext::CreateSurface()
 {
-  if (!m_pGLContext.CreateSurface(m_nativeWindow, m_HDRColorSpace))
+  if (!m_pGLContext.CreateSurface(static_cast<EGLNativeWindowType>(m_nativeWindow->m_window),
+                                  m_HDRColorSpace))
   {
     if (m_HDRColorSpace != EGL_NONE)
     {
       m_HDRColorSpace = EGL_NONE;
       m_displayMetadata = nullptr;
       m_lightMetadata = nullptr;
-      if (!m_pGLContext.CreateSurface(m_nativeWindow))
+      if (!m_pGLContext.CreateSurface(static_cast<EGLNativeWindowType>(m_nativeWindow->m_window)))
         return false;
     }
     else
@@ -206,18 +217,19 @@ bool CWinSystemAndroidGLESContext::CreateSurface()
 
 bool CWinSystemAndroidGLESContext::IsHDRDisplay()
 {
-  return m_hasHDRConfig && m_hasEGLHDRExtensions && CWinSystemAndroid::IsHDRDisplay();
+  return m_hasHDRConfig && (m_hasEGL_BT2020_PQ_Colorspace_Extension || m_hasEGL_ST2086_Extension) &&
+         CWinSystemAndroid::IsHDRDisplay();
 }
 
 bool CWinSystemAndroidGLESContext::SetHDR(const VideoPicture* videoPicture)
 {
-  if (!CWinSystemAndroid::IsHDRDisplay() || !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(SETTING_WINSYSTEM_IS_HDR_DISPLAY))
+  if (!CServiceBroker::GetWinSystem()->IsHDRDisplaySettingEnabled())
     return false;
 
   EGLint HDRColorSpace = 0;
 
 #if EGL_EXT_gl_colorspace_bt2020_linear
-  if (m_hasHDRConfig && m_hasEGLHDRExtensions)
+  if (m_hasHDRConfig && m_hasEGL_BT2020_PQ_Colorspace_Extension && m_hasEGL_ST2086_Extension)
   {
     HDRColorSpace = EGL_NONE;
     if (videoPicture && videoPicture->hasDisplayMetadata)
@@ -242,10 +254,13 @@ bool CWinSystemAndroidGLESContext::SetHDR(const VideoPicture* videoPicture)
 
     if (HDRColorSpace != m_HDRColorSpace)
     {
-      CLog::Log(LOGDEBUG, "CWinSystemAndroidGLESContext::SetHDR: ColorSpace: %d", HDRColorSpace);
+      CLog::Log(LOGDEBUG, "CWinSystemAndroidGLESContext::SetHDR: ColorSpace: {}", HDRColorSpace);
 
       m_HDRColorSpace = HDRColorSpace;
-      m_displayMetadata = m_HDRColorSpace == EGL_NONE ? nullptr : std::unique_ptr<AVMasteringDisplayMetadata>(new AVMasteringDisplayMetadata(videoPicture->displayMetadata));
+      m_displayMetadata =
+          m_HDRColorSpace == EGL_NONE
+              ? nullptr
+              : std::make_unique<AVMasteringDisplayMetadata>(videoPicture->displayMetadata);
       // TODO: discuss with NVIDIA why this prevent turning HDR display off
       //m_lightMetadata = !videoPicture || m_HDRColorSpace == EGL_NONE ? nullptr : std::unique_ptr<AVContentLightMetadata>(new AVContentLightMetadata(videoPicture->lightMetadata));
       m_pGLContext.DestroySurface();

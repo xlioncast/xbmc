@@ -11,6 +11,7 @@
 #include "TextureDatabase.h"
 #include "URL.h"
 #include "Util.h"
+#include "cores/FFmpeg.h"
 #include "filesystem/File.h"
 #include "guilib/LocalizeStrings.h"
 #include "music/tags/MusicInfoTag.h"
@@ -72,7 +73,7 @@ bool CAudioBookFileDirectory::GetDirectory(const CURL& url,
   for (size_t i=0;i<m_fctx->nb_chapters;++i)
   {
     tag=nullptr;
-    std::string chaptitle = StringUtils::Format(g_localizeStrings.Get(25010).c_str(), i+1);
+    std::string chaptitle = StringUtils::Format(g_localizeStrings.Get(25010), i + 1);
     std::string chapauthor;
     std::string chapalbum;
     while ((tag=av_dict_get(m_fctx->chapters[i]->metadata, "", tag, AV_DICT_IGNORE_SUFFIX)))
@@ -99,22 +100,25 @@ bool CAudioBookFileDirectory::GetDirectory(const CURL& url,
     else
       item->GetMusicInfoTag()->SetArtist(chapauthor);
 
-    item->SetLabel(StringUtils::Format("{0:02}. {1} - {2}",i+1,
-                   item->GetMusicInfoTag()->GetAlbum().c_str(),
-                   item->GetMusicInfoTag()->GetTitle()).c_str());
-    item->m_lStartOffset = CUtil::ConvertSecsToMilliSecs(m_fctx->chapters[i]->start*av_q2d(m_fctx->chapters[i]->time_base));
-    item->m_lEndOffset = m_fctx->chapters[i]->end*av_q2d(m_fctx->chapters[i]->time_base);
+    item->SetLabel(StringUtils::Format("{0:02}. {1} - {2}", i + 1,
+                                       item->GetMusicInfoTag()->GetAlbum(),
+                                       item->GetMusicInfoTag()->GetTitle()));
+    item->SetStartOffset(CUtil::ConvertSecsToMilliSecs(m_fctx->chapters[i]->start *
+                                                       av_q2d(m_fctx->chapters[i]->time_base)));
+    item->SetEndOffset(m_fctx->chapters[i]->end * av_q2d(m_fctx->chapters[i]->time_base));
     int compare = m_fctx->duration / (AV_TIME_BASE);
-    if (item->m_lEndOffset < 0 || item->m_lEndOffset > compare)
+    if (item->GetEndOffset() < 0 || item->GetEndOffset() > compare)
     {
       if (i < m_fctx->nb_chapters-1)
-        item->m_lEndOffset = m_fctx->chapters[i+1]->start*av_q2d(m_fctx->chapters[i+1]->time_base);
+        item->SetEndOffset(m_fctx->chapters[i + 1]->start *
+                           av_q2d(m_fctx->chapters[i + 1]->time_base));
       else
-        item->m_lEndOffset = compare;
+        item->SetEndOffset(compare);
     }
-    item->m_lEndOffset = CUtil::ConvertSecsToMilliSecs(item->m_lEndOffset);
-    item->GetMusicInfoTag()->SetDuration(CUtil::ConvertMilliSecsToSecsInt(item->m_lEndOffset - item->m_lStartOffset));
-    item->SetProperty("item_start", item->m_lStartOffset);
+    item->SetEndOffset(CUtil::ConvertSecsToMilliSecs(item->GetEndOffset()));
+    item->GetMusicInfoTag()->SetDuration(
+        CUtil::ConvertMilliSecsToSecsInt(item->GetEndOffset() - item->GetStartOffset()));
+    item->SetProperty("item_start", item->GetStartOffset());
     if (!thumb.empty())
       item->SetArt("thumb", thumb);
     items.Add(item);
@@ -146,7 +150,7 @@ bool CAudioBookFileDirectory::ContainsFiles(const CURL& url)
 
   m_ioctx->max_packet_size = 32768;
 
-  AVInputFormat* iformat=nullptr;
+  const AVInputFormat* iformat = nullptr;
   av_probe_input_buffer(m_ioctx, &iformat, url.Get().c_str(), nullptr, 0, 0);
 
   bool contains = false;

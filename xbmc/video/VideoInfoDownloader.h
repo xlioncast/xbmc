@@ -11,7 +11,6 @@
 #include "Episode.h"
 #include "VideoInfoTag.h"
 #include "addons/Scraper.h"
-#include "filesystem/CurlFile.h"
 #include "threads/Thread.h"
 
 #include <string>
@@ -24,6 +23,10 @@ class CGUIDialogProgress;
 namespace ADDON
 {
 class CScraperError;
+}
+namespace XFILE
+{
+class CurlFile;
 }
 
 typedef std::vector<CScraperUrl> MOVIELIST;
@@ -51,7 +54,10 @@ public:
    */
   bool GetArtwork(CVideoInfoTag &details);
 
-  bool GetDetails(const CScraperUrl& url, CVideoInfoTag &movieDetails, CGUIDialogProgress *pProgress = NULL);
+  bool GetDetails(const std::unordered_map<std::string, std::string>& uniqueIDs,
+                  const CScraperUrl& url,
+                  CVideoInfoTag& movieDetails,
+                  CGUIDialogProgress* pProgress = NULL);
   bool GetEpisodeDetails(const CScraperUrl& url, CVideoInfoTag &movieDetails, CGUIDialogProgress *pProgress = NULL);
   bool GetEpisodeList(const CScraperUrl& url, VIDEO::EPISODELIST& details, CGUIDialogProgress *pProgress = NULL);
 
@@ -67,12 +73,13 @@ protected:
   XFILE::CCurlFile*   m_http;
   std::string         m_movieTitle;
   int                 m_movieYear;
+  std::unordered_map<std::string, std::string> m_uniqueIDs;
   MOVIELIST           m_movieList;
   CVideoInfoTag       m_movieDetails;
   CScraperUrl         m_url;
   VIDEO::EPISODELIST  m_episode;
-  LOOKUP_STATE        m_state;
-  int                 m_found;
+  LOOKUP_STATE m_state = DO_NOTHING;
+  int m_found = 0;
   ADDON::ScraperPtr   m_info;
 
   // threaded stuff

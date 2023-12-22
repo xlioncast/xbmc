@@ -53,9 +53,9 @@ public:
   virtual EINTERLACEMETHOD GetFallbackDeintMethod();
   virtual void SetSwDeinterlacingMethods();
   void UpdateDeinterlacingMethods(std::list<EINTERLACEMETHOD> &methods);
-  bool Supports(EINTERLACEMETHOD method);
+  bool Supports(EINTERLACEMETHOD method) const;
   void SetDeinterlacingMethodDefault(EINTERLACEMETHOD method);
-  EINTERLACEMETHOD GetDeinterlacingMethodDefault();
+  EINTERLACEMETHOD GetDeinterlacingMethodDefault() const;
   CVideoBufferManager& GetVideoBufferManager();
   std::vector<AVPixelFormat> GetPixFormats();
   void SetPixFormats(std::vector<AVPixelFormat> &formats);
@@ -71,6 +71,7 @@ public:
   void SetAudioBitsPerSample(int bitsPerSample);
   int GetAudioBitsPerSample();
   virtual bool AllowDTSHDDecode();
+  virtual bool WantsRawPassthrough() { return false; }
 
   // render info
   void SetRenderClockSync(bool enabled);
@@ -81,6 +82,12 @@ public:
   virtual std::vector<AVPixelFormat> GetRenderFormats();
 
   // player states
+  /*!
+   * @brief Notifies that a seek operation has finished
+   * @param offset - the seek offset
+  */
+  void SeekFinished(int64_t offset);
+
   void SetStateSeeking(bool active);
   bool IsSeeking();
   void SetStateRealtime(bool state);
@@ -102,6 +109,7 @@ public:
   bool GetGuiRender();
   void SetVideoRender(bool video);
   bool GetVideoRender();
+  unsigned int GetMaxPassthroughOffSyncDuration() const;
 
   void SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max);
   int64_t GetMaxTime();
@@ -109,7 +117,7 @@ public:
   // settings
   CVideoSettings GetVideoSettings();
   void SetVideoSettings(CVideoSettings &settings);
-  CVideoSettingsLocked& UpdateVideoSettings();
+  CVideoSettingsLocked& GetVideoSettingsLocked();
 
 protected:
   CProcessInfo();
@@ -129,7 +137,7 @@ protected:
   bool m_videoIsInterlaced;
   std::list<EINTERLACEMETHOD> m_deintMethods;
   EINTERLACEMETHOD m_deintMethodDefault;
-  CCriticalSection m_videoCodecSection;
+  mutable CCriticalSection m_videoCodecSection;
   CVideoBufferManager m_videoBufferManager;
   std::vector<AVPixelFormat> m_pixFormats;
 

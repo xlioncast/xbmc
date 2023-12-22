@@ -18,13 +18,6 @@
 #include <utility>
 #include <vector>
 
-#define CACHE_BUFFER_MODE_INTERNET      0
-#define CACHE_BUFFER_MODE_ALL           1
-#define CACHE_BUFFER_MODE_TRUE_INTERNET 2
-#define CACHE_BUFFER_MODE_NONE          3
-#define CACHE_BUFFER_MODE_REMOTE        4
-
-class CAppParamParser;
 class CProfileManager;
 class CSettingsManager;
 class CVariant;
@@ -72,13 +65,14 @@ public:
 struct TVShowRegexp
 {
   bool byDate;
+  bool byTitle;
   std::string regexp;
   int defaultSeason;
-  TVShowRegexp(bool d, const std::string& r, int s = 1):
-    regexp(r)
+  TVShowRegexp(bool d, const std::string& r, int s = 1, bool t = false) : regexp(r)
   {
     byDate = d;
     defaultSeason = s;
+    byTitle = t;
   }
 };
 
@@ -114,9 +108,9 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
 
     void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
 
-    void Initialize(const CAppParamParser &params, CSettingsManager& settingsMgr);
+    void Initialize(CSettingsManager& settingsMgr);
     void Uninitialize(CSettingsManager& settingsMgr);
-    bool Initialized() const { return m_initialized; };
+    bool Initialized() const { return m_initialized; }
     void AddSettingsFile(const std::string &filename);
     bool Load(const CProfileManager &profileManager);
 
@@ -159,10 +153,10 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     int m_videoIgnoreSecondsAtStart;
     float m_videoIgnorePercentAtEnd;
     float m_audioApplyDrc;
+    unsigned int m_maxPassthroughOffSyncDuration = 10; // when 10 ms off adjust
 
     int   m_videoVDPAUScaling;
     float m_videoNonLinStretchRatio;
-    bool  m_videoEnableHighQualityHwScalers;
     float m_videoAutoScaleMaxFps;
     std::vector<RefreshOverride> m_videoAdjustRefreshOverrides;
     std::vector<RefreshVideoLatency> m_videoRefreshLatency;
@@ -191,11 +185,21 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     int m_airTunesPort;
     int m_airPlayPort;
 
+    /*! \brief Only used in linux for the udisks and udisks2 providers
+    * defines if kodi should automount media drives
+    * @note if kodi is running standalone (--standalone option) it will
+    * be set to tue
+    */
     bool m_handleMounting;
+    /*! \brief Only used in linux for the udisks and udisks2 providers
+    * defines if kodi should automount optical discs
+    */
+    bool m_autoMountOpticalMedia{true};
 
     bool m_fullScreenOnMovieStart;
     std::string m_cachePath;
     std::string m_videoCleanDateTimeRegExp;
+    std::string m_videoFilenameIdentifierRegExp;
     std::vector<std::string> m_videoCleanStringRegExps;
     std::vector<std::string> m_videoExcludeFromListingRegExps;
     std::vector<std::string> m_allExcludeFromScanRegExps;
@@ -220,6 +224,8 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     unsigned int m_fanartRes; ///< \brief the maximal resolution to cache fanart at (assumes 16x9)
     unsigned int m_imageRes;  ///< \brief the maximal resolution to cache images at (assumes 16x9)
     CPictureScalingAlgorithm::Algorithm m_imageScalingAlgorithm;
+    unsigned int
+        m_imageQualityJpeg; ///< \brief the stored jpeg quality the lower the better (default: 4)
 
     int m_sambaclienttimeout;
     std::string m_sambadoscodepage;
@@ -231,8 +237,6 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     bool m_bShoutcastArt;
 
     std::string m_musicThumbs;
-    std::vector<std::string> m_musicArtistExtraArt;
-    std::vector<std::string> m_musicAlbumExtraArt;
 
     int m_iMusicLibraryRecentlyAddedItems;
     int m_iMusicLibraryDateAdded;
@@ -251,14 +255,8 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     int m_iVideoLibraryRecentlyAddedItems;
     bool m_bVideoLibraryCleanOnUpdate;
     bool m_bVideoLibraryUseFastHash;
-    bool m_bVideoLibraryImportWatchedState;
-    bool m_bVideoLibraryImportResumePoint;
-    std::vector<std::string> m_videoEpisodeExtraArt;
-    std::vector<std::string> m_videoTvShowExtraArt;
-    std::vector<std::string> m_videoTvSeasonExtraArt;
-    std::vector<std::string> m_videoMovieExtraArt;
-    std::vector<std::string> m_videoMovieSetExtraArt;
-    std::vector<std::string> m_videoMusicVideoExtraArt;
+    bool m_bVideoLibraryImportWatchedState{true};
+    bool m_bVideoLibraryImportResumePoint{true};
 
     bool m_bVideoScannerIgnoreErrors;
     int m_iVideoLibraryDateAdded;
@@ -275,6 +273,8 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
 
     // EDL Commercial Break
     bool m_bEdlMergeShortCommBreaks;
+    /*!< @brief If GUI notifications should be shown when reaching the start of commercial breaks */
+    bool m_EdlDisplayCommbreakNotifications;
     int m_iEdlMaxCommBreakLength;   // seconds
     int m_iEdlMinCommBreakLength;   // seconds
     int m_iEdlMaxCommBreakGap;      // seconds
@@ -285,11 +285,13 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     int m_curlconnecttimeout;
     int m_curllowspeedtime;
     int m_curlretries;
+    int m_curlKeepAliveInterval;    // seconds
     bool m_curlDisableIPV6;
     bool m_curlDisableHTTP2;
 
     std::string m_caTrustFile;
 
+    bool m_minimizeToTray; /* win32 only */
     bool m_fullScreen;
     bool m_startFullScreen;
     bool m_showExitButton; /* Ideal for appliances to hide a 'useless' button */
@@ -301,14 +303,7 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     bool m_GLRectangleHack;
     int m_iSkipLoopFilter;
 
-    /*!< @brief Decision flag to show or hide specific dependencies in the list of the AddonInfo dialog
-    as this information usually adds no value for a consumer.
-    True to recursively show any dependency of the selected add-on
-    False to hide 'low-level' dependencies like e.g. scripts/modules (default) */
-    bool m_showAllDependencies;
-
     bool m_bVirtualShares;
-    bool m_bTry10bitOutput;
 
     std::string m_cpuTempCmd;
     std::string m_gpuTempCmd;
@@ -335,11 +330,6 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     bool m_guiSmartRedraw;
     unsigned int m_addonPackageFolderSize;
 
-    unsigned int m_cacheMemSize;
-    unsigned int m_cacheBufferMode;
-    unsigned int m_cacheChunkSize;
-    float m_cacheReadFactor;
-
     bool m_jsonOutputCompact;
     unsigned int m_jsonTcpPort;
 
@@ -353,7 +343,10 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     void SetDebugMode(bool debug);
 
     //! \brief Toggles dirty-region visualization
-    void ToggleDirtyRegionVisualization() { m_guiVisualizeDirtyRegions = !m_guiVisualizeDirtyRegions; };
+    void ToggleDirtyRegionVisualization()
+    {
+      m_guiVisualizeDirtyRegions = !m_guiVisualizeDirtyRegions;
+    }
 
     // runtime settings which cannot be set from advancedsettings.xml
     std::string m_videoExtensions;
@@ -366,19 +359,14 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     std::string m_stereoscopicregex_sbs;
     std::string m_stereoscopicregex_tab;
 
-    /*!< @brief position behavior of ass subtitles when setting "subtitle position on screen" set to "fixed"
-    True to show at the fixed position set in video calibration
-    False to show at the bottom of video (default) */
-    bool m_videoAssFixedWorks;
-
     bool m_openGlDebugging;
 
     std::string m_userAgent;
     uint32_t m_nfsTimeout;
+    int m_nfsRetries;
 
   private:
     void Initialize();
     void Clear();
     void SetExtraArtwork(const TiXmlElement* arttypes, std::vector<std::string>& artworkMap);
-    void MigrateOldArtSettings();
 };

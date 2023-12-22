@@ -22,6 +22,8 @@
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 
+#include <mutex>
+
 using namespace KODI::GUILIB;
 using namespace XFILE;
 
@@ -223,19 +225,21 @@ void CGUIMultiImage::LoadDirectory()
    3. Bundled folder
    */
   CFileItem item(m_currentPath, false);
-  if (item.IsPicture() || CTextureCache::GetInstance().HasCachedImage(m_currentPath))
+  if (item.IsPicture() || CServiceBroker::GetTextureCache()->HasCachedImage(m_currentPath))
     m_files.push_back(m_currentPath);
   else // bundled folder?
-    CServiceBroker::GetGUI()->GetTextureManager().GetBundledTexturesFromPath(m_currentPath, m_files);
+    m_files =
+        CServiceBroker::GetGUI()->GetTextureManager().GetBundledTexturesFromPath(m_currentPath);
   if (!m_files.empty())
   { // found - nothing more to do
     OnDirectoryLoaded();
     return;
   }
   // slow(er) checks necessary - do them in the background
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
   m_directoryStatus = LOADING;
-  m_jobID = CJobManager::GetInstance().AddJob(new CMultiImageJob(m_currentPath), this, CJob::PRIORITY_NORMAL);
+  m_jobID = CServiceBroker::GetJobManager()->AddJob(new CMultiImageJob(m_currentPath), this,
+                                                    CJob::PRIORITY_NORMAL);
 }
 
 void CGUIMultiImage::OnDirectoryLoaded()
@@ -255,15 +259,15 @@ void CGUIMultiImage::OnDirectoryLoaded()
 
 void CGUIMultiImage::CancelLoading()
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
   if (m_directoryStatus == LOADING)
-    CJobManager::GetInstance().CancelJob(m_jobID);
+    CServiceBroker::GetJobManager()->CancelJob(m_jobID);
   m_directoryStatus = UNLOADED;
 }
 
 void CGUIMultiImage::OnJobComplete(unsigned int jobID, bool success, CJob *job)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
   if (m_directoryStatus == LOADING && strncmp(job->GetType(), "multiimage", 10) == 0)
   {
     m_files = ((CMultiImageJob *)job)->m_files;

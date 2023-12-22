@@ -67,8 +67,11 @@ public:
   void SetScalingMethod(SCALINGMETHOD method);
   void SetStretchMode(STRETCHMODE stretchMode);
   void SetRenderRotation(unsigned int rotationDegCCW);
+  void SetPixels(const std::string& pixelPath);
 
+  // Rendering properties
   bool IsVisible() const;
+  IRenderBuffer* GetRenderBuffer() const;
 
 protected:
   // Protected renderer interface
@@ -99,7 +102,7 @@ private:
   virtual void ManageRenderArea(const IRenderBuffer& renderBuffer);
 
   /*!
-   * \brief Performs whatever nessesary after a frame has been rendered
+   * \brief Performs whatever necessary after a frame has been rendered
    */
   void PostRender();
 

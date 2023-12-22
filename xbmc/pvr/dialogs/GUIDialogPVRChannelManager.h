@@ -37,6 +37,7 @@ namespace PVR
     CFileItemPtr GetCurrentListItem(int offset = 0) override;
 
     void Open(const std::shared_ptr<CFileItem>& initialSelection);
+    void SetRadio(bool bIsRadio);
 
   protected:
     void OnInitWindow() override;
@@ -45,36 +46,45 @@ namespace PVR
   private:
     void Clear();
     void Update();
+    void PromptAndSaveList();
     void SaveList();
     void Renumber();
     void SetData(int iItem);
     void RenameChannel(const CFileItemPtr& pItem);
 
+    void ClearChannelOptions();
+    void EnableChannelOptions(bool bEnable);
+
     bool OnPopupMenu(int iItem);
     bool OnContextButton(int itemNumber, CONTEXT_BUTTON button);
     bool OnActionMove(const CAction& action);
-    bool OnMessageClick(CGUIMessage& message);
-    bool OnClickListChannels(CGUIMessage& message);
-    bool OnClickButtonOK(CGUIMessage& message);
-    bool OnClickButtonApply(CGUIMessage& message);
-    bool OnClickButtonCancel(CGUIMessage& message);
-    bool OnClickButtonRadioTV(CGUIMessage& message);
-    bool OnClickButtonRadioActive(CGUIMessage& message);
-    bool OnClickButtonRadioParentalLocked(CGUIMessage& message);
-    bool OnClickButtonEditName(CGUIMessage& message);
-    bool OnClickButtonChannelLogo(CGUIMessage& message);
-    bool OnClickButtonUseEPG(CGUIMessage& message);
-    bool OnClickEPGSourceSpin(CGUIMessage& message);
-    bool OnClickButtonGroupManager(CGUIMessage& message);
+    bool OnMessageClick(const CGUIMessage& message);
+    bool OnClickListChannels(const CGUIMessage& message);
+    bool OnClickButtonOK();
+    bool OnClickButtonApply();
+    bool OnClickButtonCancel();
+    bool OnClickButtonRadioTV();
+    bool OnClickButtonRadioActive();
+    bool OnClickButtonRadioParentalLocked();
+    bool OnClickButtonEditName();
+    bool OnClickButtonChannelLogo();
+    bool OnClickButtonUseEPG();
+    bool OnClickEPGSourceSpin();
+    bool OnClickButtonGroupManager();
     bool OnClickButtonNewChannel();
+    bool OnClickButtonRefreshChannelLogos();
 
-    bool PersistChannel(const CFileItemPtr& pItem, const std::shared_ptr<CPVRChannelGroup>& group, unsigned int* iChannelNumber);
-    void SetItemsUnchanged();
+    bool UpdateChannelData(const std::shared_ptr<CFileItem>& pItem,
+                           const std::shared_ptr<CPVRChannelGroup>& group);
+
+    bool HasChangedItems() const;
+    void SetItemChanged(const CFileItemPtr& pItem);
 
     bool m_bIsRadio = false;
     bool m_bMovingMode = false;
-    bool m_bContainsChanges = false;
     bool m_bAllowNewChannel = false;
+    bool m_bAllowRenumber = false;
+    bool m_bAllowReorder = false;
 
     std::shared_ptr<CFileItem> m_initialSelection;
     int m_iSelected = 0;

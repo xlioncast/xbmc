@@ -18,6 +18,9 @@ namespace KODI
 {
 namespace GAME
 {
+/*!
+ * \ingroup games
+ */
 class CGUIDialogIgnoreInput : public CGUIDialogButtonCapture
 {
 public:
@@ -40,7 +43,7 @@ protected:
 private:
   bool AddPrimitive(const JOYSTICK::CDriverPrimitive& primitive);
 
-  std::string m_deviceName;
+  std::string m_location;
   std::vector<JOYSTICK::CDriverPrimitive> m_capturedPrimitives;
 };
 } // namespace GAME

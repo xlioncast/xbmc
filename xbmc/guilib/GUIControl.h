@@ -17,7 +17,7 @@
 #include "VisibleEffect.h" // needed for the CAnimation members
 #include "guiinfo/GUIInfoBool.h"
 #include "guiinfo/GUIInfoColor.h" // needed for CGUIInfoColor to handle infolabel'ed colors
-#include "utils/Color.h"
+#include "utils/ColorUtils.h"
 #include "windowing/GraphicContext.h" // needed by any rendering operation (all controls)
 
 #include <vector>
@@ -84,13 +84,13 @@ public:
   virtual void DoProcess(unsigned int currentTime, CDirtyRegionList &dirtyregions);
   virtual void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions);
   virtual void DoRender();
-  virtual void Render() {};
+  virtual void Render() {}
   // Called after the actual rendering is completed to trigger additional
   // non GUI rendering operations
-  virtual void RenderEx() {};
+  virtual void RenderEx() {}
 
   /*! \brief Returns whether or not we have processed */
-  bool HasProcessed() const { return m_hasProcessed; };
+  bool HasProcessed() const { return m_hasProcessed; }
 
   // OnAction() is called by our window when we are the focused control.
   // We should process any control-specific actions in the derived classes,
@@ -110,8 +110,8 @@ public:
   virtual bool OnInfo();
   virtual void OnNextControl();
   virtual void OnPrevControl();
-  virtual void OnFocus() {};
-  virtual void OnUnFocus() {};
+  virtual void OnFocus() {}
+  virtual void OnUnFocus() {}
 
   /*! \brief React to a mouse event
 
@@ -135,7 +135,10 @@ public:
    \return EVENT_RESULT corresponding to whether the control handles this event
    \sa SendMouseEvent, HitTest, CanFocusFromPoint, CMouseEvent
    */
-  virtual EVENT_RESULT OnMouseEvent(const CPoint &point, const CMouseEvent &event) { return EVENT_RESULT_UNHANDLED; };
+  virtual EVENT_RESULT OnMouseEvent(const CPoint& point, const CMouseEvent& event)
+  {
+    return EVENT_RESULT_UNHANDLED;
+  }
 
   /*! \brief Unfocus the control if the given point on screen is not within it's boundary
    \param point the location in transformed skin coordinates from the upper left corner of the parent control.
@@ -152,19 +155,19 @@ public:
 
   virtual bool OnMessage(CGUIMessage& message);
   virtual int GetID(void) const;
-  virtual void SetID(int id) { m_controlID = id; };
+  virtual void SetID(int id) { m_controlID = id; }
   int GetParentID() const;
   virtual bool HasFocus() const;
   virtual void AllocResources();
   virtual void FreeResources(bool immediately = false);
   virtual void DynamicResourceAlloc(bool bOnOff);
-  virtual bool IsDynamicallyAllocated() { return false; };
+  virtual bool IsDynamicallyAllocated() { return false; }
   virtual bool CanFocus() const;
   virtual bool IsVisible() const;
-  bool IsVisibleFromSkin() const { return m_visibleFromSkinCondition; };
+  bool IsVisibleFromSkin() const { return m_visibleFromSkinCondition; }
   virtual bool IsDisabled() const;
   virtual void SetPosition(float posX, float posY);
-  virtual void SetHitRect(const CRect &rect, const UTILS::Color &color);
+  virtual void SetHitRect(const CRect& rect, const UTILS::COLOR::Color& color);
   virtual void SetCamera(const CPoint &camera);
   virtual void SetStereoFactor(const float &factor);
   bool SetColorDiffuse(const KODI::GUILIB::GUIINFO::CGUIInfoColor &color);
@@ -175,11 +178,11 @@ public:
   virtual float GetHeight() const;
 
   void MarkDirtyRegion(const unsigned int dirtyState = DIRTY_STATE_CONTROL);
-  bool IsControlDirty() const { return m_controlDirtyState != 0; };
+  bool IsControlDirty() const { return m_controlDirtyState != 0; }
 
   /*! \brief return the render region in screen coordinates of this control
    */
-  const CRect &GetRenderRegion() const { return m_renderRegion; };
+  const CRect& GetRenderRegion() const { return m_renderRegion; }
   /*! \brief calculate the render region in parentcontrol coordinates of this control
    Called during process to update m_renderRegion
    */
@@ -214,18 +217,18 @@ public:
   virtual void SetHeight(float height);
   virtual void SetVisible(bool bVisible, bool setVisState = false);
   void SetVisibleCondition(const std::string &expression, const std::string &allowHiddenFocus = "");
-  bool HasVisibleCondition() const { return m_visibleCondition != NULL; };
+  bool HasVisibleCondition() const { return m_visibleCondition != NULL; }
   void SetEnableCondition(const std::string &expression);
   virtual void UpdateVisibility(const CGUIListItem *item);
   virtual void SetInitialVisibility();
   virtual void SetEnabled(bool bEnable);
-  virtual void SetInvalid() { m_bInvalidated = true; };
-  virtual void SetPulseOnSelect(bool pulse) { m_pulseOnSelect = pulse; };
-  virtual std::string GetDescription() const { return ""; };
-  virtual std::string GetDescriptionByIndex(int index) const { return ""; };
+  virtual void SetInvalid() { m_bInvalidated = true; }
+  virtual void SetPulseOnSelect(bool pulse) { m_pulseOnSelect = pulse; }
+  virtual std::string GetDescription() const { return ""; }
+  virtual std::string GetDescriptionByIndex(int index) const { return ""; }
 
   void SetAnimations(const std::vector<CAnimation> &animations);
-  const std::vector<CAnimation> &GetAnimations() const { return m_animations; };
+  const std::vector<CAnimation>& GetAnimations() const { return m_animations; }
 
   virtual void QueueAnimation(ANIMATION_TYPE anim);
   virtual bool IsAnimating(ANIMATION_TYPE anim);
@@ -235,58 +238,63 @@ public:
   virtual void ResetAnimations();
 
   // push information updates
-  virtual void UpdateInfo(const CGUIListItem *item = NULL) {};
-  virtual void SetPushUpdates(bool pushUpdates) { m_pushedUpdates = pushUpdates; };
+  virtual void UpdateInfo(const CGUIListItem* item = NULL) {}
+  virtual void SetPushUpdates(bool pushUpdates) { m_pushedUpdates = pushUpdates; }
 
-  virtual bool IsGroup() const { return false; };
-  virtual bool IsContainer() const { return false; };
-  virtual bool GetCondition(int condition, int data) const { return false; };
+  virtual bool IsGroup() const { return false; }
+  virtual bool IsContainer() const { return false; }
+  virtual bool GetCondition(int condition, int data) const { return false; }
 
-  void SetParentControl(CGUIControl *control) { m_parentControl = control; };
-  CGUIControl *GetParentControl(void) const { return m_parentControl; };
+  void SetParentControl(CGUIControl* control) { m_parentControl = control; }
+  CGUIControl* GetParentControl(void) const { return m_parentControl; }
   virtual void SaveStates(std::vector<CControlState> &states);
   virtual CGUIControl *GetControl(int id, std::vector<CGUIControl*> *idCollector = nullptr);
 
 
-  void SetControlStats(GUICONTROLSTATS *controlStats) { m_controlStats = controlStats; };
+  void SetControlStats(GUICONTROLSTATS* controlStats) { m_controlStats = controlStats; }
   virtual void UpdateControlStats();
 
-  enum GUICONTROLTYPES {
+  enum GUICONTROLTYPES
+  {
     GUICONTROL_UNKNOWN,
-    GUICONTROL_BUTTON,
-    GUICONTROL_FADELABEL,
-    GUICONTROL_IMAGE,
+
+    // Keep sorted
+    GUICONTAINER_EPGGRID,
+    GUICONTAINER_FIXEDLIST,
+    GUICONTAINER_LIST,
+    GUICONTAINER_PANEL,
+    GUICONTAINER_WRAPLIST,
     GUICONTROL_BORDEREDIMAGE,
+    GUICONTROL_BUTTON,
+    GUICONTROL_COLORBUTTON,
+    GUICONTROL_EDIT,
+    GUICONTROL_FADELABEL,
+    GUICONTROL_GAME,
+    GUICONTROL_GAMECONTROLLER,
+    GUICONTROL_GAMECONTROLLERLIST,
+    GUICONTROL_GROUP,
+    GUICONTROL_GROUPLIST,
+    GUICONTROL_IMAGE,
     GUICONTROL_LABEL,
     GUICONTROL_LISTGROUP,
+    GUICONTROL_LISTLABEL,
+    GUICONTROL_MOVER,
+    GUICONTROL_MULTI_IMAGE,
     GUICONTROL_PROGRESS,
     GUICONTROL_RADIO,
+    GUICONTROL_RANGES,
+    GUICONTROL_RENDERADDON,
+    GUICONTROL_RESIZE,
     GUICONTROL_RSS,
-    GUICONTROL_SLIDER,
+    GUICONTROL_SCROLLBAR,
     GUICONTROL_SETTINGS_SLIDER,
+    GUICONTROL_SLIDER,
     GUICONTROL_SPIN,
     GUICONTROL_SPINEX,
     GUICONTROL_TEXTBOX,
     GUICONTROL_TOGGLEBUTTON,
     GUICONTROL_VIDEO,
-    GUICONTROL_GAME,
-    GUICONTROL_MOVER,
-    GUICONTROL_RESIZE,
-    GUICONTROL_EDIT,
     GUICONTROL_VISUALISATION,
-    GUICONTROL_RENDERADDON,
-    GUICONTROL_MULTI_IMAGE,
-    GUICONTROL_GROUP,
-    GUICONTROL_GROUPLIST,
-    GUICONTROL_SCROLLBAR,
-    GUICONTROL_LISTLABEL,
-    GUICONTROL_GAMECONTROLLER,
-    GUICONTAINER_LIST,
-    GUICONTAINER_WRAPLIST,
-    GUICONTAINER_FIXEDLIST,
-    GUICONTAINER_EPGGRID,
-    GUICONTAINER_PANEL,
-    GUICONTROL_RANGES
   };
   GUICONTROLTYPES GetControlType() const { return ControlType; }
 
@@ -295,14 +303,14 @@ public:
   enum GUISCROLLVALUE { FOCUS = 0, NEVER, ALWAYS };
 
 #ifdef _DEBUG
-  virtual void DumpTextureUse() {};
+  virtual void DumpTextureUse() {}
 #endif
 protected:
   /*!
    \brief Return the coordinates of the top left of the control, in the control's parent coordinates
    \return The top left coordinates of the control
    */
-  virtual CPoint GetPosition() const { return CPoint(GetXPosition(), GetYPosition()); };
+  virtual CPoint GetPosition() const { return CPoint(GetXPosition(), GetYPosition()); }
 
   /*! \brief Called when the mouse is over the control.
    Default implementation selects the control.
@@ -318,7 +326,7 @@ protected:
    */
   virtual bool CanFocusFromPoint(const CPoint &point) const;
 
-  virtual bool UpdateColors();
+  virtual bool UpdateColors(const CGUIListItem* item);
   virtual bool Animate(unsigned int currentTime);
   virtual bool CheckAnimation(ANIMATION_TYPE animType);
   void UpdateStates(ANIMATION_TYPE type, ANIMATION_PROCESS currentProcess, ANIMATION_STATE currentState);
@@ -332,7 +340,7 @@ protected:
   float m_height;
   float m_width;
   CRect m_hitRect;
-  UTILS::Color m_hitColor = 0xffffffff;
+  UTILS::COLOR::Color m_hitColor = 0xffffffff;
   KODI::GUILIB::GUIINFO::CGUIInfoColor m_diffuseColor;
   int m_controlID;
   int m_parentID;
@@ -365,6 +373,7 @@ protected:
   float m_stereo;
   TransformMatrix m_transform;
   TransformMatrix m_cachedTransform; // Contains the absolute transform the control
+  bool m_isCulled{true};
 
   static const unsigned int DIRTY_STATE_CONTROL = 1; //This control is dirty
   static const unsigned int DIRTY_STATE_CHILD = 2; //One / more children are dirty

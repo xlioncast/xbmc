@@ -11,10 +11,11 @@
 #include "ServiceBroker.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "threads/SingleLock.h"
 #include "utils/Screenshot.h"
 #include "windowing/GraphicContext.h"
 
+#include <memory>
+#include <mutex>
 #include <vector>
 
 #include "system_gl.h"
@@ -26,7 +27,7 @@ void CScreenshotSurfaceGL::Register()
 
 std::unique_ptr<IScreenshotSurface> CScreenshotSurfaceGL::CreateSurface()
 {
-  return std::unique_ptr<CScreenshotSurfaceGL>(new CScreenshotSurfaceGL());
+  return std::make_unique<CScreenshotSurfaceGL>();
 }
 
 bool CScreenshotSurfaceGL::Capture()
@@ -39,7 +40,7 @@ bool CScreenshotSurfaceGL::Capture()
   if (!gui)
     return false;
 
-  CSingleLock lock(winsystem->GetGfxContext());
+  std::unique_lock<CCriticalSection> lock(winsystem->GetGfxContext());
   gui->GetWindowManager().Render();
 
   glReadBuffer(GL_BACK);

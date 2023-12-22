@@ -15,9 +15,11 @@
 #include <array>
 
 #include <drm_fourcc.h>
+#include <fcntl.h>
 #include <linux/dma-heap.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 namespace
 {
@@ -110,8 +112,10 @@ bool CDMAHeapBufferObject::CreateBufferObject(uint64_t size)
     }
   }
 
-  struct dma_heap_allocation_data allocData = {
-      .len = m_size, .fd_flags = (O_CLOEXEC | O_RDWR), .heap_flags = 0};
+  struct dma_heap_allocation_data allocData{};
+  allocData.len = m_size;
+  allocData.fd_flags = (O_CLOEXEC | O_RDWR);
+  allocData.heap_flags = 0;
 
   int ret = ioctl(m_dmaheapfd, DMA_HEAP_IOCTL_ALLOC, &allocData);
   if (ret < 0)

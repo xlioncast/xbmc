@@ -11,6 +11,7 @@
 #include "DVDDemux.h"
 
 #include <memory>
+#include <string>
 #include <vector>
 
 class CDVDOverlayCodecFFmpeg;
@@ -41,11 +42,9 @@ private:
     : public CDemuxStreamSubtitle
   {
   public:
-    explicit CStream(CDVDDemuxVobsub* parent)
-      : m_discard(false), m_parent(parent)
-    {}
+    explicit CStream(CDVDDemuxVobsub* parent) : m_parent(parent) {}
 
-    bool m_discard;
+    bool m_discard = false;
     CDVDDemuxVobsub* m_parent;
   };
 
@@ -79,9 +78,9 @@ private:
     }
   };
 
-  bool ParseLangIdx(SState& state, char* line);
-  bool ParseDelay(SState& state, char* line);
-  bool ParseId(SState& state, char* line);
-  bool ParseExtra(SState& state, char* line);
-  bool ParseTimestamp(SState& state, char* line);
+  bool ParseLangIdx(SState& state, std::string& line);
+  bool ParseDelay(SState& state, std::string& line);
+  bool ParseId(SState& state, std::string& line);
+  bool ParseExtra(SState& state, const std::string& line);
+  bool ParseTimestamp(SState& state, std::string& line);
 };

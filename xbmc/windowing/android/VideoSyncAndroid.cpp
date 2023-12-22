@@ -19,17 +19,15 @@
 
 #include "platform/android/activity/XBMCApp.h"
 
-
-bool CVideoSyncAndroid::Setup(PUPDATECLOCK func)
+bool CVideoSyncAndroid::Setup()
 {
-  CLog::Log(LOGDEBUG, "CVideoSyncAndroid::%s setting up", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "CVideoSyncAndroid::{} setting up", __FUNCTION__);
 
   //init the vblank timestamp
   m_LastVBlankTime = CurrentHostCounter();
-  UpdateClock = func;
   m_abortEvent.Reset();
 
-  CXBMCApp::InitFrameCallback(this);
+  CXBMCApp::Get().InitFrameCallback(this);
   CServiceBroker::GetWinSystem()->Register(this);
 
   return true;
@@ -43,15 +41,16 @@ void CVideoSyncAndroid::Run(CEvent& stopEvent)
 
 void CVideoSyncAndroid::Cleanup()
 {
-  CLog::Log(LOGDEBUG, "CVideoSyncAndroid::%s cleaning up", __FUNCTION__);
-  CXBMCApp::DeinitFrameCallback();
+  CLog::Log(LOGDEBUG, "CVideoSyncAndroid::{} cleaning up", __FUNCTION__);
+  CXBMCApp::Get().DeinitFrameCallback();
   CServiceBroker::GetWinSystem()->Unregister(this);
 }
 
 float CVideoSyncAndroid::GetFps()
 {
   m_fps = CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS();
-  CLog::Log(LOGDEBUG, "CVideoSyncAndroid::%s Detected refreshrate: %f hertz", __FUNCTION__, m_fps);
+  CLog::Log(LOGDEBUG, "CVideoSyncAndroid::{} Detected refreshrate: {:f} hertz", __FUNCTION__,
+            m_fps);
   return m_fps;
 }
 
@@ -67,11 +66,11 @@ void CVideoSyncAndroid::FrameCallback(int64_t frameTimeNanos)
 
   //calculate how many vblanks happened
   VBlankTime = (double)(frameTimeNanos - m_LastVBlankTime) / (double)CurrentHostFrequency();
-  NrVBlanks = MathUtils::round_int(VBlankTime * m_fps);
+  NrVBlanks = MathUtils::round_int(VBlankTime * static_cast<double>(m_fps));
 
   //save the timestamp of this vblank so we can calculate how many happened next time
   m_LastVBlankTime = frameTimeNanos;
 
   //update the vblank timestamp, update the clock and send a signal that we got a vblank
-  UpdateClock(NrVBlanks, frameTimeNanos, m_refClock);
+  m_refClock->UpdateClock(NrVBlanks, frameTimeNanos);
 }

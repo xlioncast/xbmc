@@ -20,6 +20,7 @@ namespace PVR
 {
   class CPVREpg;
   class CPVREpgInfoTag;
+  class CPVREpgSearchFilter;
 
   struct PVREpgSearchData;
 
@@ -65,7 +66,7 @@ namespace PVR
      * @brief Get the minimal database version that is required to operate correctly.
      * @return The minimal database version.
      */
-    int GetSchemaVersion() const override { return 13; }
+    int GetSchemaVersion() const override { return 16; }
 
     /*!
      * @brief Get the default sqlite database filename.
@@ -107,21 +108,34 @@ namespace PVR
      * @param iEpgID The ID of the EPG.
      * @return The entries.
      */
-    std::vector<std::shared_ptr<CPVREpgInfoTag>> GetAllEpgTags(int iEpgID);
+    std::vector<std::shared_ptr<CPVREpgInfoTag>> GetAllEpgTags(int iEpgID) const;
 
     /*!
-     * @brief Get the start time of the first tag in this EPG.
+     * @brief Get all icon paths for a given EPG id.
      * @param iEpgID The ID of the EPG.
-     * @return The time.
+     * @return The entries.
      */
-    CDateTime GetFirstStartTime(int iEpgID);
+    std::vector<std::string> GetAllIconPaths(int iEpgID) const;
+
+    /*!
+     * @brief Check whether this EPG has any tags.
+     * @param iEpgID The ID of the EPG.
+     * @return True in case there are tags, false otherwise.
+     */
+    bool HasTags(int iEpgID) const;
 
     /*!
      * @brief Get the end time of the last tag in this EPG.
      * @param iEpgID The ID of the EPG.
      * @return The time.
      */
-    CDateTime GetLastEndTime(int iEpgID);
+    CDateTime GetLastEndTime(int iEpgID) const;
+
+    /*!
+     * @brief Get the start and end time across all EPGs.
+     * @return The times; first: start time, second: end time.
+     */
+    std::pair<CDateTime, CDateTime> GetFirstAndLastEPGDate() const;
 
     /*!
      * @brief Get the start time of the first tag with a start time greater than the given min time.
@@ -129,7 +143,7 @@ namespace PVR
      * @param minStart The min start time.
      * @return The time.
      */
-    CDateTime GetMinStartTime(int iEpgID, const CDateTime& minStart);
+    CDateTime GetMinStartTime(int iEpgID, const CDateTime& minStart) const;
 
     /*!
      * @brief Get the end time of the first tag with an end time less than the given max time.
@@ -137,14 +151,15 @@ namespace PVR
      * @param maxEnd The mx end time.
      * @return The time.
      */
-    CDateTime GetMaxEndTime(int iEpgID, const CDateTime& maxEnd);
+    CDateTime GetMaxEndTime(int iEpgID, const CDateTime& maxEnd) const;
 
     /*!
      * @brief Get all EPG tags matching the given search criteria.
      * @param searchData The search criteria.
      * @return The matching tags.
      */
-    std::vector<std::shared_ptr<CPVREpgInfoTag>> GetEpgTags(const PVREpgSearchData& searchData);
+    std::vector<std::shared_ptr<CPVREpgInfoTag>> GetEpgTags(
+        const PVREpgSearchData& searchData) const;
 
     /*!
      * @brief Get an EPG tag given its EPG id and unique broadcast ID.
@@ -152,8 +167,8 @@ namespace PVR
      * @param iUniqueBroadcastId The unique broadcast ID for the tag to get.
      * @return The tag or nullptr, if not found.
      */
-    std::shared_ptr<CPVREpgInfoTag> GetEpgTagByUniqueBroadcastID(int iEpgID,
-                                                                 unsigned int iUniqueBroadcastId);
+    std::shared_ptr<CPVREpgInfoTag> GetEpgTagByUniqueBroadcastID(
+        int iEpgID, unsigned int iUniqueBroadcastId) const;
 
     /*!
      * @brief Get an EPG tag given its EPG id and database ID.
@@ -161,7 +176,7 @@ namespace PVR
      * @param iDatabaseId The database ID for the tag to get.
      * @return The tag or nullptr, if not found.
      */
-    std::shared_ptr<CPVREpgInfoTag> GetEpgTagByDatabaseID(int iEpgID, int iDatabaseId);
+    std::shared_ptr<CPVREpgInfoTag> GetEpgTagByDatabaseID(int iEpgID, int iDatabaseId) const;
 
     /*!
      * @brief Get an EPG tag given its EPG ID and start time.
@@ -169,7 +184,8 @@ namespace PVR
      * @param startTime The start time for the tag to get.
      * @return The tag or nullptr, if not found.
      */
-    std::shared_ptr<CPVREpgInfoTag> GetEpgTagByStartTime(int iEpgID, const CDateTime& startTime);
+    std::shared_ptr<CPVREpgInfoTag> GetEpgTagByStartTime(int iEpgID,
+                                                         const CDateTime& startTime) const;
 
     /*!
      * @brief Get the next EPG tag matching the given EPG id and min start time.
@@ -178,7 +194,7 @@ namespace PVR
      * @return The tag or nullptr, if not found.
      */
     std::shared_ptr<CPVREpgInfoTag> GetEpgTagByMinStartTime(int iEpgID,
-                                                            const CDateTime& minStartTime);
+                                                            const CDateTime& minStartTime) const;
 
     /*!
      * @brief Get the next EPG tag matching the given EPG id and max end time.
@@ -186,7 +202,8 @@ namespace PVR
      * @param maxEndTime The max end time for the tag to get.
      * @return The tag or nullptr, if not found.
      */
-    std::shared_ptr<CPVREpgInfoTag> GetEpgTagByMaxEndTime(int iEpgID, const CDateTime& maxEndTime);
+    std::shared_ptr<CPVREpgInfoTag> GetEpgTagByMaxEndTime(int iEpgID,
+                                                          const CDateTime& maxEndTime) const;
 
     /*!
      * @brief Get all EPG tags matching the given EPG id, min start time and max end time.
@@ -196,7 +213,7 @@ namespace PVR
      * @return The tags or empty vector, if no tags were found.
      */
     std::vector<std::shared_ptr<CPVREpgInfoTag>> GetEpgTagsByMinStartMaxEndTime(
-        int iEpgID, const CDateTime& minStartTime, const CDateTime& maxEndTime);
+        int iEpgID, const CDateTime& minStartTime, const CDateTime& maxEndTime) const;
 
     /*!
      * @brief Get all EPG tags matching the given EPG id, min end time and max start time.
@@ -206,7 +223,7 @@ namespace PVR
      * @return The tags or empty vector, if no tags were found.
      */
     std::vector<std::shared_ptr<CPVREpgInfoTag>> GetEpgTagsByMinEndMaxStartTime(
-        int iEpgID, const CDateTime& minEndTime, const CDateTime& maxStartTime);
+        int iEpgID, const CDateTime& minEndTime, const CDateTime& maxStartTime) const;
 
     /*!
      * @brief Write the query to delete all EPG tags in range of given EPG id, min end time and max
@@ -226,7 +243,7 @@ namespace PVR
      * @param lastScan The last scan time or -1 if it wasn't found.
      * @return True if the time was fetched successfully, false otherwise.
      */
-    bool GetLastEpgScanTime(int iEpgId, CDateTime* lastScan);
+    bool GetLastEpgScanTime(int iEpgId, CDateTime* lastScan) const;
 
     /*!
      * @brief Write the query to update the last scan time for the given EPG to db query queue.
@@ -283,7 +300,54 @@ namespace PVR
     /*!
      * @return Last EPG id in the database
      */
-    int GetLastEPGId();
+    int GetLastEPGId() const;
+
+    //@}
+
+    /*! @name EPG searches methods */
+    //@{
+
+    /*!
+     * @brief Get all saved searches from the database.
+     * @param bRadio Whether to fetch saved searches for radio or TV.
+     * @return The searches.
+     */
+    std::vector<std::shared_ptr<CPVREpgSearchFilter>> GetSavedSearches(bool bRadio) const;
+
+    /*!
+     * @brief Get the saved search matching the given id.
+     * @param bRadio Whether to fetch a TV or radio saved search.
+     * @param iId The id.
+     * @return The saved search or nullptr if not found.
+     */
+    std::shared_ptr<CPVREpgSearchFilter> GetSavedSearchById(bool bRadio, int iId) const;
+
+    /*!
+     * @brief Persist a search.
+     * @param epgSearch The search.
+     * @return True on success, false otherwise.
+     */
+    bool Persist(CPVREpgSearchFilter& epgSearch);
+
+    /*!
+     * @brief Update time last executed for the given search.
+     * @param epgSearch The search.
+     * @return True on success, false otherwise.
+     */
+    bool UpdateSavedSearchLastExecuted(const CPVREpgSearchFilter& epgSearch);
+
+    /*!
+     * @brief Delete a saved search.
+     * @param epgSearch The search.
+     * @return True on success, false otherwise.
+     */
+    bool Delete(const CPVREpgSearchFilter& epgSearch);
+
+    /*!
+     * @brief Delete all saved searches.
+     * @return True on success, false otherwise.
+     */
+    bool DeleteSavedSearches();
 
     //@}
 
@@ -306,8 +370,12 @@ namespace PVR
 
     int GetMinSchemaVersion() const override { return 4; }
 
-    std::shared_ptr<CPVREpgInfoTag> CreateEpgTag(const std::unique_ptr<dbiplus::Dataset>& pDS);
+    std::shared_ptr<CPVREpgInfoTag> CreateEpgTag(
+        const std::unique_ptr<dbiplus::Dataset>& pDS) const;
 
-    CCriticalSection m_critSection;
+    std::shared_ptr<CPVREpgSearchFilter> CreateEpgSearchFilter(
+        bool bRadio, const std::unique_ptr<dbiplus::Dataset>& pDS) const;
+
+    mutable CCriticalSection m_critSection;
   };
 }

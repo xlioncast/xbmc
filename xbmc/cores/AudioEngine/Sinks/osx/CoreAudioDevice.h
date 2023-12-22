@@ -9,6 +9,7 @@
 #pragma once
 
 #include "cores/AudioEngine/Sinks/osx/CoreAudioStream.h"
+#include "threads/SystemClock.h"
 
 #include <list>
 #include <string>
@@ -65,7 +66,10 @@ public:
   static void   RegisterDeviceChangedCB(bool bRegister, AudioObjectPropertyListenerProc callback,  void *ref);
   static void   RegisterDefaultOutputDeviceChangedCB(bool bRegister, AudioObjectPropertyListenerProc callback, void *ref);
   // suppresses the default output device changed callback for given time in ms
-  static void   SuppressDefaultOutputDeviceCB(unsigned int suppressTimeMs){ m_callbackSuppressTimer.Set(suppressTimeMs); }
+  static void SuppressDefaultOutputDeviceCB(unsigned int suppressTimeMs)
+  {
+    m_callbackSuppressTimer.Set(std::chrono::milliseconds(suppressTimeMs));
+  }
 
   bool          AddIOProc(AudioDeviceIOProc ioProc, void* pCallbackData);
   bool          RemoveIOProc();
@@ -76,13 +80,13 @@ protected:
   AudioDeviceIOProc m_IoProc = nullptr;
   AudioObjectPropertyListenerProc m_ObjectListenerProc = nullptr;
 
-  Float64 m_SampleRateRestore = 0.0f;
+  Float64 m_SampleRateRestore = 0.0;
   pid_t m_HogPid = -1;
   unsigned int m_frameSize = 0;
   unsigned int m_OutputBufferIndex = 0;
   unsigned int m_BufferSizeRestore = 0;
 
-  static XbmcThreads::EndTime m_callbackSuppressTimer;
+  static XbmcThreads::EndTime<> m_callbackSuppressTimer;
   static AudioObjectPropertyListenerProc m_defaultOutputDeviceChangedCB;
   static OSStatus defaultOutputDeviceChanged(AudioObjectID                       inObjectID,
                                              UInt32                              inNumberAddresses,

@@ -5,13 +5,16 @@ set(SOURCES TestAlarmClock.cpp
             TestBitstreamStats.cpp
             TestCharsetConverter.cpp
             TestCPUInfo.cpp
+            TestComponentContainer.cpp
             TestCrc32.cpp
             TestDatabaseUtils.cpp
             TestDigest.cpp
             TestEndianSwap.cpp
+            TestExecString.cpp
             TestFileOperationJob.cpp
             TestFileUtils.cpp
             TestGlobalsHandling.cpp
+            TestGPUInfo.cpp
             TestHTMLUtil.cpp
             TestHttpHeader.cpp
             TestHttpParser.cpp
@@ -30,6 +33,7 @@ set(SOURCES TestAlarmClock.cpp
             TestRegExp.cpp
             Testrfft.cpp
             TestRingBuffer.cpp
+            TestRssReader.cpp
             TestScraperParser.cpp
             TestScraperUrl.cpp
             TestSortUtils.cpp
@@ -42,12 +46,9 @@ set(SOURCES TestAlarmClock.cpp
             TestUrlOptions.cpp
             TestVariant.cpp
             TestXBMCTinyXML.cpp
+            TestXBMCTinyXML2.cpp
             TestXMLUtils.cpp)
 
 set(HEADERS TestGlobalsHandlingPattern1.h)
-
-if(NOT CORE_SYSTEM_NAME STREQUAL windows AND NOT CORE_SYSTEM_NAME STREQUAL windowsstore)
-  list(APPEND SOURCES TestCryptThreading.cpp)
-endif()
 
 core_add_test_library(utils_test)

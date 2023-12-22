@@ -8,6 +8,7 @@
 
 #include "VideoSyncWpPresentation.h"
 
+#include "cores/VideoPlayer/VideoReferenceClock.h"
 #include "settings/AdvancedSettings.h"
 #include "utils/TimeUtils.h"
 #include "utils/log.h"
@@ -19,14 +20,14 @@
 using namespace KODI::WINDOWING::WAYLAND;
 using namespace std::placeholders;
 
-CVideoSyncWpPresentation::CVideoSyncWpPresentation(void* clock, CWinSystemWayland& winSystem)
-: CVideoSync(clock), m_winSystem(winSystem)
+CVideoSyncWpPresentation::CVideoSyncWpPresentation(CVideoReferenceClock* clock,
+                                                   CWinSystemWayland& winSystem)
+  : CVideoSync(clock), m_winSystem(winSystem)
 {
 }
 
-bool CVideoSyncWpPresentation::Setup(PUPDATECLOCK func)
+bool CVideoSyncWpPresentation::Setup()
 {
-  UpdateClock = func;
   m_stopEvent.Reset();
   m_fps = m_winSystem.GetSyncOutputRefreshRate();
 
@@ -56,7 +57,11 @@ void CVideoSyncWpPresentation::HandlePresentation(timespec tv, std::uint32_t ref
 {
   auto mscDiff = msc - m_lastMsc;
 
-  CLog::Log(LOGDEBUG, LOGAVTIMING, "VideoSyncWpPresentation: tv %" PRIu64 ".%09" PRIu64 " s next refresh in +%" PRIu32 " ns (fps %f) sync output id %" PRIu32 " fps %f msc %" PRIu64 " mscdiff %" PRIu64, static_cast<std::uint64_t> (tv.tv_sec), static_cast<std::uint64_t> (tv.tv_nsec), refresh, 1.0e9 / refresh, syncOutputID, syncOutputRefreshRate, msc, mscDiff);
+  CLog::Log(LOGDEBUG, LOGAVTIMING,
+            "VideoSyncWpPresentation: tv {}.{:09} s next refresh in +{} ns (fps {:f}) sync output "
+            "id {} fps {:f} msc {} mscdiff {}",
+            static_cast<std::uint64_t>(tv.tv_sec), static_cast<std::uint64_t>(tv.tv_nsec), refresh,
+            1.0e9 / refresh, syncOutputID, syncOutputRefreshRate, msc, mscDiff);
 
   if (m_fps != syncOutputRefreshRate || (m_syncOutputID != 0 && m_syncOutputID != syncOutputID))
   {
@@ -75,5 +80,5 @@ void CVideoSyncWpPresentation::HandlePresentation(timespec tv, std::uint32_t ref
 
   // FIXME use timespec instead of currenthostcounter()? Possibly difficult
   // due to different clock base
-  UpdateClock(mscDiff, CurrentHostCounter(), m_refClock);
+  m_refClock->UpdateClock(mscDiff, CurrentHostCounter());
 }

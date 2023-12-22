@@ -9,8 +9,6 @@
 #include "InputStreamMultiSource.h"
 
 #include "DVDFactoryInputStream.h"
-#include "filesystem/File.h"
-#include "utils/StringUtils.h"
 #include "utils/log.h"
 
 #include <map>
@@ -110,13 +108,15 @@ bool CInputStreamMultiSource::Open()
     InputStreamPtr inputstream(CDVDFactoryInputStream::CreateInputStream(m_pPlayer, fileitem));
     if (!inputstream)
     {
-      CLog::Log(LOGERROR, "CDVDPlayer::OpenInputStream - unable to create input stream for file [%s]", m_filenames[i].c_str());
+      CLog::Log(LOGERROR,
+                "CDVDPlayer::OpenInputStream - unable to create input stream for file [{}]",
+                m_filenames[i]);
       continue;
     }
 
     if (!inputstream->Open())
     {
-      CLog::Log(LOGERROR, "CDVDPlayer::OpenInputStream - error opening file [%s]", m_filenames[i].c_str());
+      CLog::Log(LOGERROR, "CDVDPlayer::OpenInputStream - error opening file [{}]", m_filenames[i]);
       continue;
     }
     m_InputStreams.push_back(inputstream);
@@ -134,7 +134,7 @@ int64_t CInputStreamMultiSource::Seek(int64_t offset, int whence)
   return -1;
 }
 
-void CInputStreamMultiSource::SetReadRate(unsigned rate)
+void CInputStreamMultiSource::SetReadRate(uint32_t rate)
 {
   for (const auto& iter : m_InputStreams)
     iter->SetReadRate(rate);

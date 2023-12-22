@@ -7,24 +7,26 @@
  */
 
 #include "FileUtils.h"
-#include "ServiceBroker.h"
-#include "guilib/GUIKeyboardFactory.h"
-#include "utils/log.h"
-#include "guilib/LocalizeStrings.h"
-#include "JobManager.h"
+
+#include "CompileInfo.h"
 #include "FileOperationJob.h"
+#include "ServiceBroker.h"
+#include "StringUtils.h"
 #include "URIUtils.h"
+#include "URL.h"
+#include "Util.h"
+#include "filesystem/File.h"
 #include "filesystem/MultiPathDirectory.h"
 #include "filesystem/SpecialProtocol.h"
 #include "filesystem/StackDirectory.h"
+#include "guilib/GUIKeyboardFactory.h"
+#include "guilib/LocalizeStrings.h"
 #include "settings/MediaSourceSettings.h"
-#include "Util.h"
-#include "StringUtils.h"
-#include "URL.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "storage/MediaManager.h"
 #include "utils/Variant.h"
+#include "utils/log.h"
 
 #if defined(TARGET_WINDOWS)
 #include "platform/win32/WIN32Util.h"
@@ -44,7 +46,7 @@ bool CFileUtils::DeleteItem(const std::string &strPath)
   return DeleteItem(item);
 }
 
-bool CFileUtils::DeleteItem(const CFileItemPtr &item)
+bool CFileUtils::DeleteItem(const std::shared_ptr<CFileItem>& item)
 {
   if (!item || item->IsParentFolder())
     return false;
@@ -71,7 +73,7 @@ bool CFileUtils::RenameFile(const std::string &strFile)
   if (CGUIKeyboardFactory::ShowAndGetInput(strFileName, CVariant{g_localizeStrings.Get(16013)}, false))
   {
     strPath = URIUtils::AddFileToFolder(strPath, strFileName);
-    CLog::Log(LOGINFO, "FileUtils: rename %s->%s", strFileAndPath.c_str(), strPath.c_str());
+    CLog::Log(LOGINFO, "FileUtils: rename {}->{}", strFileAndPath, strPath);
     if (URIUtils::IsMultiPath(strFileAndPath))
     { // special case for multipath renames - rename all the paths.
       std::vector<std::string> paths;
@@ -152,7 +154,7 @@ bool CFileUtils::RemoteAccessAllowed(const std::string &strPath)
   // Check auto-mounted sources
   VECSOURCES sources;
   CServiceBroker::GetMediaManager().GetRemovableDrives(
-      sources); // Sources returned allways have m_allowsharing = true
+      sources); // Sources returned always have m_allowsharing = true
   //! @todo Make sharing of auto-mounted sources user configurable
   int sourceIndex = CUtil::GetMatchingSource(realPath, sources, isSource);
   if (sourceIndex >= 0 && sourceIndex < static_cast<int>(sources.size()) &&
@@ -177,7 +179,7 @@ CDateTime CFileUtils::GetModificationDate(const int& code, const std::string& st
   CDateTime dateAdded;
   if (strFileNameAndPath.empty())
   {
-    CLog::Log(LOGDEBUG, "%s empty strFileNameAndPath variable", __FUNCTION__);
+    CLog::Log(LOGDEBUG, "{} empty strFileNameAndPath variable", __FUNCTION__);
     return dateAdded;
   }
 
@@ -214,7 +216,7 @@ CDateTime CFileUtils::GetModificationDate(const int& code, const std::string& st
           addedTime =
               std::min(static_cast<time_t>(buffer.st_ctime), static_cast<time_t>(buffer.st_mtime));
       }
-      // Perfer the earliest of ctime and mtime, fallback to other
+      // Prefer the earliest of ctime and mtime, fallback to other
       else
       {
         addedTime =
@@ -243,8 +245,8 @@ CDateTime CFileUtils::GetModificationDate(const int& code, const std::string& st
   }
   catch (...)
   {
-    CLog::Log(LOGERROR, "%s unable to extract modification date for file (%s)", __FUNCTION__,
-              strFileNameAndPath.c_str());
+    CLog::Log(LOGERROR, "{} unable to extract modification date for file ({})", __FUNCTION__,
+              strFileNameAndPath);
   }
   return dateAdded;
 }
@@ -261,11 +263,14 @@ bool CFileUtils::CheckFileAccessAllowed(const std::string &filePath)
     "/.ssh/",
   };
   // ALLOW kodi paths
-  const std::vector<std::string> whitelist = {
-    CSpecialProtocol::TranslatePath("special://home"),
-    CSpecialProtocol::TranslatePath("special://xbmc"),
-    CSpecialProtocol::TranslatePath("special://musicartistsinfo")
+  std::vector<std::string> whitelist = {
+      CSpecialProtocol::TranslatePath("special://home"),
+      CSpecialProtocol::TranslatePath("special://xbmc"),
+      CSpecialProtocol::TranslatePath("special://musicartistsinfo"),
   };
+
+  auto kodiExtraWhitelist = CCompileInfo::GetWebserverExtraWhitelist();
+  whitelist.insert(whitelist.end(), kodiExtraWhitelist.begin(), kodiExtraWhitelist.end());
 
   // image urls come in the form of image://... sometimes with a / appended at the end
   // and can be embedded in a music or video file image://music@...
@@ -287,7 +292,7 @@ bool CFileUtils::CheckFileAccessAllowed(const std::string &filePath)
   {
     if (decodePath.find(b) != std::string::npos)
     {
-      CLog::Log(LOGERROR,"%s denied access to %s",  __FUNCTION__, decodePath.c_str());
+      CLog::Log(LOGERROR, "{} denied access to {}", __FUNCTION__, decodePath);
       return false;
     }
   }
@@ -348,4 +353,9 @@ bool CFileUtils::CheckFileAccessAllowed(const std::string &filePath)
   if (! isImage)
     return CFileUtils::RemoteAccessAllowed(decodePath);
   return true;
+}
+
+bool CFileUtils::Exists(const std::string& strFileName, bool bUseCache)
+{
+  return CFile::Exists(strFileName, bUseCache);
 }

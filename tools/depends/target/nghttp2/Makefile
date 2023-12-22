@@ -1,38 +1,32 @@
-include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile
-
-# lib name, version
-LIBNAME=nghttp2
-VERSION=1.41.0
-ARCHIVE=$(LIBNAME)-$(VERSION).tar.xz
+include ../../Makefile.include NGHTTP2-VERSION ../../download-files.include
+DEPS = ../../Makefile.include NGHTTP2-VERSION Makefile ../../download-files.include
 
 # configuration settings
-CONFIGURE=./configure --prefix=$(PREFIX) --enable-lib-only --disable-shared
+CMAKE_OPTIONS=-DENABLE_DEBUG=OFF \
+              -DENABLE_FAILMALLOC=OFF \
+              -DENABLE_LIB_ONLY=ON \
+              -DENABLE_STATIC_LIB=ON \
+              -DENABLE_SHARED_LIB=OFF
 
-LIBDYLIB=$(PLATFORM)/lib/.libs/lib$(LIBNAME).a
+LIBDYLIB=$(PLATFORM)/build/lib/$(BYPRODUCT)
 
 all: .installed-$(PLATFORM)
 
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
-	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
+	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)/build
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
-	cd $(PLATFORM); $(AUTORECONF) -vif
-	cd $(PLATFORM); $(CONFIGURE)
+	cd $(PLATFORM)/build; $(CMAKE) $(CMAKE_OPTIONS) ..
 
 $(LIBDYLIB): $(PLATFORM)
-	$(MAKE) -C $(PLATFORM)
+	$(MAKE) -C $(PLATFORM)/build
 
 .installed-$(PLATFORM): $(LIBDYLIB)
-	$(MAKE) -C $(PLATFORM) install
+	$(MAKE) -C $(PLATFORM)/build install
 	touch $@
 
 clean:
-	$(MAKE) -C $(PLATFORM) clean
+	$(MAKE) -C $(PLATFORM)/build clean
 	rm -f .installed-$(PLATFORM)
 
 distclean::
 	rm -rf $(PLATFORM) .installed-$(PLATFORM)
-

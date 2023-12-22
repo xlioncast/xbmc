@@ -60,8 +60,20 @@ void CGUIImage::UpdateVisibility(const CGUIListItem *item)
   AllocateOnDemand();
 }
 
+void CGUIImage::UpdateDiffuseColor(const CGUIListItem* item)
+{
+  if (m_texture->SetDiffuseColor(m_diffuseColor, item))
+  {
+    MarkDirtyRegion();
+  }
+}
+
 void CGUIImage::UpdateInfo(const CGUIListItem *item)
 {
+  // The texture may also depend on info conditions. Update the diffuse color in that case.
+  if (m_texture->GetDiffuseColor().HasInfo())
+    UpdateDiffuseColor(item);
+
   if (m_info.IsConstant())
     return; // nothing to do
 
@@ -156,8 +168,8 @@ void CGUIImage::Process(unsigned int currentTime, CDirtyRegionList &dirtyregions
       MarkDirtyRegion();
   }
 
-  if (m_texture->SetDiffuseColor(m_diffuseColor))
-    MarkDirtyRegion();
+  if (!m_texture->GetDiffuseColor().HasInfo())
+    UpdateDiffuseColor(nullptr);
 
   if (m_texture->Process(currentTime))
     MarkDirtyRegion();
@@ -351,10 +363,9 @@ void CGUIImage::DumpTextureUse()
   if (m_texture->IsAllocated())
   {
     if (GetID())
-      CLog::Log(LOGDEBUG, "Image control %u using texture %s", GetID(),
-                m_texture->GetFileName().c_str());
+      CLog::Log(LOGDEBUG, "Image control {} using texture {}", GetID(), m_texture->GetFileName());
     else
-      CLog::Log(LOGDEBUG, "Using texture %s", m_texture->GetFileName().c_str());
+      CLog::Log(LOGDEBUG, "Using texture {}", m_texture->GetFileName());
   }
 }
 #endif

@@ -1,29 +1,17 @@
-include ../../Makefile.include
+include ../../Makefile.include MESON-VERSION ../../download-files.include
 PLATFORM=$(NATIVEPLATFORM)
-DEPS=../../Makefile.include Makefile
-
-# lib name, version
-LIBNAME=meson
-VERSION=0.55.1
-SOURCE=$(LIBNAME)-$(VERSION)
-ARCHIVE=$(SOURCE).tar.gz
-
-LIBDYLIB=$(PLATFORM)/build
+DEPS =../../Makefile.include Makefile MESON-VERSION ../../download-files.include
 
 all: .installed-$(PLATFORM)
 
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
 
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); $(NATIVEPREFIX)/bin/python3 setup.py config
 
-$(LIBDYLIB): $(PLATFORM)
+.installed-$(PLATFORM): $(PLATFORM)
 	cd $(PLATFORM); $(NATIVEPREFIX)/bin/python3 setup.py build
-
-.installed-$(PLATFORM): $(LIBDYLIB)
 	cd $(PLATFORM); $(NATIVEPREFIX)/bin/python3 setup.py install --prefix="$(NATIVEPREFIX)"
 	touch $@
 

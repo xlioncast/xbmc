@@ -7,21 +7,26 @@
  */
 
 #include "TCPServer.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <memory.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 
+#include "ServiceBroker.h"
+#include "interfaces/AnnouncementManager.h"
+#include "interfaces/json-rpc/JSONRPC.h"
+#include "network/Network.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
-#include "interfaces/json-rpc/JSONRPC.h"
-#include "interfaces/AnnouncementManager.h"
-#include "utils/log.h"
 #include "utils/Variant.h"
-#include "threads/SingleLock.h"
+#include "utils/log.h"
 #include "websocket/WebSocketManager.h"
-#include "Network.h"
+
+#include <mutex>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <arpa/inet.h>
+#include <memory.h>
+#include <netinet/in.h>
+
+using namespace std::chrono_literals;
 
 #if defined(TARGET_WINDOWS) || defined(HAVE_LIBBLUETOOTH)
 static const char     bt_service_name[] = "XBMC JSON-RPC";
@@ -48,7 +53,12 @@ static const bdaddr_t bt_bdaddr_local = {{0, 0, 0, 0xff, 0xff, 0xff}};
 
 using namespace JSONRPC;
 
-#define RECEIVEBUFFER 1024
+#define RECEIVEBUFFER 4096
+
+namespace
+{
+constexpr size_t maxBufferLength = 64 * 1024;
+}
 
 CTCPServer *CTCPServer::ServerInstance = NULL;
 
@@ -123,7 +133,7 @@ void CTCPServer::Process()
     if (res < 0)
     {
       CLog::Log(LOGERROR, "JSONRPC Server: Select failed");
-      CThread::Sleep(1000);
+      CThread::Sleep(1000ms);
       Initialize();
     }
     else if (res > 0)
@@ -186,10 +196,10 @@ void CTCPServer::Process()
 
           if (newconnection->m_socket == INVALID_SOCKET)
           {
-            CLog::Log(LOGERROR, "JSONRPC Server: Accept of new connection failed: %d", errno);
+            CLog::Log(LOGERROR, "JSONRPC Server: Accept of new connection failed: {}", errno);
             if (EBADF == errno)
             {
-              CThread::Sleep(1000);
+              CThread::Sleep(1000ms);
               Initialize();
               break;
             }
@@ -227,12 +237,15 @@ void CTCPServer::Announce(ANNOUNCEMENT::AnnouncementFlag flag,
                           const std::string& message,
                           const CVariant& data)
 {
+  if (m_connections.empty())
+    return;
+
   std::string str = IJSONRPCAnnouncer::AnnouncementToJSONRPC(flag, sender, message, data, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_jsonOutputCompact);
 
   for (unsigned int i = 0; i < m_connections.size(); i++)
   {
     {
-      CSingleLock lock (m_connections[i]->m_critSection);
+      std::unique_lock<CCriticalSection> lock(m_connections[i]->m_critSection);
       if ((m_connections[i]->GetAnnouncementFlags() & flag) == 0)
         continue;
     }
@@ -262,7 +275,7 @@ bool CTCPServer::Initialize()
 #ifdef TARGET_WINDOWS_STORE
 bool CTCPServer::InitializeBlue()
 {
-  CLog::Log(LOGDEBUG, "%s is not implemented", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "{} is not implemented", __FUNCTION__);
   return true; // need to fake it for now
 }
 
@@ -333,7 +346,8 @@ bool CTCPServer::InitializeBlue()
   service.dwNumberOfCsAddrs       = 1;
 
   if (WSASetService(&service, RNRSERVICE_REGISTER, 0) == SOCKET_ERROR)
-    CLog::Log(LOGERROR, "JSONRPC Server: failed to register bluetooth service error %d",  WSAGetLastError());
+    CLog::Log(LOGERROR, "JSONRPC Server: failed to register bluetooth service error {}",
+              WSAGetLastError());
 
   return true;
 #endif
@@ -346,7 +360,7 @@ bool CTCPServer::InitializeBlue()
     CLog::Log(LOGINFO, "JSONRPC Server: Unable to get bluetooth socket");
     return false;
   }
-  struct sockaddr_rc sa  = {0};
+  struct sockaddr_rc sa = {};
   sa.rc_family  = AF_BLUETOOTH;
   sa.rc_bdaddr  = bt_bdaddr_any;
   sa.rc_channel = 0;
@@ -364,7 +378,7 @@ bool CTCPServer::InitializeBlue()
 
   if (listen(fd, 10) < 0)
   {
-    CLog::Log(LOGERROR, "JSONRPC Server: Failed to listen to bluetooth port %d", sa.rc_channel);
+    CLog::Log(LOGERROR, "JSONRPC Server: Failed to listen to bluetooth port {}", sa.rc_channel);
     closesocket(fd);
     return false;
   }
@@ -435,7 +449,7 @@ bool CTCPServer::InitializeBlue()
 
   if (sdp_record_register(session, record, 0) < 0)
   {
-    CLog::Log(LOGERROR, "JSONRPC Server: Failed to register record with error %d", errno);
+    CLog::Log(LOGERROR, "JSONRPC Server: Failed to register record with error {}", errno);
     closesocket(fd);
     sdp_close(session);
     sdp_record_free(record);
@@ -532,7 +546,7 @@ void CTCPServer::CTCPClient::Send(const char *data, unsigned int size)
   unsigned int sent = 0;
   do
   {
-    CSingleLock lock (m_critSection);
+    std::unique_lock<CCriticalSection> lock(m_critSection);
     sent += send(m_socket, data + sent, size - sent, 0);
   } while (sent < size);
 }
@@ -613,7 +627,7 @@ void CTCPServer::CTCPClient::Disconnect()
 {
   if (m_socket > 0)
   {
-    CSingleLock lock (m_critSection);
+    std::unique_lock<CCriticalSection> lock(m_critSection);
     shutdown(m_socket, SHUT_RDWR);
     closesocket(m_socket);
     m_socket = INVALID_SOCKET;
@@ -637,11 +651,14 @@ void CTCPServer::CTCPClient::Copy(const CTCPClient& client)
 CTCPServer::CWebSocketClient::CWebSocketClient(CWebSocket *websocket)
 {
   m_websocket = websocket;
+  m_buffer.reserve(maxBufferLength);
 }
 
 CTCPServer::CWebSocketClient::CWebSocketClient(const CWebSocketClient& client)
+  : CTCPServer::CTCPClient(client)
 {
   *this = client;
+  m_buffer.reserve(maxBufferLength);
 }
 
 CTCPServer::CWebSocketClient::CWebSocketClient(CWebSocket *websocket, const CTCPClient& client)
@@ -649,6 +666,7 @@ CTCPServer::CWebSocketClient::CWebSocketClient(CWebSocket *websocket, const CTCP
   Copy(client);
 
   m_websocket = websocket;
+  m_buffer.reserve(maxBufferLength);
 }
 
 CTCPServer::CWebSocketClient::~CWebSocketClient()
@@ -661,6 +679,7 @@ CTCPServer::CWebSocketClient& CTCPServer::CWebSocketClient::operator=(const CWeb
   Copy(client);
 
   m_websocket = client.m_websocket;
+  m_buffer = client.m_buffer;
 
   return *this;
 }
@@ -680,16 +699,28 @@ void CTCPServer::CWebSocketClient::PushBuffer(CTCPServer *host, const char *buff
 {
   bool send;
   const CWebSocketMessage *msg = NULL;
-  size_t len = length;
+
+  if (m_buffer.size() + length > maxBufferLength)
+  {
+    CLog::Log(LOGINFO, "WebSocket: client buffer size {} exceeded", maxBufferLength);
+    return Disconnect();
+  }
+
+  m_buffer.append(buffer, length);
+
+  const char* buf = m_buffer.data();
+  size_t len = m_buffer.size();
+
   do
   {
-    if ((msg = m_websocket->Handle(buffer, len, send)) != NULL && msg->IsComplete())
+    if ((msg = m_websocket->Handle(buf, len, send)) != NULL && msg->IsComplete())
     {
       std::vector<const CWebSocketFrame *> frames = msg->GetFrames();
       if (send)
       {
         for (unsigned int index = 0; index < frames.size(); index++)
-          Send(frames.at(index)->GetFrameData(), (unsigned int)frames.at(index)->GetFrameLength());
+          CTCPClient::Send(frames.at(index)->GetFrameData(),
+                           static_cast<unsigned int>(frames.at(index)->GetFrameLength()));
       }
       else
       {
@@ -701,6 +732,9 @@ void CTCPServer::CWebSocketClient::PushBuffer(CTCPServer *host, const char *buff
     }
   }
   while (len > 0 && msg != NULL);
+
+  if (len < m_buffer.size())
+    m_buffer = m_buffer.substr(m_buffer.size() - len);
 
   if (m_websocket->GetState() == WebSocketStateClosed)
     Disconnect();
@@ -721,4 +755,3 @@ void CTCPServer::CWebSocketClient::Disconnect()
       CTCPClient::Disconnect();
   }
 }
-

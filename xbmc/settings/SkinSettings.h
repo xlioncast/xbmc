@@ -12,6 +12,7 @@
 #include "settings/ISubSettings.h"
 #include "threads/CriticalSection.h"
 
+#include <memory>
 #include <set>
 #include <string>
 
@@ -26,7 +27,7 @@ public:
   bool Save(TiXmlNode *settings) const override;
   void Clear() override;
 
-  void MigrateSettings(const ADDON::SkinPtr& skin);
+  void MigrateSettings(const std::shared_ptr<ADDON::CSkinInfo>& skin);
 
   int TranslateString(const std::string &setting);
   const std::string& GetString(int setting) const;
@@ -35,6 +36,16 @@ public:
   int TranslateBool(const std::string &setting);
   bool GetBool(int setting) const;
   void SetBool(int setting, bool set);
+
+  /*! \brief Get the skin setting value as an integer value
+   * \param setting - the setting id
+   * \return the setting value as an integer, -1 if no conversion is possible
+   */
+  int GetInt(int setting) const;
+
+  std::set<ADDON::CSkinSettingPtr> GetSettings() const;
+  ADDON::CSkinSettingPtr GetSetting(const std::string& settingId);
+  std::shared_ptr<const ADDON::CSkinSetting> GetSetting(const std::string& settingId) const;
 
   void Reset(const std::string &setting);
   void Reset();

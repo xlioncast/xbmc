@@ -45,7 +45,7 @@ public:
   InvokerState GetState() const { return m_state; }
   bool IsActive() const;
   bool IsRunning() const;
-  void Reset() { m_state = InvokerStateUninitialized; };
+  void Reset() { m_state = InvokerStateUninitialized; }
 
 protected:
   friend class CLanguageInvokerThread;
@@ -69,8 +69,8 @@ protected:
   ADDON::AddonPtr m_addon;
 
 private:
-  int m_id;
-  InvokerState m_state;
+  int m_id = -1;
+  InvokerState m_state = InvokerStateUninitialized;
   ILanguageInvocationHandler *m_invocationHandler;
 };
 

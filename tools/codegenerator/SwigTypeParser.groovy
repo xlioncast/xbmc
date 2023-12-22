@@ -18,6 +18,8 @@
  *
  */
 
+import groovy.xml.XmlParser
+
 /**
  * These methods are somewhat ugly because they have been copied out of
  * the Swig source code and simply made compilable with groovy. They could
@@ -146,7 +148,7 @@ public class SwigTypeParser
    }
 
    /**
-    * This will resolve typedefs anbd handle qualifiers, pointers,
+    * This will resolve typedefs and handle qualifiers, pointers,
     *  references, and typedef of typedefs to resolve all the way down to the
     *  most basic types.
     */
@@ -269,6 +271,20 @@ public class SwigTypeParser
       //return result.replaceAll('<\\(', '<').replaceAll('\\)>', '>')
    }
 
+   /**
+    * SwigType_lrtype(const SwigType *ty)
+    *
+    * Create a locally assignable reference type
+    */
+   public static String SwigType_lrtype(String s) {
+      String ltype = SwigType_ltype(s);
+      if (SwigType_ispointer(s)) {
+         return ltype;
+      } else {
+         return "r." + ltype;
+      }
+   }
+   
    /**
    * This creates the C++ declaration for a valid ltype for the type string
    * given. For example, if the type is a "const char*" which is equivalent

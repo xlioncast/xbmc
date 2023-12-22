@@ -25,7 +25,7 @@
 #include "profiles/ProfileManager.h"
 #include "profiles/dialogs/GUIDialogProfileSettings.h"
 #include "pvr/PVRManager.h"
-#include "pvr/guilib/PVRGUIActions.h"
+#include "pvr/guilib/PVRGUIActionsPowerManagement.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/StringUtils.h"
@@ -92,7 +92,7 @@ bool CGUIWindowLoginScreen::OnMessage(CGUIMessage& message)
           if (bOkay)
           {
             if (iItem >= 0)
-              CApplicationMessenger::GetInstance().PostMsg(TMSG_LOADPROFILE, iItem);
+              CServiceBroker::GetAppMessenger()->PostMsg(TMSG_LOADPROFILE, iItem);
           }
           else
           {
@@ -128,7 +128,7 @@ bool CGUIWindowLoginScreen::OnAction(const CAction &action)
     std::string actionName = action.GetName();
     StringUtils::ToLower(actionName);
     if ((actionName.find("shutdown") != std::string::npos) &&
-        CServiceBroker::GetPVRManager().GUIActions()->CanSystemPowerdown())
+        CServiceBroker::GetPVRManager().Get<PVR::GUI::PowerManagement>().CanSystemPowerdown())
       CBuiltins::GetInstance().Execute(action.GetName());
     return true;
   }
@@ -151,7 +151,8 @@ void CGUIWindowLoginScreen::FrameMove()
 
   const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
 
-  std::string strLabel = StringUtils::Format(g_localizeStrings.Get(20114).c_str(), m_iSelectedItem+1, profileManager->GetNumberOfProfiles());
+  std::string strLabel = StringUtils::Format(g_localizeStrings.Get(20114), m_iSelectedItem + 1,
+                                             profileManager->GetNumberOfProfiles());
   SET_CONTROL_LABEL(CONTROL_LABEL_SELECTED_PROFILE,strLabel);
   CGUIWindow::FrameMove();
 }
@@ -202,7 +203,7 @@ void CGUIWindowLoginScreen::Update()
     if (profile->getDate().empty())
       strLabel = g_localizeStrings.Get(20113);
     else
-      strLabel = StringUtils::Format(g_localizeStrings.Get(20112).c_str(), profile->getDate().c_str());
+      strLabel = StringUtils::Format(g_localizeStrings.Get(20112), profile->getDate());
 
     item->SetLabel2(strLabel);
     item->SetArt("thumb", profile->getThumb());
@@ -241,7 +242,7 @@ bool CGUIWindowLoginScreen::OnPopupMenu(int iItem)
     if (g_passwordManager.CheckLock(profileManager->GetMasterProfile().getLockMode(), profileManager->GetMasterProfile().getLockCode(), 20075))
       g_passwordManager.iMasterLockRetriesLeft = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_MASTERLOCK_MAXRETRIES);
     else // be inconvenient
-      CApplicationMessenger::GetInstance().PostMsg(TMSG_SHUTDOWN);
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_SHUTDOWN);
 
     return true;
   }

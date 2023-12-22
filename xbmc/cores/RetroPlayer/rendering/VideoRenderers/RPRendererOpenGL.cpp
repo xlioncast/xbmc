@@ -11,6 +11,7 @@
 #include "cores/RetroPlayer/buffers/RenderBufferOpenGL.h"
 #include "cores/RetroPlayer/buffers/RenderBufferPoolOpenGL.h"
 #include "cores/RetroPlayer/rendering/RenderContext.h"
+#include "utils/GLUtils.h"
 #include "utils/log.h"
 
 #include <cstddef>
@@ -164,7 +165,7 @@ void CRPRendererOpenGL::DrawBlackBars()
   glUniform4f(uniCol, m_clearColour / 255.0f, m_clearColour / 255.0f, m_clearColour / 255.0f, 1.0f);
 
   // top quad
-  if (m_rotatedDestCoords[0].y > 0.0)
+  if (m_rotatedDestCoords[0].y > 0.0f)
   {
     GLubyte quad = count;
     vertices[quad].x = 0.0;
@@ -206,7 +207,7 @@ void CRPRendererOpenGL::DrawBlackBars()
   }
 
   // left quad
-  if (m_rotatedDestCoords[0].x > 0.0)
+  if (m_rotatedDestCoords[0].x > 0.0f)
   {
     GLubyte quad = count;
     vertices[quad].x = 0.0;
@@ -296,10 +297,10 @@ void CRPRendererOpenGL::Render(uint8_t alpha)
   GLint uniColLoc = m_context.GUIShaderGetUniCol();
 
   // Setup color values
-  colour[0] = static_cast<GLubyte>(GET_R(color));
-  colour[1] = static_cast<GLubyte>(GET_G(color));
-  colour[2] = static_cast<GLubyte>(GET_B(color));
-  colour[3] = static_cast<GLubyte>(GET_A(color));
+  colour[0] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::R, color);
+  colour[1] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::G, color);
+  colour[2] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::B, color);
+  colour[3] = UTILS::GL::GetChannelFromARGB(UTILS::GL::ColorChannel::A, color);
 
   for (unsigned int i = 0; i < 4; i++)
   {

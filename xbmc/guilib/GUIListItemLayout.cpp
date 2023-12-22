@@ -20,22 +20,29 @@ using namespace KODI::GUILIB;
 CGUIListItemLayout::CGUIListItemLayout()
 : m_group(0, 0, 0, 0, 0, 0)
 {
-  m_width = 0;
-  m_height = 0;
-  m_focused = false;
-  m_invalidated = true;
   m_group.SetPushUpdates(true);
 }
 
-CGUIListItemLayout::CGUIListItemLayout(const CGUIListItemLayout &from, CGUIControl *control)
-: m_group(from.m_group), m_isPlaying(from.m_isPlaying)
+CGUIListItemLayout::CGUIListItemLayout(const CGUIListItemLayout& from)
+  : CGUIListItemLayout(from, nullptr)
 {
-  m_width = from.m_width;
-  m_height = from.m_height;
-  m_focused = from.m_focused;
-  m_condition = from.m_condition;
-  m_invalidated = true;
+}
+
+CGUIListItemLayout::CGUIListItemLayout(const CGUIListItemLayout& from, CGUIControl* control)
+  : m_group(from.m_group),
+    m_width(from.m_width),
+    m_height(from.m_height),
+    m_focused(from.m_focused),
+    m_condition(from.m_condition),
+    m_isPlaying(from.m_isPlaying),
+    m_infoUpdateMillis(from.m_infoUpdateMillis)
+{
   m_group.SetParentControl(control);
+  m_infoUpdateTimeout.Set(m_infoUpdateMillis);
+
+  // m_group was just created, cloned controls with resources must be allocated
+  // before use
+  m_group.AllocResources();
 }
 
 bool CGUIListItemLayout::IsAnimating(ANIMATION_TYPE animType)
@@ -61,12 +68,21 @@ void CGUIListItemLayout::Process(CGUIListItem *item, int parentID, unsigned int 
     // could use a dynamic cast here if RTTI was enabled.  As it's not,
     // let's use a static cast with a virtual base function
     CFileItem *fileItem = item->IsFileItem() ? static_cast<CFileItem*>(item) : new CFileItem(*item);
-    m_isPlaying.Update(item);
+    m_isPlaying.Update(INFO::DEFAULT_CONTEXT, item);
     m_group.SetInvalid();
     m_group.UpdateInfo(fileItem);
     // delete our temporary fileitem
     if (!item->IsFileItem())
       delete fileItem;
+
+    m_infoUpdateTimeout.Set(m_infoUpdateMillis);
+  }
+  else if (m_infoUpdateTimeout.IsTimePast())
+  {
+    m_isPlaying.Update(INFO::DEFAULT_CONTEXT, item);
+    m_group.UpdateInfo(item);
+
+    m_infoUpdateTimeout.Set(m_infoUpdateMillis);
   }
 
   // update visibility, and render
@@ -127,7 +143,7 @@ bool CGUIListItemLayout::MoveRight()
 
 bool CGUIListItemLayout::CheckCondition()
 {
-  return !m_condition || m_condition->Get();
+  return !m_condition || m_condition->Get(INFO::DEFAULT_CONTEXT);
 }
 
 void CGUIListItemLayout::LoadControl(TiXmlElement *child, CGUIControlGroup *group)
@@ -162,6 +178,12 @@ void CGUIListItemLayout::LoadLayout(TiXmlElement *layout, int context, bool focu
   const char *condition = layout->Attribute("condition");
   if (condition)
     m_condition = CServiceBroker::GetGUI()->GetInfoManager().Register(condition, context);
+  unsigned int infoupdatemillis = 0;
+  layout->QueryUnsignedAttribute("infoupdate", &infoupdatemillis);
+  if (infoupdatemillis > 0)
+    m_infoUpdateMillis = std::chrono::milliseconds(infoupdatemillis);
+
+  m_infoUpdateTimeout.Set(m_infoUpdateMillis);
   m_isPlaying.Parse("listitem.isplaying", context);
   // ensure width and height are valid
   if (!m_width)

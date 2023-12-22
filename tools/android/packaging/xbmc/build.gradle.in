@@ -1,26 +1,41 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 29
-    buildToolsVersion "29.0.3"
+    namespace '@APP_PACKAGE@'
+    compileSdkVersion @TARGET_SDK@
+    ndkPath "@NDKROOT@"
     defaultConfig {
         applicationId "@APP_PACKAGE@"
-        minSdkVersion 21
-        targetSdkVersion 29
+        minSdkVersion @TARGET_MINSDK@
+        targetSdkVersion @TARGET_SDK@
         versionCode @APP_VERSION_CODE_ANDROID@
         versionName "@APP_VERSION@"
     }
+    signingConfigs {
+        release {
+            keyAlias System.getenv("KODI_ANDROID_KEY_ALIAS")
+            keyPassword System.getenv("KODI_ANDROID_KEY_PASSWORD")
+            storeFile file(System.getenv("KODI_ANDROID_STORE_FILE"))
+            storePassword System.getenv("KODI_ANDROID_STORE_PASSWORD")
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
+        }
+
+    }
     buildTypes {
-        releaseUnsigned.initWith(buildTypes.release)
-        releaseUnsigned {
-            signingConfig null
+        debug {
+            zipAlignEnabled true
+            signingConfig signingConfigs.release
         }
-
-        debugUnsigned.initWith(buildTypes.debug)
-        debugUnsigned {
-            signingConfig null
+        relwithdebinfo {
+            zipAlignEnabled true
+            signingConfig signingConfigs.release
         }
-
+        release {
+            zipAlignEnabled true
+            signingConfig signingConfigs.release
+        }
     }
     aaptOptions {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
@@ -47,5 +62,5 @@ project.afterEvaluate {
 dependencies {
     // New support library to for channels/programs development.
     implementation 'androidx.tvprovider:tvprovider:1.0.0'
-    implementation 'com.google.code.gson:gson:2.8.5'
+    implementation 'com.google.code.gson:gson:2.10.1'
 }

@@ -44,7 +44,7 @@ public:
     if (m_ptempFilePath.empty())
       return false;
 
-    OpenForWrite(m_ptempFilePath.c_str(), true);
+    OpenForWrite(m_ptempFilePath, true);
     return true;
   }
   bool Delete()
@@ -117,7 +117,7 @@ std::string CXBMCTestUtils::TempFilePath(XFILE::CFile const* const tempfile)
 {
   if (!tempfile)
     return "";
-  CTempFile const* const f = static_cast<CTempFile const* const>(tempfile);
+  CTempFile const* const f = static_cast<CTempFile const*>(tempfile);
   return f->getTempFilePath();
 }
 
@@ -125,7 +125,7 @@ std::string CXBMCTestUtils::TempFileDirectory(XFILE::CFile const* const tempfile
 {
   if (!tempfile)
     return "";
-  CTempFile const* const f = static_cast<CTempFile const* const>(tempfile);
+  CTempFile const* const f = static_cast<CTempFile const*>(tempfile);
   return f->getTempFileDirectory();
 }
 

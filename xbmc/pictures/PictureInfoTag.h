@@ -17,10 +17,20 @@
 #include <string>
 #include <vector>
 
+namespace KODI
+{
+namespace ADDONS
+{
+class CImageDecoder;
+} /* namespace ADDONS */
+} /* namespace KODI */
+
 class CVariant;
 
 class CPictureInfoTag : public IArchivable, public ISerializable, public ISortable
 {
+  friend class KODI::ADDONS::CImageDecoder;
+
   // Mimic structs from libexif.h but with C++ types instead of arrays
   struct ExifInfo
   {
@@ -118,7 +128,7 @@ class CPictureInfoTag : public IArchivable, public ISerializable, public ISortab
   };
 
 public:
-  CPictureInfoTag() { Reset(); };
+  CPictureInfoTag() { Reset(); }
   virtual ~CPictureInfoTag() = default;
   void Reset();
   void Archive(CArchive& ar) override;
@@ -126,7 +136,7 @@ public:
   void ToSortable(SortItem& sortable, Field field) const override;
   const std::string GetInfo(int info) const;
 
-  bool Loaded() const { return m_isLoaded; };
+  bool Loaded() const { return m_isLoaded; }
   bool Load(const std::string &path);
 
   void SetInfo(const std::string& key, const std::string& value);

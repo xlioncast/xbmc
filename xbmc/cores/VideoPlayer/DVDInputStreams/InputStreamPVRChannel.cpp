@@ -17,8 +17,7 @@
 using namespace PVR;
 
 CInputStreamPVRChannel::CInputStreamPVRChannel(IVideoPlayer* pPlayer, const CFileItem& fileitem)
-  : CInputStreamPVRBase(pPlayer, fileitem),
-    m_bDemuxActive(false)
+  : CInputStreamPVRBase(pPlayer, fileitem)
 {
 }
 
@@ -42,12 +41,15 @@ bool CInputStreamPVRChannel::OpenPVRStream()
     channel = CServiceBroker::GetPVRManager().ChannelGroups()->GetByPath(m_item.GetPath());
 
   if (!channel)
-    CLog::Log(LOGERROR, "CInputStreamPVRChannel - %s - unable to obtain channel instance for channel %s", __FUNCTION__, m_item.GetPath().c_str());
+    CLog::Log(LOGERROR,
+              "CInputStreamPVRChannel - {} - unable to obtain channel instance for channel {}",
+              __FUNCTION__, m_item.GetPath());
 
   if (channel && m_client && (m_client->OpenLiveStream(channel) == PVR_ERROR_NO_ERROR))
   {
     m_bDemuxActive = m_client->GetClientCapabilities().HandlesDemuxing();
-    CLog::Log(LOGDEBUG, "CInputStreamPVRChannel - %s - opened channel stream %s", __FUNCTION__, m_item.GetPath().c_str());
+    CLog::Log(LOGDEBUG, "CInputStreamPVRChannel - {} - opened channel stream {}", __FUNCTION__,
+              m_item.GetPath());
     return true;
   }
   return false;
@@ -58,7 +60,8 @@ void CInputStreamPVRChannel::ClosePVRStream()
   if (m_client && (m_client->CloseLiveStream() == PVR_ERROR_NO_ERROR))
   {
     m_bDemuxActive = false;
-    CLog::Log(LOGDEBUG, "CInputStreamPVRChannel - %s - closed channel stream %s", __FUNCTION__, m_item.GetPath().c_str());
+    CLog::Log(LOGDEBUG, "CInputStreamPVRChannel - {} - closed channel stream {}", __FUNCTION__,
+              m_item.GetPath());
   }
 }
 

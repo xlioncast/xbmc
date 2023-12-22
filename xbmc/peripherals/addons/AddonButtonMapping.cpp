@@ -14,6 +14,8 @@
 #include "peripherals/addons/AddonButtonMap.h"
 #include "utils/log.h"
 
+#include <memory>
+
 using namespace KODI;
 using namespace JOYSTICK;
 using namespace PERIPHERALS;
@@ -26,19 +28,19 @@ CAddonButtonMapping::CAddonButtonMapping(CPeripherals& manager,
 
   if (!addon)
   {
-    CLog::Log(LOGDEBUG, "Failed to locate add-on for \"%s\"", peripheral->DeviceName().c_str());
+    CLog::Log(LOGDEBUG, "Failed to locate add-on for \"{}\"", peripheral->DeviceName());
   }
   else
   {
     const std::string controllerId = mapper->ControllerID();
-    m_buttonMap.reset(new CAddonButtonMap(peripheral, addon, controllerId));
+    m_buttonMap = std::make_unique<CAddonButtonMap>(peripheral, addon, controllerId);
     if (m_buttonMap->Load())
     {
       IKeymap* keymap = peripheral->GetKeymap(controllerId);
-      m_buttonMapping.reset(new CButtonMapping(mapper, m_buttonMap.get(), keymap));
+      m_buttonMapping = std::make_unique<CButtonMapping>(mapper, m_buttonMap.get(), keymap);
 
       // Allow the mapper to save our button map
-      mapper->SetButtonMapCallback(peripheral->DeviceName(), this);
+      mapper->SetButtonMapCallback(peripheral->Location(), this);
     }
     else
       m_buttonMap.reset();
@@ -78,10 +80,10 @@ bool CAddonButtonMapping::OnAxisMotion(unsigned int axisIndex,
   return false;
 }
 
-void CAddonButtonMapping::ProcessAxisMotions(void)
+void CAddonButtonMapping::OnInputFrame(void)
 {
   if (m_buttonMapping)
-    m_buttonMapping->ProcessAxisMotions();
+    m_buttonMapping->OnInputFrame();
 }
 
 bool CAddonButtonMapping::OnKeyPress(const CKey& key)

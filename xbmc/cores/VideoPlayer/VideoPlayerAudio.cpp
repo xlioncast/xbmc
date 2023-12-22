@@ -16,11 +16,11 @@
 #include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SingleLock.h"
 #include "utils/MathUtils.h"
 #include "utils/log.h"
 
-#include "system.h"
+#include <mutex>
+
 #ifdef TARGET_RASPBERRY_PI
 #include "platform/linux/RBP.h"
 #endif
@@ -29,19 +29,17 @@
 #include <iomanip>
 #include <math.h>
 
+using namespace std::chrono_literals;
+
 class CDVDMsgAudioCodecChange : public CDVDMsg
 {
 public:
-  CDVDMsgAudioCodecChange(const CDVDStreamInfo &hints, CDVDAudioCodec* codec)
-    : CDVDMsg(GENERAL_STREAMCHANGE)
-    , m_codec(codec)
-    , m_hints(hints)
+  CDVDMsgAudioCodecChange(const CDVDStreamInfo& hints, std::unique_ptr<CDVDAudioCodec> codec)
+    : CDVDMsg(GENERAL_STREAMCHANGE), m_codec(std::move(codec)), m_hints(hints)
   {}
- ~CDVDMsgAudioCodecChange() override
-  {
-    delete m_codec;
-  }
-  CDVDAudioCodec* m_codec;
+  ~CDVDMsgAudioCodecChange() override = default;
+
+  std::unique_ptr<CDVDAudioCodec> m_codec;
   CDVDStreamInfo  m_hints;
 };
 
@@ -53,7 +51,6 @@ CVideoPlayerAudio::CVideoPlayerAudio(CDVDClock* pClock, CDVDMessageQueue& parent
 , m_audioSink(pClock)
 {
   m_pClock = pClock;
-  m_pAudioCodec = NULL;
   m_audioClock = 0;
   m_speed = DVD_PLAYSPEED_NORMAL;
   m_stalled = true;
@@ -64,8 +61,10 @@ CVideoPlayerAudio::CVideoPlayerAudio(CDVDClock* pClock, CDVDMessageQueue& parent
   m_prevskipped = false;
   m_maxspeedadjust = 0.0;
 
-  m_messageQueue.SetMaxDataSize(6 * 1024 * 1024);
+  // 18 MB allows max bitrate of 18 Mbit/s (TrueHD max peak) during 8 seconds
+  m_messageQueue.SetMaxDataSize(18 * 1024 * 1024);
   m_messageQueue.SetMaxTimeSize(8.0);
+  m_disconAdjustTimeMs = processInfo.GetMaxPassthroughOffSyncDuration();
 }
 
 CVideoPlayerAudio::~CVideoPlayerAudio()
@@ -78,16 +77,15 @@ CVideoPlayerAudio::~CVideoPlayerAudio()
 
 bool CVideoPlayerAudio::OpenStream(CDVDStreamInfo hints)
 {
-  CLog::Log(LOGINFO, "Finding audio codec for: %i", hints.codec);
+  CLog::Log(LOGINFO, "Finding audio codec for: {}", hints.codec);
   bool allowpassthrough = !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
   if (m_processInfo.IsRealtimeStream())
     allowpassthrough = false;
 
   CAEStreamInfo::DataType streamType =
       m_audioSink.GetPassthroughStreamType(hints.codec, hints.samplerate, hints.profile);
-  CDVDAudioCodec* codec = CDVDFactoryCodec::CreateAudioCodec(hints, m_processInfo,
-                                                             allowpassthrough, m_processInfo.AllowDTSHDDecode(),
-                                                             streamType);
+  std::unique_ptr<CDVDAudioCodec> codec = CDVDFactoryCodec::CreateAudioCodec(
+      hints, m_processInfo, allowpassthrough, m_processInfo.AllowDTSHDDecode(), streamType);
   if(!codec)
   {
     CLog::Log(LOGERROR, "Unsupported audio codec");
@@ -95,10 +93,10 @@ bool CVideoPlayerAudio::OpenStream(CDVDStreamInfo hints)
   }
 
   if(m_messageQueue.IsInited())
-    m_messageQueue.Put(new CDVDMsgAudioCodecChange(hints, codec), 0);
+    m_messageQueue.Put(std::make_shared<CDVDMsgAudioCodecChange>(hints, std::move(codec)), 0);
   else
   {
-    OpenStream(hints, codec);
+    OpenStream(hints, std::move(codec));
     m_messageQueue.Init();
     CLog::Log(LOGINFO, "Creating audio thread");
     Create();
@@ -106,10 +104,9 @@ bool CVideoPlayerAudio::OpenStream(CDVDStreamInfo hints)
   return true;
 }
 
-void CVideoPlayerAudio::OpenStream(CDVDStreamInfo &hints, CDVDAudioCodec* codec)
+void CVideoPlayerAudio::OpenStream(CDVDStreamInfo& hints, std::unique_ptr<CDVDAudioCodec> codec)
 {
-  SAFE_DELETE(m_pAudioCodec);
-  m_pAudioCodec = codec;
+  m_pAudioCodec = std::move(codec);
 
   m_processInfo.ResetAudioCodecInfo();
 
@@ -140,11 +137,14 @@ void CVideoPlayerAudio::OpenStream(CDVDStreamInfo &hints, CDVDAudioCodec* codec)
   else if (m_processInfo.IsRealtimeStream())
     m_synctype = SYNC_RESAMPLE;
 
+  if (m_synctype == SYNC_DISCON)
+    CLog::LogF(LOGINFO, "Allowing max Out-Of-Sync Value of {} ms", m_disconAdjustTimeMs);
+
   m_prevskipped = false;
 
   m_maxspeedadjust = 5.0;
 
-  m_messageParent.Put(new CDVDMsg(CDVDMsg::PLAYER_AVCHANGE));
+  m_messageParent.Put(std::make_shared<CDVDMsg>(CDVDMsg::PLAYER_AVCHANGE));
   m_syncState = IDVDStreamPlayer::SYNC_STARTING;
 }
 
@@ -186,8 +186,7 @@ void CVideoPlayerAudio::CloseStream(bool bWaitForBuffers)
   if (m_pAudioCodec)
   {
     m_pAudioCodec->Dispose();
-    delete m_pAudioCodec;
-    m_pAudioCodec = NULL;
+    m_pAudioCodec.reset();
   }
 }
 
@@ -201,9 +200,13 @@ void CVideoPlayerAudio::UpdatePlayerInfo()
   s << "aq:"     << std::setw(2) << std::min(99,m_messageQueue.GetLevel()) << "%";
   s << ", Kb/s:" << std::fixed << std::setprecision(2) << m_audioStats.GetBitrate() / 1024.0;
 
+  // print a/v discontinuity adjustments counter when audio is not resampled (passthrough mode)
+  if (m_synctype == SYNC_DISCON)
+    s << ", a/v corrections (" << m_disconAdjustTimeMs << "ms): " << m_disconAdjustCounter;
+
   //print the inverse of the resample ratio, since that makes more sense
   //if the resample ratio is 0.5, then we're playing twice as fast
-  if (m_synctype == SYNC_RESAMPLE)
+  else if (m_synctype == SYNC_RESAMPLE)
     s << ", rr:" << std::fixed << std::setprecision(5) << 1.0 / m_audioSink.GetResampleRatio();
 
   SInfo info;
@@ -211,7 +214,8 @@ void CVideoPlayerAudio::UpdatePlayerInfo()
   info.pts         = m_audioSink.GetPlayingPts();
   info.passthrough = m_pAudioCodec && m_pAudioCodec->NeedPassthrough();
 
-  { CSingleLock lock(m_info_section);
+  {
+    std::unique_lock<CCriticalSection> lock(m_info_section);
     m_info = info;
   }
 }
@@ -224,13 +228,27 @@ void CVideoPlayerAudio::Process()
   audioframe.nb_frames = 0;
   audioframe.framesOut = 0;
   m_audioStats.Start();
+  m_disconAdjustCounter = 0;
+
+  // Only enable "learning" if advancedsettings m_maxPassthroughOffSyncDuration
+  // not exists or has it's default 10 ms value, otherwise use advancedsettings value
+  if (m_disconAdjustTimeMs == 10)
+  {
+    m_disconTimer.Set(30s);
+    m_disconLearning = true;
+  }
+  else
+  {
+    m_disconLearning = false;
+  }
 
   bool onlyPrioMsgs = false;
 
   while (!m_bStop)
   {
-    CDVDMsg* pMsg;
-    int timeout = (int)(1000 * m_audioSink.GetCacheTime());
+    std::shared_ptr<CDVDMsg> pMsg;
+    auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::duration<double, std::ratio<1>>(m_audioSink.GetCacheTime()));
 
     // read next packet and return -1 on error
     int priority = 1;
@@ -250,16 +268,18 @@ void CVideoPlayerAudio::Process()
     if (onlyPrioMsgs)
     {
       priority = 1;
-      timeout = 0;
+      timeout = 0ms;
     }
 
-    MsgQueueReturnCode ret = m_messageQueue.Get(&pMsg, timeout, priority);
+    MsgQueueReturnCode ret = m_messageQueue.Get(pMsg, timeout, priority);
 
     onlyPrioMsgs = false;
 
     if (MSGQ_IS_ERROR(ret))
     {
-      CLog::Log(LOGERROR, "Got MSGQ_ABORT or MSGO_IS_ERROR return true");
+      if (!m_messageQueue.ReceivedAbortRequest())
+        CLog::Log(LOGERROR, "MSGQ_IS_ERROR returned true ({})", ret);
+
       break;
     }
     else if (ret == MSGQ_TIMEOUT)
@@ -284,8 +304,8 @@ void CVideoPlayerAudio::Process()
           m_stalled = true;
         }
       }
-      if (timeout == 0)
-        CThread::Sleep(10);
+      if (timeout == 0ms)
+        CThread::Sleep(10ms);
 
       continue;
     }
@@ -293,16 +313,17 @@ void CVideoPlayerAudio::Process()
     // handle messages
     if (pMsg->IsType(CDVDMsg::GENERAL_SYNCHRONIZE))
     {
-      if (static_cast<CDVDMsgGeneralSynchronize*>(pMsg)->Wait(100, SYNCSOURCE_AUDIO))
+      if (std::static_pointer_cast<CDVDMsgGeneralSynchronize>(pMsg)->Wait(100ms, SYNCSOURCE_AUDIO))
         CLog::Log(LOGDEBUG, "CVideoPlayerAudio - CDVDMsg::GENERAL_SYNCHRONIZE");
       else
-        m_messageQueue.Put(pMsg->Acquire(), 1);  // push back as prio message, to process other prio messages
+        m_messageQueue.Put(pMsg, 1); // push back as prio message, to process other prio messages
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_RESYNC))
     { //player asked us to set internal clock
-      double pts = static_cast<CDVDMsgDouble*>(pMsg)->m_value;
-      CLog::Log(LOGDEBUG, "CVideoPlayerAudio - CDVDMsg::GENERAL_RESYNC(%f), level: %d, cache: %f",
-                pts, m_messageQueue.GetLevel(), m_audioSink.GetDelay());
+      double pts = std::static_pointer_cast<CDVDMsgDouble>(pMsg)->m_value;
+      CLog::Log(LOGDEBUG,
+                "CVideoPlayerAudio - CDVDMsg::GENERAL_RESYNC({:f}), level: {}, cache: {:f}", pts,
+                m_messageQueue.GetLevel(), m_audioSink.GetDelay());
 
       double delay = m_audioSink.GetDelay();
       if (pts > m_audioClock - delay + 0.5 * DVD_TIME_BASE)
@@ -313,7 +334,7 @@ void CVideoPlayerAudio::Process()
       if (m_speed != DVD_PLAYSPEED_PAUSE)
         m_audioSink.Resume();
       m_syncState = IDVDStreamPlayer::SYNC_INSYNC;
-      m_syncTimer.Set(3000);
+      m_syncTimer.Set(3000ms);
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))
     {
@@ -327,7 +348,7 @@ void CVideoPlayerAudio::Process()
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH))
     {
-      bool sync = static_cast<CDVDMsgBool*>(pMsg)->m_value;
+      bool sync = std::static_pointer_cast<CDVDMsgBool>(pMsg)->m_value;
       m_audioSink.Flush();
       m_stalled = true;
       m_audioClock = 0;
@@ -348,7 +369,7 @@ void CVideoPlayerAudio::Process()
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_SETSPEED))
     {
-      double speed = static_cast<CDVDMsgInt*>(pMsg)->m_value;
+      double speed = std::static_pointer_cast<CDVDMsgInt>(pMsg)->m_value;
 
       if (m_processInfo.IsTempoAllowed(static_cast<float>(speed)/DVD_PLAYSPEED_NORMAL))
       {
@@ -369,40 +390,50 @@ void CVideoPlayerAudio::Process()
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_STREAMCHANGE))
     {
-      CDVDMsgAudioCodecChange* msg(static_cast<CDVDMsgAudioCodecChange*>(pMsg));
-      OpenStream(msg->m_hints, msg->m_codec);
+      auto msg = std::static_pointer_cast<CDVDMsgAudioCodecChange>(pMsg);
+      OpenStream(msg->m_hints, std::move(msg->m_codec));
       msg->m_codec = NULL;
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_PAUSE))
     {
-      m_paused = static_cast<CDVDMsgBool*>(pMsg)->m_value;
-      CLog::Log(LOGDEBUG, "CVideoPlayerAudio - CDVDMsg::GENERAL_PAUSE: %d", m_paused);
+      m_paused = std::static_pointer_cast<CDVDMsgBool>(pMsg)->m_value;
+      CLog::Log(LOGDEBUG, "CVideoPlayerAudio - CDVDMsg::GENERAL_PAUSE: {}", m_paused);
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_REQUEST_STATE))
     {
       SStateMsg msg;
       msg.player = VideoPlayer_AUDIO;
       msg.syncState = m_syncState;
-      m_messageParent.Put(new CDVDMsgType<SStateMsg>(CDVDMsg::PLAYER_REPORT_STATE, msg));
+      m_messageParent.Put(
+          std::make_shared<CDVDMsgType<SStateMsg>>(CDVDMsg::PLAYER_REPORT_STATE, msg));
     }
     else if (pMsg->IsType(CDVDMsg::DEMUXER_PACKET))
     {
-      DemuxPacket* pPacket = static_cast<CDVDMsgDemuxerPacket*>(pMsg)->GetPacket();
-      bool bPacketDrop  = static_cast<CDVDMsgDemuxerPacket*>(pMsg)->GetPacketDrop();
+      DemuxPacket* pPacket = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg)->GetPacket();
+      bool bPacketDrop = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg)->GetPacketDrop();
 
-      if (bPacketDrop ||
-          (!m_processInfo.IsTempoAllowed(static_cast<float>(m_speed)/DVD_PLAYSPEED_NORMAL) &&
-           m_syncState == IDVDStreamPlayer::SYNC_INSYNC))
+      if (bPacketDrop)
       {
-        pMsg->Release();
+        if (m_syncState != IDVDStreamPlayer::SYNC_STARTING)
+        {
+          m_audioSink.Drain();
+          m_audioSink.Flush();
+          audioframe.nb_frames = 0;
+        }
+        m_syncState = IDVDStreamPlayer::SYNC_STARTING;
+        continue;
+      }
+
+      if (!m_processInfo.IsTempoAllowed(static_cast<float>(m_speed) / DVD_PLAYSPEED_NORMAL) &&
+          m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
+      {
         continue;
       }
 
       if (!m_pAudioCodec->AddData(*pPacket))
       {
-        m_messageQueue.PutBack(pMsg->Acquire());
+        m_messageQueue.PutBack(pMsg);
         onlyPrioMsgs = true;
-        pMsg->Release();
         continue;
       }
 
@@ -413,10 +444,11 @@ void CVideoPlayerAudio::Process()
       {
         onlyPrioMsgs = true;
       }
-
-    } // demuxer packet
-
-    pMsg->Release();
+    }
+    else if (pMsg->IsType(CDVDMsg::PLAYER_DISPLAY_RESET))
+    {
+      m_displayReset = true;
+    }
   }
 }
 
@@ -469,6 +501,17 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
       }
     }
 
+    // Display reset event has occurred
+    // See if we should enable passthrough
+    if (m_displayReset)
+    {
+      if (SwitchCodecIfNeeded())
+      {
+        audioframe.nb_frames = 0;
+        return false;
+      }
+    }
+
     // demuxer reads metatags that influence channel layout
     if (m_streaminfo.codec == AV_CODEC_ID_FLAC && m_streaminfo.channellayout)
       audioframe.format.m_channelLayout = CAEUtil::GetAEChannelLayout(m_streaminfo.channellayout);
@@ -482,13 +525,16 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
       m_audioSink.Destroy(false);
 
       if (!m_audioSink.Create(audioframe, m_streaminfo.codec, m_synctype == SYNC_RESAMPLE))
-        CLog::Log(LOGERROR, "%s - failed to create audio renderer", __FUNCTION__);
+        CLog::Log(LOGERROR, "{} - failed to create audio renderer", __FUNCTION__);
 
-      m_audioSink.SetDynamicRangeCompression((long)(m_processInfo.GetVideoSettings().m_VolumeAmplification * 100));
+      m_prevsynctype = -1;
 
       if (m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
         m_audioSink.Resume();
     }
+
+    m_audioSink.SetDynamicRangeCompression(
+        static_cast<long>(m_processInfo.GetVideoSettings().m_VolumeAmplification * 100));
 
     SetSyncType(audioframe.passthrough);
 
@@ -499,15 +545,33 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
     audioframe.hasDownmix = true;
   }
 
-
+  if (m_synctype == SYNC_DISCON)
   {
     double syncerror = m_audioSink.GetSyncError();
-    if (m_synctype == SYNC_DISCON && fabs(syncerror) > DVD_MSEC_TO_TIME(10))
+
+    if (m_disconLearning)
+    {
+      const double syncErr = std::abs(syncerror);
+      if (syncErr > DVD_MSEC_TO_TIME(m_disconAdjustTimeMs))
+        m_disconAdjustTimeMs = DVD_TIME_TO_MSEC(syncErr);
+      if (m_disconTimer.IsTimePast())
+      {
+        m_disconLearning = false;
+        m_disconAdjustTimeMs = (static_cast<double>(m_disconAdjustTimeMs) * 1.15) + 5.0;
+        if (m_disconAdjustTimeMs > 100) // sanity check
+          m_disconAdjustTimeMs = 100;
+
+        CLog::LogF(LOGINFO, "Changed max allowed Out-Of-Sync value to {} ms due self-learning",
+                   m_disconAdjustTimeMs);
+      }
+    }
+    else if (std::abs(syncerror) > DVD_MSEC_TO_TIME(m_disconAdjustTimeMs))
     {
       double correction = m_pClock->ErrorAdjust(syncerror, "CVideoPlayerAudio::OutputPacket");
       if (correction != 0)
       {
         m_audioSink.SetSyncErrorCorrection(-correction);
+        m_disconAdjustCounter++;
       }
     }
   }
@@ -533,14 +597,14 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
       msg.cachetotal = m_audioSink.GetMaxDelay() * DVD_TIME_BASE;
       msg.cachetime = m_audioSink.GetDelay();
       msg.timestamp = audioframe.hasTimestamp ? audioframe.pts : DVD_NOPTS_VALUE;
-      m_messageParent.Put(new CDVDMsgType<SStartMsg>(CDVDMsg::PLAYER_STARTED, msg));
+      m_messageParent.Put(std::make_shared<CDVDMsgType<SStartMsg>>(CDVDMsg::PLAYER_STARTED, msg));
 
       m_streaminfo.channels = audioframe.format.m_channelLayout.Count();
       m_processInfo.SetAudioChannels(audioframe.format.m_channelLayout);
       m_processInfo.SetAudioSampleRate(audioframe.format.m_sampleRate);
       m_processInfo.SetAudioBitsPerSample(audioframe.bits_per_sample);
       m_processInfo.SetAudioDecoderName(m_pAudioCodec->GetName());
-      m_messageParent.Put(new CDVDMsg(CDVDMsg::PLAYER_AVCHANGE));
+      m_messageParent.Put(std::make_shared<CDVDMsg>(CDVDMsg::PLAYER_AVCHANGE));
     }
   }
 
@@ -563,7 +627,8 @@ void CVideoPlayerAudio::SetSyncType(bool passthrough)
   {
     const char *synctypes[] = {"clock feedback", "resample", "invalid"};
     int synctype = (m_synctype >= 0 && m_synctype <= 1) ? m_synctype : 2;
-    CLog::Log(LOGDEBUG, "CVideoPlayerAudio:: synctype set to %i: %s", m_synctype, synctypes[synctype]);
+    CLog::Log(LOGDEBUG, "CVideoPlayerAudio:: synctype set to {}: {}", m_synctype,
+              synctypes[synctype]);
     m_prevsynctype = m_synctype;
     if (m_synctype == SYNC_RESAMPLE)
       m_audioSink.SetResampleMode(1);
@@ -584,7 +649,7 @@ void CVideoPlayerAudio::OnExit()
 void CVideoPlayerAudio::SetSpeed(int speed)
 {
   if(m_messageQueue.IsInited())
-    m_messageQueue.Put( new CDVDMsgInt(CDVDMsg::PLAYER_SETSPEED, speed), 1 );
+    m_messageQueue.Put(std::make_shared<CDVDMsgInt>(CDVDMsg::PLAYER_SETSPEED, speed), 1);
   else
     m_speed = speed;
 }
@@ -592,7 +657,7 @@ void CVideoPlayerAudio::SetSpeed(int speed)
 void CVideoPlayerAudio::Flush(bool sync)
 {
   m_messageQueue.Flush();
-  m_messageQueue.Put( new CDVDMsgBool(CDVDMsg::GENERAL_FLUSH, sync), 1);
+  m_messageQueue.Put(std::make_shared<CDVDMsgBool>(CDVDMsg::GENERAL_FLUSH, sync), 1);
 
   m_audioSink.AbortAddPackets();
 }
@@ -605,33 +670,36 @@ bool CVideoPlayerAudio::AcceptsData() const
 
 bool CVideoPlayerAudio::SwitchCodecIfNeeded()
 {
-  CLog::Log(LOGDEBUG, "CVideoPlayerAudio: stream props changed, checking for passthrough");
+  if (m_displayReset)
+    CLog::Log(LOGINFO, "CVideoPlayerAudio: display reset occurred, checking for passthrough");
+  else
+    CLog::Log(LOGDEBUG, "CVideoPlayerAudio: stream props changed, checking for passthrough");
+
+  m_displayReset = false;
+
   bool allowpassthrough = !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
   if (m_processInfo.IsRealtimeStream() || m_synctype == SYNC_RESAMPLE)
     allowpassthrough = false;
 
   CAEStreamInfo::DataType streamType = m_audioSink.GetPassthroughStreamType(
       m_streaminfo.codec, m_streaminfo.samplerate, m_streaminfo.profile);
-  CDVDAudioCodec *codec = CDVDFactoryCodec::CreateAudioCodec(m_streaminfo, m_processInfo,
-                                                             allowpassthrough, m_processInfo.AllowDTSHDDecode(),
-                                                             streamType);
+  std::unique_ptr<CDVDAudioCodec> codec = CDVDFactoryCodec::CreateAudioCodec(
+      m_streaminfo, m_processInfo, allowpassthrough, m_processInfo.AllowDTSHDDecode(), streamType);
 
   if (!codec || codec->NeedPassthrough() == m_pAudioCodec->NeedPassthrough())
   {
     // passthrough state has not changed
-    delete codec;
     return false;
   }
 
-  delete m_pAudioCodec;
-  m_pAudioCodec = codec;
+  m_pAudioCodec = std::move(codec);
 
   return true;
 }
 
 std::string CVideoPlayerAudio::GetPlayerInfo()
 {
-  CSingleLock lock(m_info_section);
+  std::unique_lock<CCriticalSection> lock(m_info_section);
   return m_info.info;
 }
 
@@ -642,6 +710,6 @@ int CVideoPlayerAudio::GetAudioChannels()
 
 bool CVideoPlayerAudio::IsPassthrough() const
 {
-  CSingleLock lock(m_info_section);
+  std::unique_lock<CCriticalSection> lock(m_info_section);
   return m_info.passthrough;
 }

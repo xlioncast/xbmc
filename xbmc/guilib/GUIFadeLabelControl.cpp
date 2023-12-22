@@ -85,7 +85,7 @@ void CGUIFadeLabelControl::Process(unsigned int currentTime, CDirtyRegionList &d
     if (width < m_width) // append spaces for scrolling
       numSpaces += (unsigned int)((m_width - width) / spaceWidth) + 1;
     m_shortText = (width + m_label.offsetX) < m_width;
-    m_scrollInfo.suffix.assign(numSpaces, ' ');
+    m_scrollInfo.m_suffix.assign(numSpaces, ' ');
     if (m_resetOnLabelChange)
     {
       m_scrollInfo.Reset();
@@ -110,17 +110,17 @@ void CGUIFadeLabelControl::Process(unsigned int currentTime, CDirtyRegionList &d
     bool moveToNextLabel = false;
     if (!m_scrollOut)
     {
-      if (m_scrollInfo.pixelPos + m_width > m_scrollInfo.m_textWidth)
+      if (m_scrollInfo.m_pixelPos + m_width > m_scrollInfo.m_textWidth)
       {
         if (m_fadeAnim.GetProcess() != ANIM_PROCESS_NORMAL)
           m_fadeAnim.QueueAnimation(ANIM_PROCESS_NORMAL);
         moveToNextLabel = true;
       }
     }
-    else if (m_scrollInfo.pixelPos > m_scrollInfo.m_textWidth)
+    else if (m_scrollInfo.m_pixelPos > m_scrollInfo.m_textWidth)
       moveToNextLabel = true;
 
-    if(m_scrollInfo.pixelSpeed || m_fadeAnim.GetState() == ANIM_STATE_IN_PROCESS)
+    if (m_scrollInfo.m_pixelSpeed || m_fadeAnim.GetState() == ANIM_STATE_IN_PROCESS)
       MarkDirtyRegion();
 
     // apply the fading animation
@@ -151,6 +151,7 @@ void CGUIFadeLabelControl::Process(unsigned int currentTime, CDirtyRegionList &d
     if (m_scroll)
     {
       m_textLayout.UpdateScrollinfo(m_scrollInfo);
+      MarkDirtyRegion();
     }
 
     CServiceBroker::GetWinSystem()->GetGfxContext().RemoveTransform();
@@ -159,9 +160,9 @@ void CGUIFadeLabelControl::Process(unsigned int currentTime, CDirtyRegionList &d
   CGUIControl::Process(currentTime, dirtyregions);
 }
 
-bool CGUIFadeLabelControl::UpdateColors()
+bool CGUIFadeLabelControl::UpdateColors(const CGUIListItem* item)
 {
-  bool changed = CGUIControl::UpdateColors();
+  bool changed = CGUIControl::UpdateColors(nullptr);
   changed |= m_label.UpdateColors();
 
   return changed;
@@ -184,7 +185,7 @@ void CGUIFadeLabelControl::Render()
     if (m_label.align & XBFONT_CENTER_X)
       posX = m_posX + m_width * 0.5f;
     else if (m_label.align & XBFONT_RIGHT)
-      posX = m_posX + m_width;
+      posX = m_posX + m_width - m_textLayout.GetTextWidth();
     m_textLayout.Render(posX, posY, m_label.angle, m_label.textColor, m_label.shadowColor, m_label.align, m_width - m_label.offsetX);
     CGUIControl::Render();
     return;
@@ -198,7 +199,7 @@ void CGUIFadeLabelControl::Render()
     if (m_label.align & XBFONT_CENTER_X)
       posX = m_posX + m_width * 0.5f;
     else if (m_label.align & XBFONT_RIGHT)
-      posX = m_posX + m_width;
+      posX = m_posX + m_width - m_textLayout.GetTextWidth();
     m_textLayout.Render(posX, posY, 0, m_label.textColor, m_label.shadowColor, m_label.align, m_width);
   }
   else

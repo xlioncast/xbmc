@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "utils/TransformMatrix.h"
-#include "ShaderFormats.h"
+#include "ConversionMatrix.h"
 #include "GLSLOutput.h"
-#include "guilib/Shader.h"
+#include "ShaderFormats.h"
 #include "cores/VideoSettings.h"
+#include "guilib/Shader.h"
+#include "utils/TransformMatrix.h"
 
 #include <memory>
 
@@ -24,14 +25,19 @@ extern "C" {
 class CConvertMatrix;
 
 namespace Shaders {
+namespace GL
+{
 
 class BaseYUV2RGBGLSLShader : public CGLSLShaderProgram
 {
 public:
-  BaseYUV2RGBGLSLShader(bool rect, EShaderFormat format, bool stretch,
-                        AVColorPrimaries dst, AVColorPrimaries src,
+  BaseYUV2RGBGLSLShader(bool rect,
+                        EShaderFormat format,
+                        bool stretch,
+                        AVColorPrimaries dst,
+                        AVColorPrimaries src,
                         bool toneMap,
-                        int toneMapMethod,
+                        ETONEMAPMETHOD toneMapMethod,
                         std::shared_ptr<GLSLOutput> output);
   ~BaseYUV2RGBGLSLShader() override;
 
@@ -43,10 +49,11 @@ public:
   void SetBlack(float black) { m_black = black; }
   void SetContrast(float contrast) { m_contrast = contrast; }
   void SetNonLinStretch(float stretch) { m_stretch = stretch; }
-  void SetDisplayMetadata(bool hasDisplayMetadata, AVMasteringDisplayMetadata displayMetadata,
-                          bool hasLightMetadata, AVContentLightMetadata lightMetadata);
-  void SetToneMapParam(int method, float param);
-  float GetLuminanceValue() const;
+  void SetDisplayMetadata(bool hasDisplayMetadata,
+                          const AVMasteringDisplayMetadata& displayMetadata,
+                          bool hasLightMetadata,
+                          AVContentLightMetadata lightMetadata);
+  void SetToneMapParam(ETONEMAPMETHOD method, float param);
 
   void SetConvertFullColorRange(bool convertFullRange) { m_convertFullRange = convertFullRange; }
 
@@ -75,8 +82,10 @@ protected:
   bool m_hasLightMetadata = false;
   AVContentLightMetadata m_lightMetadata;
   bool m_toneMapping = false;
-  int m_toneMappingMethod = VS_TONEMAPMETHOD_REINHARD;
+  ETONEMAPMETHOD m_toneMappingMethod = VS_TONEMAPMETHOD_REINHARD;
   float m_toneMappingParam = 1.0;
+
+  bool m_colorConversion{false};
 
   float m_black;
   float m_contrast;
@@ -89,7 +98,7 @@ protected:
   std::string m_defines;
 
   std::shared_ptr<Shaders::GLSLOutput> m_glslOutput;
-  std::shared_ptr<CConvertMatrix> m_pConvMatrix;
+  CConvertMatrix m_convMatrix;
 
   // pixel shader attribute handles
   GLint m_hYTex = -1;
@@ -121,9 +130,10 @@ public:
   YUV2RGBProgressiveShader(bool rect,
                            EShaderFormat format,
                            bool stretch,
-                           AVColorPrimaries dstPrimaries, AVColorPrimaries srcPrimaries,
+                           AVColorPrimaries dstPrimaries,
+                           AVColorPrimaries srcPrimaries,
                            bool toneMap,
-                           int toneMapMethod,
+                           ETONEMAPMETHOD toneMapMethod,
                            std::shared_ptr<GLSLOutput> output);
 };
 
@@ -133,9 +143,10 @@ public:
   YUV2RGBFilterShader4(bool rect,
                        EShaderFormat format,
                        bool stretch,
-                       AVColorPrimaries dstPrimaries, AVColorPrimaries srcPrimaries,
+                       AVColorPrimaries dstPrimaries,
+                       AVColorPrimaries srcPrimaries,
                        bool toneMap,
-                       int toneMapMethod,
+                       ETONEMAPMETHOD toneMapMethod,
                        ESCALINGMETHOD method,
                        std::shared_ptr<GLSLOutput> output);
   ~YUV2RGBFilterShader4() override;
@@ -149,5 +160,6 @@ protected:
   ESCALINGMETHOD m_scaling = VS_SCALINGMETHOD_LANCZOS3_FAST;
 };
 
+} // namespace GL
 } // end namespace
 

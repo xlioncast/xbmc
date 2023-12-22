@@ -33,7 +33,7 @@ public:
   void GetData(DVDAudioFrame &frame) override;
   void Reset() override;
   AEAudioFormat GetFormat() override { return m_format; }
-  std::string GetName() override { return m_codecName; };
+  std::string GetName() override { return m_codecName; }
   enum AVMatrixEncoding GetMatrixEncoding() override;
   enum AVAudioServiceType GetAudioServiceType() override;
   int GetProfile() override;
@@ -49,7 +49,7 @@ protected:
 
   AEAudioFormat m_format;
   AVCodecContext* m_pCodecContext;
-  enum AVSampleFormat m_iSampleFormat;
+  enum AVSampleFormat m_iSampleFormat = AV_SAMPLE_FMT_NONE;
   CAEChannelInfo m_channelLayout;
   enum AVMatrixEncoding m_matrixEncoding = AV_MATRIX_ENCODING_NONE;
   AVFrame* m_pFrame;
@@ -59,5 +59,6 @@ protected:
   int m_channels;
   uint64_t m_layout;
   std::string m_codecName;
+  uint64_t m_hint_layout;
 };
 

@@ -17,11 +17,10 @@
 #include "GUIFontTTF.h"
 
 #include <list>
+#include <memory>
 #include <vector>
 
 #include <wrl/client.h>
-
-#define ELEMENT_ARRAY_MAX_CHAR_INDEX (2000)
 
 /*!
  \ingroup textures
@@ -30,13 +29,13 @@
 class CGUIFontTTFDX : public CGUIFontTTF, public ID3DResource
 {
 public:
-  explicit CGUIFontTTFDX(const std::string& strFileName);
+  explicit CGUIFontTTFDX(const std::string& fontIdent);
   virtual ~CGUIFontTTFDX(void);
 
   bool FirstBegin() override;
   void LastEnd() override;
-  CVertexBuffer CreateVertexBuffer(const std::vector<SVertex> &vertices) const override;
-  void DestroyVertexBuffer(CVertexBuffer &bufferHandle) const override;
+  CVertexBuffer CreateVertexBuffer(const std::vector<SVertex>& vertices) const override;
+  void DestroyVertexBuffer(CVertexBuffer& bufferHandle) const override;
 
   void OnDestroyDevice(bool fatal) override;
   void OnCreateDevice() override;
@@ -45,8 +44,12 @@ public:
   static void DestroyStaticIndexBuffer(void);
 
 protected:
-  CTexture* ReallocTexture(unsigned int& newHeight) override;
-  bool CopyCharToTexture(FT_BitmapGlyph bitGlyph, unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2) override;
+  std::unique_ptr<CTexture> ReallocTexture(unsigned int& newHeight) override;
+  bool CopyCharToTexture(FT_BitmapGlyph bitGlyph,
+                         unsigned int x1,
+                         unsigned int y1,
+                         unsigned int x2,
+                         unsigned int y2) override;
   void DeleteHardwareTexture() override;
 
 private:
@@ -54,12 +57,11 @@ private:
   static void AddReference(CGUIFontTTFDX* font, CD3DBuffer* pBuffer);
   static void ClearReference(CGUIFontTTFDX* font, CD3DBuffer* pBuffer);
 
-  unsigned m_vertexWidth;
-  CD3DTexture* m_speedupTexture;  // extra texture to speed up reallocations
+  unsigned m_vertexWidth{0};
+  std::unique_ptr<CD3DTexture> m_speedupTexture; // extra texture to speed up reallocations
   Microsoft::WRL::ComPtr<ID3D11Buffer> m_vertexBuffer;
   std::list<CD3DBuffer*> m_buffers;
 
   static bool m_staticIndexBufferCreated;
   static Microsoft::WRL::ComPtr<ID3D11Buffer> m_staticIndexBuffer;
 };
-

@@ -8,29 +8,28 @@
 
 #include "addons/kodi-dev-kit/include/kodi/gui/Window.h"
 
-#include "Application.h"
 #include "FileItem.h"
 #include "GUITranslator.h"
 #include "General.h"
 #include "ServiceBroker.h"
 #include "Window.h"
 #include "addons/Skin.h"
+#include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "addons/binary-addons/AddonDll.h"
+#include "application/Application.h"
 #include "controls/Rendering.h"
-#include "filesystem/File.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIRenderingControl.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/TextureManager.h"
 #include "input/Key.h"
 #include "messaging/ApplicationMessenger.h"
+#include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
-
-using namespace ADDON;
-using namespace KODI::MESSAGING;
 
 namespace ADDON
 {
@@ -136,10 +135,11 @@ KODI_GUI_WINDOW_HANDLE Interface_GUIWindow::create(KODI_HANDLE kodiBase,
   RESOLUTION_INFO res;
   std::string strSkinPath = g_SkinInfo->GetSkinPath(xml_filename, &res);
 
-  if (!XFILE::CFile::Exists(strSkinPath))
+  if (!CFileUtils::Exists(strSkinPath))
   {
     std::string str("none");
-    ADDON::AddonInfoPtr addonInfo = std::make_shared<ADDON::CAddonInfo>(str, ADDON::ADDON_SKIN);
+    ADDON::AddonInfoPtr addonInfo =
+        std::make_shared<ADDON::CAddonInfo>(str, ADDON::AddonType::SKIN);
 
     // Check for the matching folder for the skin in the fallback skins folder
     std::string fallbackPath = URIUtils::AddFileToFolder(addon->Path(), "resources", "skins");
@@ -148,7 +148,7 @@ KODI_GUI_WINDOW_HANDLE Interface_GUIWindow::create(KODI_HANDLE kodiBase,
     strSkinPath = g_SkinInfo->GetSkinPath(xml_filename, &res, basePath);
 
     // Check for the matching folder for the skin in the fallback skins folder (if it exists)
-    if (XFILE::CFile::Exists(basePath))
+    if (CFileUtils::Exists(basePath))
     {
       addonInfo->SetPath(basePath);
       const std::shared_ptr<ADDON::CSkinInfo> skinInfo =
@@ -157,7 +157,7 @@ KODI_GUI_WINDOW_HANDLE Interface_GUIWindow::create(KODI_HANDLE kodiBase,
       strSkinPath = skinInfo->GetSkinPath(xml_filename, &res);
     }
 
-    if (!XFILE::CFile::Exists(strSkinPath))
+    if (!CFileUtils::Exists(strSkinPath))
     {
       // Finally fallback to the DefaultSkin as it didn't exist in either the Kodi Skin folder or the fallback skin folder
       addonInfo->SetPath(URIUtils::AddFileToFolder(fallbackPath, default_skin));
@@ -166,7 +166,7 @@ KODI_GUI_WINDOW_HANDLE Interface_GUIWindow::create(KODI_HANDLE kodiBase,
 
       skinInfo->Start();
       strSkinPath = skinInfo->GetSkinPath(xml_filename, &res);
-      if (!XFILE::CFile::Exists(strSkinPath))
+      if (!CFileUtils::Exists(strSkinPath))
       {
         CLog::Log(LOGERROR,
                   "Interface_GUIWindow::{}: {}/{} - XML File '{}' for Window is missing, contact "
@@ -1167,15 +1167,7 @@ int Interface_GUIWindow::GetNextAvailableWindowId()
 
 CGUIAddonWindow::CGUIAddonWindow(int id, const std::string& strXML, CAddonDll* addon, bool isMedia)
   : CGUIMediaWindow(id, strXML.c_str()),
-    m_clientHandle{nullptr},
-    CBOnInit{nullptr},
-    CBOnFocus{nullptr},
-    CBOnClick{nullptr},
-    CBOnAction{nullptr},
-    CBGetContextButtons{nullptr},
-    CBOnContextButton{nullptr},
     m_windowId(id),
-    m_oldWindowId(0),
     m_actionEvent(true),
     m_addon(addon),
     m_isMedia(isMedia)
@@ -1412,7 +1404,7 @@ int CGUIAddonWindow::GetCurrentContainerControlId()
 
 void CGUIAddonWindow::GetContextButtons(int itemNumber, CContextButtons& buttons)
 {
-  gui_context_menu_pair c_buttons[ADDON_MAX_CONTEXT_ENTRIES] = {{0}};
+  gui_context_menu_pair c_buttons[ADDON_MAX_CONTEXT_ENTRIES] = {};
   unsigned int size = ADDON_MAX_CONTEXT_ENTRIES;
   if (CBGetContextButtons)
   {
@@ -1431,7 +1423,7 @@ bool CGUIAddonWindow::OnContextButton(int itemNumber, CONTEXT_BUTTON button)
 
 void CGUIAddonWindow::WaitForActionEvent(unsigned int timeout)
 {
-  m_actionEvent.WaitMSec(timeout);
+  m_actionEvent.Wait(std::chrono::milliseconds(timeout));
   m_actionEvent.Reset();
 }
 
@@ -1445,9 +1437,8 @@ void CGUIAddonWindow::SetupShares()
   UpdateButtons();
 }
 
-
 CGUIAddonWindowDialog::CGUIAddonWindowDialog(int id, const std::string& strXML, CAddonDll* addon)
-  : CGUIAddonWindow(id, strXML, addon, false), m_bRunning(false)
+  : CGUIAddonWindow(id, strXML, addon, false)
 {
 }
 
@@ -1456,13 +1447,13 @@ void CGUIAddonWindowDialog::Show(bool show /* = true */, bool modal /* = true*/)
   if (modal)
   {
     unsigned int count = CServiceBroker::GetWinSystem()->GetGfxContext().exit();
-    CApplicationMessenger::GetInstance().SendMsg(TMSG_GUI_ADDON_DIALOG, 0, show ? 1 : 0,
-                                                 static_cast<void*>(this));
+    CServiceBroker::GetAppMessenger()->SendMsg(TMSG_GUI_ADDON_DIALOG, 0, show ? 1 : 0,
+                                               static_cast<void*>(this));
     CServiceBroker::GetWinSystem()->GetGfxContext().restore(count);
   }
   else
-    CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ADDON_DIALOG, 0, show ? 1 : 0,
-                                                 static_cast<void*>(this));
+    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_GUI_ADDON_DIALOG, 0, show ? 1 : 0,
+                                               static_cast<void*>(this));
 }
 
 void CGUIAddonWindowDialog::Show_Internal(bool show /* = true */)

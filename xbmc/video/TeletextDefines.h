@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "threads/CriticalSection.h"
+
+#include <chrono>
 #include <string>
 
 #define FLOFSIZE 4
@@ -381,7 +384,7 @@ typedef struct
 typedef struct
 {
   bool Valid;
-  long Timestamp;
+  std::chrono::time_point<std::chrono::steady_clock> Timestamp;
   unsigned char  PageChar[TELETEXT_PAGE_SIZE];
   TextPageAttr_t PageAtrb[TELETEXT_PAGE_SIZE];
 } TextSubtitleCache_t;
@@ -421,6 +424,9 @@ typedef struct TextCacheStruct_t
   unsigned short *ColorTable;
 
   std::string      line30;
+
+  // TODO: We should get rid of this public mutex. Here are the details: https://github.com/xbmc/xbmc/pull/22226
+  CCriticalSection m_critSection;
 } TextCacheStruct_t;
 
 /* struct for all Information needed for Page Rendering */

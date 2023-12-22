@@ -136,7 +136,10 @@ void CSeat::SetCursor(std::uint32_t serial, wayland::surface_t const &surface, s
 {
   if (m_pointer)
   {
+    // set_cursor on webOS completely breaks pointer input
+#ifndef TARGET_WEBOS
     m_pointer.set_cursor(serial, surface, hotspotX, hotspotY);
+#endif
   }
 }
 
@@ -227,7 +230,7 @@ void CSeat::HandlePointerCapability()
   };
   // Wayland groups pointer events, but right now there is no benefit in
   // treating them in groups. The main use case for doing so seems to be
-  // multi-axis (i.e. diagnoal) scrolling, but we do not support this anyway.
+  // multi-axis (i.e. diagonal) scrolling, but we do not support this anyway.
   /*m_pointer.on_frame() = [this]()
   {
 

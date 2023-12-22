@@ -8,7 +8,6 @@
 
 #include "GUIDialog.h"
 
-#include "Application.h"
 #include "GUIComponent.h"
 #include "GUIControlFactory.h"
 #include "GUILabelControl.h"
@@ -18,8 +17,6 @@
 #include "messaging/ApplicationMessenger.h"
 #include "threads/SingleLock.h"
 #include "utils/TimeUtils.h"
-
-using namespace KODI::MESSAGING;
 
 CGUIDialog::CGUIDialog(int id, const std::string &xmlFile, DialogModalityType modalityType /* = DialogModalityType::MODAL */)
     : CGUIWindow(id, xmlFile)
@@ -38,16 +35,7 @@ CGUIDialog::~CGUIDialog(void) = default;
 
 bool CGUIDialog::Load(TiXmlElement* pRootElement)
 {
-  bool retVal = CGUIWindow::Load(pRootElement);
-
-  if (retVal && IsCustom())
-  {
-    // custom dialog's modality type is modeless if visible condition is specified.
-    if (m_visibleCondition)
-      m_modalityType = DialogModalityType::MODELESS;
-  }
-
-  return retVal;
+  return CGUIWindow::Load(pRootElement);
 }
 
 void CGUIDialog::OnWindowLoaded()
@@ -126,7 +114,7 @@ void CGUIDialog::DoProcess(unsigned int currentTime, CDirtyRegionList &dirtyregi
 
   // if we were running but now we're not, mark us dirty
   if (!m_active && m_wasRunning)
-    dirtyregions.push_back(CDirtyRegion(m_renderRegion));
+    dirtyregions.emplace_back(m_renderRegion);
 
   if (m_active)
     CGUIWindow::DoProcess(currentTime, dirtyregions);
@@ -138,7 +126,7 @@ void CGUIDialog::UpdateVisibility()
 {
   if (m_visibleCondition)
   {
-    if (m_visibleCondition->Get())
+    if (m_visibleCondition->Get(INFO::DEFAULT_CONTEXT))
       Open();
     else
       Close();
@@ -202,12 +190,12 @@ void CGUIDialog::Open(const std::string &param /* = "" */)
 
 void CGUIDialog::Open(bool bProcessRenderLoop, const std::string& param /* = "" */)
 {
-  if (!g_application.IsCurrentThread())
+  if (!CServiceBroker::GetAppMessenger()->IsProcessThread())
   {
     // make sure graphics lock is not held
     CSingleExit leaveIt(CServiceBroker::GetWinSystem()->GetGfxContext());
-    CApplicationMessenger::GetInstance().SendMsg(TMSG_GUI_DIALOG_OPEN, -1, bProcessRenderLoop,
-                                                 static_cast<void*>(this), param);
+    CServiceBroker::GetAppMessenger()->SendMsg(TMSG_GUI_DIALOG_OPEN, -1, bProcessRenderLoop,
+                                               static_cast<void*>(this), param);
   }
   else
     Open_Internal(bProcessRenderLoop, param);

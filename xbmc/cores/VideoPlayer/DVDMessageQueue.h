@@ -19,26 +19,17 @@
 
 struct DVDMessageListItem
 {
-  DVDMessageListItem(CDVDMsg* msg, int prio)
+  DVDMessageListItem(std::shared_ptr<CDVDMsg> msg, int prio) : message(std::move(msg))
   {
-    message = msg->Acquire();
     priority = prio;
   }
-  DVDMessageListItem()
-  {
-    message = NULL;
-    priority = 0;
-  }
+  DVDMessageListItem() { priority = 0; }
   DVDMessageListItem(const DVDMessageListItem&) = delete;
- ~DVDMessageListItem()
-  {
-    if(message)
-      message->Release();
-  }
+  ~DVDMessageListItem() = default;
 
   DVDMessageListItem& operator=(const DVDMessageListItem&) = delete;
 
-  CDVDMsg* message;
+  std::shared_ptr<CDVDMsg> message;
   int priority;
 };
 
@@ -65,19 +56,21 @@ public:
   void Abort();
   void End();
 
-  MsgQueueReturnCode Put(CDVDMsg* pMsg, int priority = 0);
-  MsgQueueReturnCode PutBack(CDVDMsg* pMsg, int priority = 0);
+  MsgQueueReturnCode Put(const std::shared_ptr<CDVDMsg>& pMsg, int priority = 0);
+  MsgQueueReturnCode PutBack(const std::shared_ptr<CDVDMsg>& pMsg, int priority = 0);
 
   /**
    * msg,       message type from DVDMessage.h
    * timeout,   timeout in msec
    * priority,  minimum priority to get, outputs returned packets priority
    */
-  MsgQueueReturnCode Get(CDVDMsg** pMsg, unsigned int iTimeoutInMilliSeconds, int &priority);
-  MsgQueueReturnCode Get(CDVDMsg** pMsg, unsigned int iTimeoutInMilliSeconds)
+  MsgQueueReturnCode Get(std::shared_ptr<CDVDMsg>& pMsg,
+                         std::chrono::milliseconds timeout,
+                         int& priority);
+  MsgQueueReturnCode Get(std::shared_ptr<CDVDMsg>& pMsg, std::chrono::milliseconds timeout)
   {
     int priority = 0;
-    return Get(pMsg, iTimeoutInMilliSeconds, priority);
+    return Get(pMsg, timeout, priority);
   }
 
   int GetDataSize() const { return m_iDataSize; }
@@ -98,15 +91,14 @@ public:
   bool IsDataBased() const;
 
 private:
-
-  MsgQueueReturnCode Put(CDVDMsg* pMsg, int priority, bool front);
+  MsgQueueReturnCode Put(const std::shared_ptr<CDVDMsg>& pMsg, int priority, bool front);
   void UpdateTimeFront();
   void UpdateTimeBack();
 
   CEvent m_hEvent;
   mutable CCriticalSection m_section;
 
-  std::atomic<bool> m_bAbortRequest;
+  std::atomic<bool> m_bAbortRequest = false;
   bool m_bInitialized;
   bool m_drain = false;
 

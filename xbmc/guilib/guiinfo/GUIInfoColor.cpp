@@ -8,6 +8,7 @@
 
 #include "guilib/guiinfo/GUIInfoColor.h"
 
+#include "FileItem.h"
 #include "GUIInfoManager.h"
 #include "ServiceBroker.h"
 #include "addons/Skin.h"
@@ -17,14 +18,21 @@
 
 using namespace KODI::GUILIB::GUIINFO;
 
-bool CGUIInfoColor::Update()
+bool CGUIInfoColor::Update(const CGUIListItem* item /* = nullptr */)
 {
   if (!m_info)
     return false; // no infolabel
 
   // Expand the infolabel, and then convert it to a color
-  std::string infoLabel(CServiceBroker::GetGUI()->GetInfoManager().GetLabel(m_info));
-  UTILS::Color color = !infoLabel.empty() ? CServiceBroker::GetGUI()->GetColorManager().GetColor(infoLabel.c_str()) : 0;
+  std::string infoLabel;
+  if (item && item->IsFileItem())
+    infoLabel = CServiceBroker::GetGUI()->GetInfoManager().GetItemLabel(
+        static_cast<const CFileItem*>(item), 0, m_info);
+  else
+    infoLabel = CServiceBroker::GetGUI()->GetInfoManager().GetLabel(m_info, INFO::DEFAULT_CONTEXT);
+
+  UTILS::COLOR::Color color =
+      !infoLabel.empty() ? CServiceBroker::GetGUI()->GetColorManager().GetColor(infoLabel) : 0;
   if (m_color != color)
   {
     m_color = color;

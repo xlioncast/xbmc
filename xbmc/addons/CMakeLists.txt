@@ -10,9 +10,9 @@ set(SOURCES Addon.cpp
             AddonUpdateRules.cpp
             AddonVersion.cpp
             AudioDecoder.cpp
-            AudioEncoder.cpp
             ContextMenuAddon.cpp
             ContextMenus.cpp
+            ExtsMimeSupportList.cpp
             FontResource.cpp
             FilesystemInstaller.cpp
             GameResource.cpp
@@ -46,13 +46,15 @@ set(HEADERS Addon.h
             AddonUpdateRules.h
             AddonVersion.h
             AudioDecoder.h
-            AudioEncoder.h
             ContextMenuAddon.h
             ContextMenus.h
+            ExtsMimeSupportList.h
             FilesystemInstaller.h
             FontResource.h
             GameResource.h
             IAddon.h
+            IAddonManagerCallback.h
+            IAddonSupportCheck.h
             ImageDecoder.h
             ImageResource.h
             LanguageResource.h

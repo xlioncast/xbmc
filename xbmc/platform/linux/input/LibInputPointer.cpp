@@ -8,8 +8,8 @@
 
 #include "LibInputPointer.h"
 
-#include "AppInboundProtocol.h"
 #include "ServiceBroker.h"
+#include "application/AppInboundProtocol.h"
 #include "input/mouse/MouseStat.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
@@ -52,15 +52,17 @@ void CLibInputPointer::ProcessButton(libinput_event_pointer *e)
       break;
   }
 
-  XBMC_Event event;
-  memset(&event, 0, sizeof(event));
+  XBMC_Event event = {};
 
   event.type = pressed ? XBMC_MOUSEBUTTONDOWN : XBMC_MOUSEBUTTONUP;
   event.button.button = xbmc_button;
   event.button.x = static_cast<uint16_t>(m_pos.X);
   event.button.y = static_cast<uint16_t>(m_pos.Y);
 
-  CLog::Log(LOGDEBUG, "CLibInputPointer::%s - event.type: %i, event.button.button: %i, event.button.x: %i, event.button.y: %i", __FUNCTION__, event.type, event.button.button, event.button.x, event.button.y);
+  CLog::Log(LOGDEBUG,
+            "CLibInputPointer::{} - event.type: {}, event.button.button: {}, event.button.x: {}, "
+            "event.button.y: {}",
+            __FUNCTION__, event.type, event.button.button, event.button.x, event.button.y);
 
   std::shared_ptr<CAppInboundProtocol> appPort = CServiceBroker::GetAppPort();
   if (appPort)
@@ -83,14 +85,15 @@ void CLibInputPointer::ProcessMotion(libinput_event_pointer *e)
   m_pos.Y = std::min(CServiceBroker::GetWinSystem()->GetGfxContext().GetHeight(), m_pos.Y);
   m_pos.Y = std::max(0, m_pos.Y);
 
-  XBMC_Event event;
-  memset(&event, 0, sizeof(event));
+  XBMC_Event event = {};
 
   event.type = XBMC_MOUSEMOTION;
   event.motion.x = static_cast<uint16_t>(m_pos.X);
   event.motion.y = static_cast<uint16_t>(m_pos.Y);
 
-  CLog::Log(LOGDEBUG, "CLibInputPointer::%s - event.type: %i, event.motion.x: %i, event.motion.y: %i", __FUNCTION__, event.type, event.motion.x, event.motion.y);
+  CLog::Log(LOGDEBUG,
+            "CLibInputPointer::{} - event.type: {}, event.motion.x: {}, event.motion.y: {}",
+            __FUNCTION__, event.type, event.motion.x, event.motion.y);
 
   std::shared_ptr<CAppInboundProtocol> appPort = CServiceBroker::GetAppPort();
   if (appPort)
@@ -102,12 +105,14 @@ void CLibInputPointer::ProcessMotionAbsolute(libinput_event_pointer *e)
   m_pos.X = static_cast<int>(libinput_event_pointer_get_absolute_x_transformed(e, CServiceBroker::GetWinSystem()->GetGfxContext().GetWidth()));
   m_pos.Y = static_cast<int>(libinput_event_pointer_get_absolute_y_transformed(e, CServiceBroker::GetWinSystem()->GetGfxContext().GetHeight()));
 
-  XBMC_Event event;
+  XBMC_Event event = {};
   event.type = XBMC_MOUSEMOTION;
   event.motion.x = static_cast<uint16_t>(m_pos.X);
   event.motion.y = static_cast<uint16_t>(m_pos.Y);
 
-  CLog::Log(LOGDEBUG, "CLibInputPointer::%s - event.type: %i, event.motion.x: %i, event.motion.y: %i", __FUNCTION__, event.type, event.motion.x, event.motion.y);
+  CLog::Log(LOGDEBUG,
+            "CLibInputPointer::{} - event.type: {}, event.motion.x: {}, event.motion.y: {}",
+            __FUNCTION__, event.type, event.motion.x, event.motion.y);
 
   std::shared_ptr<CAppInboundProtocol> appPort = CServiceBroker::GetAppPort();
   if (appPort)
@@ -126,15 +131,16 @@ void CLibInputPointer::ProcessAxis(libinput_event_pointer *e)
   else
     scroll = XBMC_BUTTON_WHEELDOWN;
 
-  XBMC_Event event;
-  memset(&event, 0, sizeof(event));
+  XBMC_Event event = {};
 
   event.type = XBMC_MOUSEBUTTONDOWN;
   event.button.button = scroll;
   event.button.x = static_cast<uint16_t>(m_pos.X);
   event.button.y = static_cast<uint16_t>(m_pos.Y);
 
-  CLog::Log(LOGDEBUG, "CLibInputPointer::%s - scroll: %s, event.button.x: %i, event.button.y: %i", __FUNCTION__, scroll == XBMC_BUTTON_WHEELUP ? "up" : "down", event.button.x, event.button.y);
+  CLog::Log(LOGDEBUG, "CLibInputPointer::{} - scroll: {}, event.button.x: {}, event.button.y: {}",
+            __FUNCTION__, scroll == XBMC_BUTTON_WHEELUP ? "up" : "down", event.button.x,
+            event.button.y);
 
   std::shared_ptr<CAppInboundProtocol> appPort = CServiceBroker::GetAppPort();
   if (appPort)

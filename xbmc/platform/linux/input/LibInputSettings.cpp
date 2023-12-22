@@ -15,7 +15,7 @@
 #include "settings/lib/Setting.h"
 #include "settings/lib/SettingDefinitions.h"
 #include "settings/lib/SettingsManager.h"
-#include "utils/XBMCTinyXML.h"
+#include "utils/XBMCTinyXML2.h"
 #include "utils/log.h"
 
 #include <algorithm>
@@ -34,7 +34,7 @@ namespace
 CLibInputSettings::CLibInputSettings(CLibInputHandler *handler) :
   m_libInputHandler(handler)
 {
-  auto settingsComponent = CServiceBroker::GetSettingsComponent();
+  const auto settingsComponent = CServiceBroker::GetSettingsComponent();
   if (!settingsComponent)
     return;
 
@@ -64,54 +64,59 @@ CLibInputSettings::CLibInputSettings(CLibInputHandler *handler) :
   /* load the keyboard layouts from xkeyboard-config */
   std::string xkbFile("/usr/share/X11/xkb/rules/base.xml");
 
-  CXBMCTinyXML xmlDoc;
+  CXBMCTinyXML2 xmlDoc;
   if (!xmlDoc.LoadFile(xkbFile))
   {
-    CLog::Log(LOGWARNING, "CLibInputSettings: unable to open: %s", xkbFile.c_str());
+    CLog::Log(LOGWARNING, "CLibInputSettings: unable to open: {}", xkbFile);
     return;
   }
 
-  const TiXmlElement* rootElement = xmlDoc.RootElement();
+  const auto* rootElement = xmlDoc.RootElement();
   if (!rootElement)
   {
-    CLog::Log(LOGWARNING, "CLibInputSettings: missing or invalid XML root element in: %s", xkbFile.c_str());
+    CLog::Log(LOGWARNING, "CLibInputSettings: missing or invalid XML root element in: {}", xkbFile);
     return;
   }
 
-  if (rootElement->ValueStr() != "xkbConfigRegistry")
+  if (strcmp(rootElement->Value(), "xkbConfigRegistry") != 0)
   {
-    CLog::Log(LOGWARNING, "CLibInputSettings: unexpected XML root element %s in: %s", rootElement->Value(), xkbFile.c_str());
+    CLog::Log(LOGWARNING, "CLibInputSettings: unexpected XML root element {} in: {}",
+              rootElement->Value(), xkbFile);
     return;
   }
 
-  const TiXmlElement* layoutListElement = rootElement->FirstChildElement("layoutList");
+  const auto* layoutListElement = rootElement->FirstChildElement("layoutList");
   if (!layoutListElement)
   {
-    CLog::Log(LOGWARNING, "CLibInputSettings: unexpected XML child element %s in: %s", layoutListElement->Value(), xkbFile.c_str());
+    CLog::Log(LOGWARNING, "CLibInputSettings: missing XML child element {} in: {}", "layoutList",
+              xkbFile);
     return;
   }
 
-  const TiXmlElement* layoutElement = layoutListElement->FirstChildElement("layout");
+  const auto* layoutElement = layoutListElement->FirstChildElement("layout");
   while (layoutElement)
   {
-    const TiXmlElement* configElement = layoutElement->FirstChildElement("configItem");
+    const auto* configElement = layoutElement->FirstChildElement("configItem");
     if (!configElement)
     {
-      CLog::Log(LOGWARNING, "CLibInputSettings: unexpected XML child element %s in: %s", layoutListElement->Value(), xkbFile.c_str());
+      CLog::Log(LOGWARNING, "CLibInputSettings: unexpected XML child element {} in: {}",
+                layoutListElement->Value(), xkbFile);
       return;
     }
 
-    const TiXmlElement* nameElement = configElement->FirstChildElement("name");
+    const auto* nameElement = configElement->FirstChildElement("name");
     if (!nameElement)
     {
-      CLog::Log(LOGWARNING, "CLibInputSettings: unexpected XML child element %s in: %s", configElement->Value(), xkbFile.c_str());
+      CLog::Log(LOGWARNING, "CLibInputSettings: unexpected XML child element {} in: {}",
+                configElement->Value(), xkbFile);
       return;
     }
 
-    const TiXmlElement* descriptionElement = configElement->FirstChildElement("description");
+    const auto* descriptionElement = configElement->FirstChildElement("description");
     if (!descriptionElement)
     {
-      CLog::Log(LOGWARNING, "CLibInputSettings: unexpected XML child element %s in: %s", configElement->Value(), xkbFile.c_str());
+      CLog::Log(LOGWARNING, "CLibInputSettings: unexpected XML child element {} in: {}",
+                configElement->Value(), xkbFile);
       return;
     }
 
@@ -119,7 +124,7 @@ CLibInputSettings::CLibInputSettings(CLibInputHandler *handler) :
     std::string layoutDescription = descriptionElement->GetText();
 
     if (!layout.empty() && !layoutDescription.empty())
-      layouts.emplace_back(StringSettingOption(layoutDescription, layout));
+      layouts.emplace_back(layoutDescription, layout);
 
     layoutElement = layoutElement->NextSiblingElement();
   }
@@ -129,7 +134,7 @@ CLibInputSettings::CLibInputSettings(CLibInputHandler *handler) :
 
 CLibInputSettings::~CLibInputSettings()
 {
-  CSettingsComponent *settingsComponent = CServiceBroker::GetSettingsComponent();
+  const auto settingsComponent = CServiceBroker::GetSettingsComponent();
   if (!settingsComponent)
     return;
 

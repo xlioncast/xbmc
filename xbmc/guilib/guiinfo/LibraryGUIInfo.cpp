@@ -8,18 +8,21 @@
 
 #include "guilib/guiinfo/LibraryGUIInfo.h"
 
-#include "Application.h"
+#include "FileItem.h"
 #include "ServiceBroker.h"
+#include "URL.h"
 #include "filesystem/Directory.h"
-#include "filesystem/File.h"
 #include "guilib/guiinfo/GUIInfo.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
 #include "music/MusicDatabase.h"
+#include "music/MusicLibraryQueue.h"
 #include "profiles/ProfileManager.h"
 #include "settings/SettingsComponent.h"
+#include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "video/VideoDatabase.h"
+#include "video/VideoLibraryQueue.h"
 
 using namespace KODI::GUILIB::GUIINFO;
 
@@ -124,7 +127,7 @@ bool CLibraryGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int contex
         CVideoDatabase db;
         if (db.Open())
         {
-          m_libraryHasMovies = db.HasContent(VIDEODB_CONTENT_MOVIES) ? 1 : 0;
+          m_libraryHasMovies = db.HasContent(VideoDbContentType::MOVIES) ? 1 : 0;
           db.Close();
         }
       }
@@ -152,7 +155,7 @@ bool CLibraryGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int contex
         CVideoDatabase db;
         if (db.Open())
         {
-          m_libraryHasTVShows = db.HasContent(VIDEODB_CONTENT_TVSHOWS) ? 1 : 0;
+          m_libraryHasTVShows = db.HasContent(VideoDbContentType::TVSHOWS) ? 1 : 0;
           db.Close();
         }
       }
@@ -166,7 +169,7 @@ bool CLibraryGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int contex
         CVideoDatabase db;
         if (db.Open())
         {
-          m_libraryHasMusicVideos = db.HasContent(VIDEODB_CONTENT_MUSICVIDEOS) ? 1 : 0;
+          m_libraryHasMusicVideos = db.HasContent(VideoDbContentType::MUSICVIDEOS) ? 1 : 0;
           db.Close();
         }
       }
@@ -242,7 +245,7 @@ bool CLibraryGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int contex
         {
           artistcount = db.GetArtistCountForRole(strRole);
           db.Close();
-          m_libraryRoleCounts.emplace_back(std::make_pair(strRole, artistcount));
+          m_libraryRoleCounts.emplace_back(strRole, artistcount);
         }
       }
       value = artistcount > 0;
@@ -262,22 +265,23 @@ bool CLibraryGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int contex
 
       std::string nodePath = URIUtils::AddFileToFolder(libDir, url.GetHostName() + "/");
       nodePath = URIUtils::AddFileToFolder(nodePath, url.GetFileName());
-      value = XFILE::CFile::Exists(nodePath);
+      value = CFileUtils::Exists(nodePath);
       return true;
     }
     case LIBRARY_IS_SCANNING:
     {
-      value = (g_application.IsMusicScanning() || g_application.IsVideoScanning());
+      value = (CMusicLibraryQueue::GetInstance().IsScanningLibrary() ||
+               CVideoLibraryQueue::GetInstance().IsScanningLibrary());
       return true;
     }
     case LIBRARY_IS_SCANNING_VIDEO:
     {
-      value = g_application.IsVideoScanning();
+      value = CVideoLibraryQueue::GetInstance().IsScanningLibrary();
       return true;
     }
     case LIBRARY_IS_SCANNING_MUSIC:
     {
-      value = g_application.IsMusicScanning();
+      value = CMusicLibraryQueue::GetInstance().IsScanningLibrary();
       return true;
     }
   }

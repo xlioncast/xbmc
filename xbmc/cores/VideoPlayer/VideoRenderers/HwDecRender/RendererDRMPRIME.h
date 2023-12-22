@@ -41,8 +41,8 @@ public:
 
   // Feature support
   bool SupportsMultiPassRendering() override { return false; }
-  bool Supports(ERENDERFEATURE feature) override;
-  bool Supports(ESCALINGMETHOD method) override;
+  bool Supports(ERENDERFEATURE feature) const override;
+  bool Supports(ESCALINGMETHOD method) const override;
 
 protected:
   void ManageRenderArea() override;
@@ -50,6 +50,7 @@ protected:
 private:
   bool m_bConfigured = false;
   int m_iLastRenderBuffer = -1;
+  CRect m_planeDestRect;
 
   std::shared_ptr<CVideoLayerBridgeDRMPRIME> m_videoLayerBridge;
 

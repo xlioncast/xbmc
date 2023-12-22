@@ -21,6 +21,7 @@
 #include "windowing/WinSystem.h"
 
 #include <atomic>
+#include <chrono>
 #include <ctime>
 #include <list>
 #include <map>
@@ -43,7 +44,10 @@ namespace WAYLAND
 class CRegistry;
 class CWindowDecorator;
 
-class CWinSystemWayland : public CWinSystemBase, IInputHandler, IWindowDecorationHandler, IShellSurfaceHandler
+class CWinSystemWayland : public CWinSystemBase,
+                          public IInputHandler,
+                          public IWindowDecorationHandler,
+                          public IShellSurfaceHandler
 {
 public:
   CWinSystemWayland();
@@ -80,7 +84,7 @@ public:
   float GetSyncOutputRefreshRate();
   float GetDisplayLatency() override;
   float GetFrameLatencyAdjustment() override;
-  std::unique_ptr<CVideoSync> GetVideoSync(void* clock) override;
+  std::unique_ptr<CVideoSync> GetVideoSync(CVideoReferenceClock* clock) override;
 
   void Register(IDispResource* resource) override;
   void Unregister(IDispResource* resource) override;
@@ -88,8 +92,7 @@ public:
   using PresentationFeedbackHandler = std::function<void(timespec /* tv */, std::uint32_t /* refresh */, std::uint32_t /* sync output id */, float /* sync output fps */, std::uint64_t /* msc */)>;
   CSignalRegistration RegisterOnPresentationFeedback(const PresentationFeedbackHandler& handler);
 
-  // Like CWinSystemX11
-  void GetConnectedOutputs(std::vector<std::string>* outputs);
+  std::vector<std::string> GetConnectedOutputs() override;
 
   // winevents override
   bool MessagePump() override;
@@ -108,10 +111,16 @@ protected:
   {
     return m_surface;
   }
+  IShellSurface* GetShellSurface() { return m_shellSurface.get(); }
 
   void PrepareFramePresentation();
   void FinishFramePresentation();
   virtual void SetContextSize(CSizeInt size) = 0;
+  virtual IShellSurface* CreateShellSurface(const std::string& name);
+
+  // IShellSurfaceHandler
+  void OnConfigure(std::uint32_t serial, CSizeInt size, IShellSurface::StateBitset state) override;
+  void OnClose() override;
 
 private:
   // IInputHandler
@@ -127,10 +136,6 @@ private:
   void OnWindowClose() override;
   void OnWindowMaximize() override;
   void OnWindowMinimize() override;
-
-  // IShellSurfaceHandler
-  void OnConfigure(std::uint32_t serial, CSizeInt size, IShellSurface::StateBitset state) override;
-  void OnClose() override;
 
   // Registry handlers
   void OnSeatAdded(std::uint32_t name, wayland::proxy_t&& seat);
@@ -242,7 +247,8 @@ private:
   static constexpr int LATENCY_MOVING_AVERAGE_SIZE{30};
   std::atomic<float> m_latencyMovingAverage;
   CSignalHandlerList<PresentationFeedbackHandler> m_presentationFeedbackHandlers;
-  std::int64_t m_frameStartTime{};
+
+  std::chrono::steady_clock::time_point m_frameStartTime{};
 
   // IDispResource
   // -------------

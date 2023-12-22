@@ -24,8 +24,6 @@
 #define CONTROL_SETTINGS_CANCEL_BUTTON 29
 #define CONTROL_SETTINGS_CUSTOM_BUTTON 30
 
-#define CONTROL_SETTINGS_CUSTOM 100
-
 #define CONTROL_SETTINGS_START_BUTTONS -100
 #define CONTROL_SETTINGS_START_CONTROL -80
 
@@ -41,6 +39,7 @@ class CGUIButtonControl;
 class CGUIRadioButtonControl;
 class CGUISettingsSliderControl;
 class CGUILabelControl;
+class CGUIColorButtonControl;
 
 class CSetting;
 class CSettingAction;
@@ -92,7 +91,7 @@ protected:
   virtual int GetSettingLevel() const { return 0; }
   virtual std::shared_ptr<CSettingSection> GetSection() = 0;
   virtual std::shared_ptr<CSetting> GetSetting(const std::string& settingId) = 0;
-  virtual unsigned int GetDelayMs() const { return 1500; }
+  virtual std::chrono::milliseconds GetDelayMs() const { return std::chrono::milliseconds(1500); }
   virtual std::string GetLocalizedString(uint32_t labelId) const;
 
   virtual bool OnOkay()
@@ -165,25 +164,26 @@ protected:
   std::vector<std::shared_ptr<CSettingCategory>> m_categories;
   std::vector<BaseSettingControlPtr> m_settingControls;
 
-  int m_iSetting;
-  int m_iCategory;
+  int m_iSetting = 0;
+  int m_iCategory = 0;
   std::shared_ptr<CSettingAction> m_resetSetting;
   std::shared_ptr<CSettingCategory> m_dummyCategory;
 
   CGUISpinControlEx* m_pOriginalSpin;
   CGUISettingsSliderControl* m_pOriginalSlider;
   CGUIRadioButtonControl* m_pOriginalRadioButton;
+  CGUIColorButtonControl* m_pOriginalColorButton = nullptr;
   CGUIButtonControl* m_pOriginalCategoryButton;
   CGUIButtonControl* m_pOriginalButton;
   CGUIEditControl* m_pOriginalEdit;
   CGUIImage* m_pOriginalImage;
   CGUILabelControl* m_pOriginalGroupTitle;
-  bool m_newOriginalEdit;
+  bool m_newOriginalEdit = false;
 
   BaseSettingControlPtr
       m_delayedSetting; ///< Current delayed setting \sa CBaseSettingControl::SetDelayed()
   CTimer m_delayedTimer; ///< Delayed setting timer
 
-  bool m_confirmed;
-  int m_focusedControl, m_fadedControl;
+  bool m_confirmed = false;
+  int m_focusedControl = 0, m_fadedControl = 0;
 };

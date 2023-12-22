@@ -155,7 +155,7 @@ void CGUIWindowWeather::UpdateLocations()
     }
     else
     {
-      strLabel = StringUtils::Format("AreaCode %i", i);
+      strLabel = StringUtils::Format("AreaCode {}", i);
       labels.emplace_back(strLabel, i);
     }
     // in case it's a button, set the label
@@ -226,7 +226,7 @@ void CGUIWindowWeather::SetLocation(int loc)
     std::string strLabel = CServiceBroker::GetWeatherManager().GetLocation(loc);
     size_t iPos = strLabel.rfind(", ");
     if (iPos != std::string::npos)
-      strLabel = strLabel.substr(0, iPos);
+      strLabel.resize(iPos);
     SET_CONTROL_LABEL(CONTROL_SELECTLOCATION, strLabel);
   }
   CServiceBroker::GetWeatherManager().Refresh();
@@ -256,7 +256,7 @@ void CGUIWindowWeather::SetProperties()
   std::string day;
   for (int i = 0; i < NUM_DAYS; i++)
   {
-    day = StringUtils::Format("Day%i.", i);
+    day = StringUtils::Format("Day{}.", i);
     SetProperty(day + "Title", CServiceBroker::GetWeatherManager().GetForecast(i).m_day);
     SetProperty(day + "HighTemp", CServiceBroker::GetWeatherManager().GetForecast(i).m_high);
     SetProperty(day + "LowTemp", CServiceBroker::GetWeatherManager().GetForecast(i).m_low);
@@ -288,7 +288,7 @@ void CGUIWindowWeather::ClearProperties()
   std::string day;
   for (int i = 0; i < NUM_DAYS; i++)
   {
-    day = StringUtils::Format("Day%i.", i);
+    day = StringUtils::Format("Day{}.", i);
     SetProperty(day + "Title", "");
     SetProperty(day + "HighTemp", "");
     SetProperty(day + "LowTemp", "");

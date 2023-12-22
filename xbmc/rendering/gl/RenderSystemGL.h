@@ -10,14 +10,17 @@
 
 #include "GLShader.h"
 #include "rendering/RenderSystem.h"
-#include "utils/Color.h"
+#include "utils/ColorUtils.h"
+#include "utils/Map.h"
 
-#include <array>
+#include <map>
 #include <memory>
+
+#include <fmt/format.h>
 
 #include "system_gl.h"
 
-enum ESHADERMETHOD
+enum class ShaderMethodGL
 {
   SM_DEFAULT = 0,
   SM_TEXTURE,
@@ -27,6 +30,35 @@ enum ESHADERMETHOD
   SM_TEXTURE_NOBLEND,
   SM_MULTI_BLENDCOLOR,
   SM_MAX
+};
+
+template<>
+struct fmt::formatter<ShaderMethodGL> : fmt::formatter<std::string_view>
+{
+  template<typename FormatContext>
+  constexpr auto format(const ShaderMethodGL& shaderMethod, FormatContext& ctx)
+  {
+    const auto it = ShaderMethodGLMap.find(shaderMethod);
+    if (it == ShaderMethodGLMap.cend())
+      throw std::range_error("no string mapping found for shader method");
+
+    return fmt::formatter<string_view>::format(it->second, ctx);
+  }
+
+private:
+  static constexpr auto ShaderMethodGLMap = make_map<ShaderMethodGL, std::string_view>({
+      {ShaderMethodGL::SM_DEFAULT, "default"},
+      {ShaderMethodGL::SM_TEXTURE, "texture"},
+      {ShaderMethodGL::SM_TEXTURE_LIM, "texture limited"},
+      {ShaderMethodGL::SM_MULTI, "multi"},
+      {ShaderMethodGL::SM_FONTS, "fonts"},
+      {ShaderMethodGL::SM_TEXTURE_NOBLEND, "texture no blending"},
+      {ShaderMethodGL::SM_MULTI_BLENDCOLOR, "multi blend colour"},
+  });
+
+  static_assert(static_cast<size_t>(ShaderMethodGL::SM_MAX) == ShaderMethodGLMap.size(),
+                "ShaderMethodGLMap doesn't match the size of ShaderMethodGL, did you forget to "
+                "add/remove a mapping?");
 };
 
 class CRenderSystemGL : public CRenderSystemBase
@@ -41,7 +73,7 @@ public:
   bool BeginRender() override;
   bool EndRender() override;
   void PresentRender(bool rendered, bool videoLayer) override;
-  bool ClearBuffers(UTILS::Color color) override;
+  bool ClearBuffers(UTILS::COLOR::Color color) override;
   bool IsExtSupported(const char* extension) const override;
 
   void SetVSync(bool vsync);
@@ -74,7 +106,7 @@ public:
   void ResetGLErrors();
 
   // shaders
-  void EnableShader(ESHADERMETHOD method);
+  void EnableShader(ShaderMethodGL method);
   void DisableShader();
   GLint ShaderGetPos();
   GLint ShaderGetCol();
@@ -101,7 +133,7 @@ protected:
 
   GLint m_viewPort[4];
 
-  std::array<std::unique_ptr<CGLShader>, SM_MAX> m_pShader;
-  ESHADERMETHOD m_method = SM_DEFAULT;
+  std::map<ShaderMethodGL, std::unique_ptr<CGLShader>> m_pShader;
+  ShaderMethodGL m_method = ShaderMethodGL::SM_DEFAULT;
   GLuint m_vertexArray = GL_NONE;
 };

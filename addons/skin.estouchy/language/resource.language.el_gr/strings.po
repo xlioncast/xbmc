@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Greek (Greece) (http://www.transifex.com/projects/p/kodi-main/language/el_GR/)\n"
+"PO-Revision-Date: 2022-07-01 08:26+0000\n"
+"Last-Translator: Christian Gade <gade@kodi.tv>\n"
+"Language-Team: Greek <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/el_gr/>\n"
+"Language: el_gr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: el_GR\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 4.13\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "Κέλυφος για συσκευές με οθόνη αφής"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "Κέλυφος σχεδιασμένο για να χρησιμοποιηθεί σε συσκευές με οθόνη αφής όπως ταμπλέτες και έξυπνα κινητά."
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -64,22 +73,27 @@ msgctxt "#31016"
 msgid "Albums"
 msgstr "Άλμπουμ"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "Πληροφορίες PVR"
+msgid "PVR"
+msgstr ""
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "Πληροφορίες διεργασίας αναπαραγωγής"
+msgid "Player"
+msgstr "Αναπαραγωγή"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "Αποκωδικοποιητής βίντεο"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "Μορφή εικονοστοιχείων"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
 msgstr "Χρήση μνήμης συστήματος"
@@ -99,6 +113,18 @@ msgstr "Σύνδεση"
 msgctxt "#31039"
 msgid "Updated:"
 msgstr "Ενημερωμένο:"
+
+msgctxt "#31040"
+msgid "Select + X"
+msgstr ""
+
+msgctxt "#31041"
+msgid "Select + B"
+msgstr ""
+
+msgctxt "#31042"
+msgid "Select + Start"
+msgstr ""
 
 msgctxt "#31043"
 msgid "PAUSED"
@@ -213,7 +239,7 @@ msgid "Configure & manage media sharing services · Configure & manage the weath
 msgstr "Ρύθμιση & διαχείριση υπηρεσιών διαμοιρασμού μέσων · Ρύθμιση & διαχείριση της υπηρεσίας καιρού"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+msgid "Configure display · Configure audio · Configure internet access · Configure power saving · Configure logging"
 msgstr "Ρύθμιση οθόνης · Ρύθμιση ήχου · Ρύθμιση πρόσβασης στο διαδίκτυο · Ρύθμιση ενέργειας · Ρύθμιση καταγραφών"
 
 msgctxt "#31407"
@@ -316,6 +342,67 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "Εμφάνιση διεγραμμένων"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Κωδικοποίηση βίντεο"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Ανάλυση βίντεο"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Αναλογίες εικόνας"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr ""
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Κωδικοποίηση ήχου"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Κανάλια ήχου"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr ""
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Ανάλυση οθόνης"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr ""
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Χρήση CPU συστήματος"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Πολυμέσα"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Σύστημα"
+
 msgctxt "#31900"
 msgid "First Run"
 msgstr "Πρώτη εκκίνηση"
@@ -335,3 +422,15 @@ msgstr "Όταν αναπαράγεται ήχος ή βίντεο, ο τίτλ�
 msgctxt "#31904"
 msgid "Now Playing Title..."
 msgstr "Τώρα εκτελείται ο τίτλος:"
+
+#~ msgctxt "#31406"
+#~ msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+#~ msgstr "Ρύθμιση οθόνης · Ρύθμιση ήχου · Ρύθμιση πρόσβασης στο διαδίκτυο · Ρύθμιση ενέργειας · Ρύθμιση καταγραφών"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "Πληροφορίες PVR"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "Πληροφορίες διεργασίας αναπαραγωγής"

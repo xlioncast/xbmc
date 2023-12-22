@@ -16,9 +16,9 @@
 
 #include "IFileTypes.h"
 #include "URL.h"
-#include "utils/auto_buffer.h"
 
 #include <iostream>
+#include <memory>
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -30,15 +30,7 @@ class BitstreamStats;
 namespace XFILE
 {
 
-using ::XUTILS::auto_buffer;
 class IFile;
-
-class IFileCallback
-{
-public:
-  virtual bool OnFileCallback(void* pContext, int ipercent, float avgSpeed) = 0;
-  virtual ~IFileCallback() = default;
-};
 
 class CFileStreamBuffer;
 
@@ -69,7 +61,7 @@ public:
   bool OpenForWrite(const CURL& file, bool bOverWrite = false);
   bool OpenForWrite(const std::string& strFileName, bool bOverWrite = false);
 
-  ssize_t LoadFile(const CURL &file, auto_buffer& outputBuffer);
+  ssize_t LoadFile(const CURL& file, std::vector<uint8_t>& outputBuffer);
 
   /**
    * Attempt to read bufSize bytes from currently opened file into buffer bufPtr.
@@ -99,15 +91,15 @@ public:
   int GetChunkSize();
   const std::string GetProperty(XFILE::FileProperty type, const std::string &name = "") const;
   const std::vector<std::string> GetPropertyValues(XFILE::FileProperty type, const std::string &name = "") const;
-  ssize_t LoadFile(const std::string &filename, auto_buffer& outputBuffer);
+  ssize_t LoadFile(const std::string& filename, std::vector<uint8_t>& outputBuffer);
 
   static int DetermineChunkSize(const int srcChunkSize, const int reqChunkSize);
 
-  BitstreamStats* GetBitstreamStats() { return m_bitStreamStats; }
+  const std::unique_ptr<BitstreamStats>& GetBitstreamStats() const { return m_bitStreamStats; }
 
   int IoControl(EIoControl request, void* param);
 
-  IFile *GetImplementation() const { return m_pFile; }
+  IFile* GetImplementation() const { return m_pFile.get(); }
 
   // CURL interface
   static bool Exists(const CURL& file, bool bUseCache = true);
@@ -163,11 +155,11 @@ public:
   double GetDownloadSpeed();
 
 private:
-  unsigned int        m_flags;
+  unsigned int m_flags = 0;
   CURL                m_curl;
-  IFile*              m_pFile;
-  CFileStreamBuffer*  m_pBuffer;
-  BitstreamStats*     m_bitStreamStats;
+  std::unique_ptr<IFile> m_pFile;
+  std::unique_ptr<CFileStreamBuffer> m_pBuffer;
+  std::unique_ptr<BitstreamStats> m_bitStreamStats;
 };
 
 // streambuf for file io, only supports buffered input currently
@@ -208,7 +200,7 @@ public:
   int64_t GetLength();
 private:
   CFileStreamBuffer m_buffer;
-  IFile*            m_file;
+  std::unique_ptr<IFile> m_file;
 };
 
 }

@@ -89,7 +89,7 @@ namespace tools
 /// ~~~~~~~~~~~~~
 ///
 ///@{
-class ATTRIBUTE_HIDDEN CDllHelper
+class ATTR_DLL_LOCAL CDllHelper
 {
 public:
   //============================================================================
@@ -162,7 +162,7 @@ public:
     }
 #endif
 
-    m_dll = dlopen(path.c_str(), RTLD_LAZY);
+    m_dll = dlopen(path.c_str(), RTLD_LOCAL | RTLD_LAZY);
     if (m_dll == nullptr)
     {
       kodi::Log(ADDON_LOG_ERROR, "Unable to load %s", dlerror());
@@ -186,7 +186,7 @@ public:
   ///   return false;
   /// ~~~~~~~~~~~~~
   ///
-  template <typename T>
+  template<typename T>
   bool RegisterSymbol(T& functionPtr, const char* strFunctionPtr)
   {
     functionPtr = reinterpret_cast<T>(dlsym(m_dll, strFunctionPtr));

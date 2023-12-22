@@ -7,11 +7,13 @@
  */
 
 #include "ContextMenuItem.h"
-#include "addons/AddonManager.h"
-#include "addons/ContextMenuAddon.h"
-#include "addons/IAddon.h"
+
+#include "FileItem.h"
 #include "GUIInfoManager.h"
+#include "addons/AddonManager.h"
+#include "addons/IAddon.h"
 #include "guilib/GUIComponent.h"
+#include "guilib/LocalizeStrings.h"
 #ifdef HAS_PYTHON
 #include "interfaces/generic/ScriptInvocationManager.h"
 #include "interfaces/python/ContextItemAddonInvoker.h"
@@ -20,6 +22,10 @@
 #include "ServiceBroker.h"
 #include "utils/StringUtils.h"
 
+std::string CStaticContextMenuAction::GetLabel(const CFileItem& item) const
+{
+  return g_localizeStrings.Get(m_label);
+}
 
 bool CContextMenuItem::IsVisible(const CFileItem& item) const
 {
@@ -28,7 +34,7 @@ bool CContextMenuItem::IsVisible(const CFileItem& item) const
     m_infoBool = CServiceBroker::GetGUI()->GetInfoManager().Register(m_visibilityCondition, 0);
     m_infoBoolRegistered = true;
   }
-  return IsGroup() || (m_infoBool && m_infoBool->Get(&item));
+  return IsGroup() || (m_infoBool && m_infoBool->Get(INFO::DEFAULT_CONTEXT, &item));
 }
 
 bool CContextMenuItem::IsParentOf(const CContextMenuItem& other) const
@@ -41,14 +47,13 @@ bool CContextMenuItem::IsGroup() const
   return !m_groupId.empty();
 }
 
-bool CContextMenuItem::Execute(const CFileItemPtr& item) const
+bool CContextMenuItem::Execute(const std::shared_ptr<CFileItem>& item) const
 {
   if (!item || m_library.empty() || IsGroup())
     return false;
 
   ADDON::AddonPtr addon;
-  if (!CServiceBroker::GetAddonMgr().GetAddon(m_addonId, addon, ADDON::ADDON_UNKNOWN,
-                                              ADDON::OnlyEnabled::YES))
+  if (!CServiceBroker::GetAddonMgr().GetAddon(m_addonId, addon, ADDON::OnlyEnabled::CHOICE_YES))
     return false;
 
   bool reuseLanguageInvoker = false;
@@ -78,11 +83,11 @@ bool CContextMenuItem::operator==(const CContextMenuItem& other) const
 std::string CContextMenuItem::ToString() const
 {
   if (IsGroup())
-    return StringUtils::Format("CContextMenuItem[group, id=%s, parent=%s, addon=%s]",
-        m_groupId.c_str(), m_parent.c_str(), m_addonId.c_str());
+    return StringUtils::Format("CContextMenuItem[group, id={}, parent={}, addon={}]", m_groupId,
+                               m_parent, m_addonId);
   else
-    return StringUtils::Format("CContextMenuItem[item, parent=%s, library=%s, addon=%s]",
-        m_parent.c_str(), m_library.c_str(), m_addonId.c_str());
+    return StringUtils::Format("CContextMenuItem[item, parent={}, library={}, addon={}]", m_parent,
+                               m_library, m_addonId);
 }
 
 CContextMenuItem CContextMenuItem::CreateGroup(const std::string& label, const std::string& parent,

@@ -6,11 +6,10 @@
  *  See LICENSES/README.md for more information.
  */
 
-
 #include "WinEventsTVOS.h"
 
-#include "AppInboundProtocol.h"
 #include "ServiceBroker.h"
+#include "application/AppInboundProtocol.h"
 #include "guilib/GUIWindowManager.h"
 #include "input/InputManager.h"
 #include "input/XBMC_vkeys.h"
@@ -18,6 +17,7 @@
 #include "utils/log.h"
 
 #include <list>
+#include <mutex>
 
 static CCriticalSection g_inputCond;
 
@@ -37,14 +37,14 @@ CWinEventsTVOS::~CWinEventsTVOS()
 
 void CWinEventsTVOS::MessagePush(XBMC_Event* newEvent)
 {
-  CSingleLock lock(m_eventsCond);
+  std::unique_lock<CCriticalSection> lock(m_eventsCond);
 
   m_events.push_back(*newEvent);
 }
 
 size_t CWinEventsTVOS::GetQueueSize()
 {
-  CSingleLock lock(g_inputCond);
+  std::unique_lock<CCriticalSection> lock(g_inputCond);
   return events.size();
 }
 
@@ -62,7 +62,7 @@ bool CWinEventsTVOS::MessagePump()
     // deeper message loop and call the deeper MessagePump from there.
     XBMC_Event pumpEvent;
     {
-      CSingleLock lock(g_inputCond);
+      std::unique_lock<CCriticalSection> lock(g_inputCond);
       if (events.empty())
         return ret;
       pumpEvent = events.front();

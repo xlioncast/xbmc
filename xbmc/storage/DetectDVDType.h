@@ -15,11 +15,13 @@
 
 #include "PlatformDefs.h"
 
-#ifdef HAS_DVD_DRIVE
+#ifdef HAS_OPTICAL_DRIVE
 
+#include "storage/discs/IDiscDriveHandler.h"
 #include "threads/CriticalSection.h"
-
 #include "threads/Thread.h"
+#include "utils/DiscsUtils.h"
+
 #include <memory>
 #include <string>
 
@@ -40,7 +42,8 @@ public:
 
   static void WaitMediaReady();
   static bool IsDiscInDrive();
-  static int DriveReady();
+  static bool DriveReady();
+  static DriveState GetDriveState();
   static CCdInfo* GetCdInfo();
   static CEvent m_evAutorun;
 
@@ -50,16 +53,18 @@ public:
   static void UpdateState();
 protected:
   void UpdateDvdrom();
-  DWORD GetTrayState();
+  DriveState PollDriveState();
 
 
   void DetectMediaType();
   void SetNewDVDShareUrl( const std::string& strNewUrl, bool bCDDA, const std::string& strDiscLabel );
 
+  void Clear();
+
 private:
   static CCriticalSection m_muReadingMedia;
 
-  static int m_DriveState;
+  static DriveState m_DriveState;
   static time_t m_LastPoll;
   static CDetectDVDMedia* m_pInstance;
 
@@ -67,13 +72,17 @@ private:
 
   bool m_bStartup = true; // Do not autorun on startup
   bool m_bAutorun = false;
-  DWORD m_dwTrayState;
-  DWORD m_dwLastTrayState = 0;
+  TrayState m_TrayState{TrayState::UNDEFINED};
+  TrayState m_LastTrayState{TrayState::UNDEFINED};
+  DriveState m_LastDriveState{DriveState::NONE};
 
   static std::string m_diskLabel;
   static std::string m_diskPath;
 
   std::shared_ptr<CLibcdio> m_cdio;
+
+  /*! \brief Stores the DiscInfo of the current disk */
+  static UTILS::DISCS::DiscInfo m_discInfo;
 };
 }
 #endif

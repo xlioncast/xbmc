@@ -12,6 +12,7 @@
 #include "LangInfo.h"
 #include "URL.h"
 #include "filesystem/BlurayCallback.h"
+#include "filesystem/Directory.h"
 #include "guilib/LocalizeStrings.h"
 #include "utils/LangCodeExpander.h"
 #include "utils/RegExp.h"
@@ -23,6 +24,7 @@
 #include <array>
 #include <cassert>
 #include <climits>
+#include <memory>
 #include <stdlib.h>
 #include <string>
 
@@ -109,22 +111,24 @@ std::string CBlurayDirectory::GetDiscInfoString(DiscInfo info)
   return "";
 }
 
-CFileItemPtr CBlurayDirectory::GetTitle(const BLURAY_TITLE_INFO* title, const std::string& label)
+std::shared_ptr<CFileItem> CBlurayDirectory::GetTitle(const BLURAY_TITLE_INFO* title,
+                                                      const std::string& label)
 {
   std::string buf;
   std::string chap;
   CFileItemPtr item(new CFileItem("", false));
   CURL path(m_url);
-  buf = StringUtils::Format("BDMV/PLAYLIST/%05d.mpls", title->playlist);
+  buf = StringUtils::Format("BDMV/PLAYLIST/{:05}.mpls", title->playlist);
   path.SetFileName(buf);
   item->SetPath(path.Get());
   int duration = (int)(title->duration / 90000);
   item->GetVideoInfoTag()->SetDuration(duration);
   item->GetVideoInfoTag()->m_iTrack = title->playlist;
-  buf = StringUtils::Format(label.c_str(), title->playlist);
+  buf = StringUtils::Format(label, title->playlist);
   item->m_strTitle = buf;
   item->SetLabel(buf);
-  chap = StringUtils::Format(g_localizeStrings.Get(25007).c_str(), title->chapter_count, StringUtils::SecondsToTimeString(duration).c_str());
+  chap = StringUtils::Format(g_localizeStrings.Get(25007), title->chapter_count,
+                             StringUtils::SecondsToTimeString(duration));
   item->SetLabel2(chap);
   item->m_dwSize = 0;
   item->SetArt("icon", "DefaultVideo.png");
@@ -153,7 +157,7 @@ void CBlurayDirectory::GetTitles(bool main, CFileItemList &items)
 
       if (!t)
       {
-        CLog::Log(LOGDEBUG, "CBlurayDirectory - unable to get title %d", i);
+        CLog::Log(LOGDEBUG, "CBlurayDirectory - unable to get title {}", i);
         continue;
       }
 
@@ -184,7 +188,7 @@ void CBlurayDirectory::GetRoot(CFileItemList &items)
     CFileItemPtr item;
 
     path.SetFileName(URIUtils::AddFileToFolder(m_url.GetFileName(), "titles"));
-    item.reset(new CFileItem());
+    item = std::make_shared<CFileItem>();
     item->SetPath(path.Get());
     item->m_bIsFolder = true;
     item->SetLabel(g_localizeStrings.Get(25002) /* All titles */);
@@ -199,7 +203,7 @@ void CBlurayDirectory::GetRoot(CFileItemList &items)
     }
 
     path.SetFileName("menu");
-    item.reset(new CFileItem());
+    item = std::make_shared<CFileItem>();
     item->SetPath(path.Get());
     item->m_bIsFolder = false;
     item->SetLabel(g_localizeStrings.Get(25003) /* Menus */);
@@ -265,7 +269,8 @@ bool CBlurayDirectory::InitializeBluray(const std::string &root)
 
   if (!bd_open_files(m_bd, const_cast<std::string*>(&root), CBlurayCallback::dir_open, CBlurayCallback::file_open))
   {
-    CLog::Log(LOGERROR, "CBlurayDirectory::InitializeBluray - failed to open %s", CURL::GetRedacted(root).c_str());
+    CLog::Log(LOGERROR, "CBlurayDirectory::InitializeBluray - failed to open {}",
+              CURL::GetRedacted(root));
     return false;
   }
   m_blurayInitialized = true;

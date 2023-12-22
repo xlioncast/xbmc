@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "../../c-api/addon-instance/inputstream/stream_crypto.h"
 #include "../../AddonBase.h"
+#include "../../c-api/addon-instance/inputstream/stream_crypto.h"
 
 #ifdef __cplusplus
 
@@ -38,7 +38,7 @@ class VideoCodecInitdata;
 /// @copydetails cpp_kodi_addon_inputstream_Defs_Info_StreamCryptoSession_Help
 ///
 ///@{
-class ATTRIBUTE_HIDDEN StreamCryptoSession
+class ATTR_DLL_LOCAL StreamCryptoSession
   : public CStructHdl<StreamCryptoSession, STREAM_CRYPTO_SESSION>
 {
   /*! \cond PRIVATE */
@@ -51,6 +51,7 @@ public:
   /*! \cond PRIVATE */
   StreamCryptoSession() { memset(m_cStructure, 0, sizeof(STREAM_CRYPTO_SESSION)); }
   StreamCryptoSession(const StreamCryptoSession& session) : CStructHdl(session) {}
+  StreamCryptoSession& operator=(const StreamCryptoSession&) = default;
   /*! \endcond */
 
   /// @defgroup cpp_kodi_addon_inputstream_Defs_Info_StreamCryptoSession_Help Value Help

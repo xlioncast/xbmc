@@ -8,13 +8,15 @@
 
 #import "IOSEAGLView.h"
 
-#include "AppInboundProtocol.h"
-#include "AppParamParser.h"
-#include "Application.h"
+#include "FileItem.h"
 #import "IOSScreenManager.h"
 #include "ServiceBroker.h"
 #include "Util.h"
 #import "XBMCController.h"
+#include "application/AppEnvironment.h"
+#include "application/AppInboundProtocol.h"
+#include "application/AppParams.h"
+#include "application/Application.h"
 #include "messaging/ApplicationMessenger.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
@@ -32,8 +34,6 @@
 #import <OpenGLES/ES2/glext.h>
 #import <QuartzCore/QuartzCore.h>
 #include <sys/resource.h>
-
-using namespace KODI::MESSAGING;
 
 //--------------------------------------------------------------
 @interface IOSEAGLView (PrivateMethods)
@@ -315,7 +315,7 @@ using namespace KODI::MESSAGING;
     xbmcAlive = FALSE;
     if (!g_application.m_bStop)
     {
-      CApplicationMessenger::GetInstance().PostMsg(TMSG_QUIT);
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_QUIT);
     }
 
     CAnnounceReceiver::GetInstance()->DeInitialize();
@@ -339,13 +339,6 @@ using namespace KODI::MESSAGING;
     NSConditionLock* myLock = arg;
     [myLock lock];
 
-    CAppParamParser appParamParser;
-#ifdef _DEBUG
-    appParamParser.m_logLevel = LOG_LEVEL_DEBUG;
-#else
-    appParamParser.m_logLevel = LOG_LEVEL_NORMAL;
-#endif
-
     // Prevent child processes from becoming zombies on exit if not waited upon. See also Util::Command
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
@@ -355,8 +348,15 @@ using namespace KODI::MESSAGING;
 
     setlocale(LC_NUMERIC, "C");
 
-    g_application.Preflight();
-    if (!g_application.Create(appParamParser))
+    const auto params = std::make_shared<CAppParams>();
+#ifdef _DEBUG
+    params->SetLogLevel(LOG_LEVEL_DEBUG);
+#else
+    params->SetLogLevel(LOG_LEVEL_NORMAL);
+#endif
+    CAppEnvironment::SetUp(params);
+
+    if (!g_application.Create())
     {
       readyToRun = false;
       ELOG(@"%sUnable to create application", __PRETTY_FUNCTION__);
@@ -386,7 +386,7 @@ using namespace KODI::MESSAGING;
       {
         @autoreleasepool
         {
-          g_application.Run(CAppParamParser());
+          g_application.Run();
         }
       }
       catch (...)
@@ -394,6 +394,8 @@ using namespace KODI::MESSAGING;
         ELOG(@"%sException caught on main loop. Exiting", __PRETTY_FUNCTION__);
       }
     }
+
+    CAppEnvironment::TearDown();
 
     // signal we are dead
     [myLock unlockWithCondition:TRUE];

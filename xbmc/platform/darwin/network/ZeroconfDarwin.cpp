@@ -8,10 +8,10 @@
 
 #include "ZeroconfDarwin.h"
 
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 
 #include <inttypes.h>
+#include <mutex>
 #include <sstream>
 #include <string>
 
@@ -39,8 +39,8 @@ bool CZeroconfDarwin::doPublishService(const std::string& fcr_identifier,
                       unsigned int f_port,
                       const std::vector<std::pair<std::string, std::string> >& txt)
 {
-  CLog::Log(LOGDEBUG, "CZeroconfDarwin::doPublishService identifier: %s type: %s name:%s port:%i", fcr_identifier.c_str(),
-            fcr_type.c_str(), fcr_name.c_str(), f_port);
+  CLog::Log(LOGDEBUG, "CZeroconfDarwin::doPublishService identifier: {} type: {} name:{} port:{}",
+            fcr_identifier, fcr_type, fcr_name, f_port);
 
   CFStringRef name = CFStringCreateWithCString (NULL,
                                                 fcr_name.c_str(),
@@ -96,11 +96,13 @@ bool CZeroconfDarwin::doPublishService(const std::string& fcr_identifier,
     CFNetServiceSetClient(netService, NULL, NULL);
     CFRelease(netService);
     netService = NULL;
-    CLog::Log(LOGERROR, "CZeroconfDarwin::doPublishService CFNetServiceRegister returned "
-      "(domain = %d, error = %" PRId64")", (int)error.domain, (int64_t)error.error);
+    CLog::Log(LOGERROR,
+              "CZeroconfDarwin::doPublishService CFNetServiceRegister returned "
+              "(domain = {}, error = {})",
+              (int)error.domain, (int64_t)error.error);
   } else
   {
-    CSingleLock lock(m_data_guard);
+    std::unique_lock<CCriticalSection> lock(m_data_guard);
     m_services.insert(make_pair(fcr_identifier, netService));
   }
 
@@ -110,7 +112,7 @@ bool CZeroconfDarwin::doPublishService(const std::string& fcr_identifier,
 bool CZeroconfDarwin::doForceReAnnounceService(const std::string& fcr_identifier)
 {
   bool ret = false;
-  CSingleLock lock(m_data_guard);
+  std::unique_lock<CCriticalSection> lock(m_data_guard);
   tServiceMap::iterator it = m_services.find(fcr_identifier);
   if(it != m_services.end())
   {
@@ -135,7 +137,7 @@ bool CZeroconfDarwin::doForceReAnnounceService(const std::string& fcr_identifier
 
 bool CZeroconfDarwin::doRemoveService(const std::string& fcr_ident)
 {
-  CSingleLock lock(m_data_guard);
+  std::unique_lock<CCriticalSection> lock(m_data_guard);
   tServiceMap::iterator it = m_services.find(fcr_ident);
   if(it != m_services.end())
   {
@@ -148,7 +150,7 @@ bool CZeroconfDarwin::doRemoveService(const std::string& fcr_ident)
 
 void CZeroconfDarwin::doStop()
 {
-  CSingleLock lock(m_data_guard);
+  std::unique_lock<CCriticalSection> lock(m_data_guard);
   for (const auto& it : m_services)
     cancelRegistration(it.second);
   m_services.clear();
@@ -162,16 +164,18 @@ void CZeroconfDarwin::registerCallback(CFNetServiceRef theService, CFStreamError
     CZeroconfDarwin* p_this = reinterpret_cast<CZeroconfDarwin*>(info);
     switch(error->error) {
       case kCFNetServicesErrorCollision:
-        CLog::Log(LOGERROR, "CZeroconfDarwin::registerCallback name collision occured");
+        CLog::Log(LOGERROR, "CZeroconfDarwin::registerCallback name collision occurred");
         break;
       default:
-        CLog::Log(LOGERROR, "CZeroconfDarwin::registerCallback returned "
-          "(domain = %d, error = %" PRId64")", (int)error->domain, (int64_t)error->error);
+        CLog::Log(LOGERROR,
+                  "CZeroconfDarwin::registerCallback returned "
+                  "(domain = {}, error = {})",
+                  (int)error->domain, (int64_t)error->error);
         break;
     }
     p_this->cancelRegistration(theService);
     //remove it
-    CSingleLock lock(p_this->m_data_guard);
+    std::unique_lock<CCriticalSection> lock(p_this->m_data_guard);
     for (tServiceMap::iterator it = p_this->m_services.begin(); it != p_this->m_services.end();
          ++it)
     {

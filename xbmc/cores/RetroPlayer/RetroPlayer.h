@@ -27,6 +27,8 @@ class CGameServices;
 
 namespace RETRO
 {
+class CCheevos;
+class CGUIGameMessenger;
 class CRetroPlayerInput;
 class CRPProcessInfo;
 class CRPRenderManager;
@@ -47,15 +49,15 @@ public:
   bool OpenFile(const CFileItem& file, const CPlayerOptions& options) override;
   bool CloseFile(bool reopen = false) override;
   bool IsPlaying() const override;
-  bool CanPause() override;
+  bool CanPause() const override;
   void Pause() override;
   bool HasVideo() const override { return true; }
   bool HasAudio() const override { return true; }
   bool HasGame() const override { return true; }
-  bool CanSeek() override;
+  bool CanSeek() const override;
   void Seek(bool bPlus = true, bool bLargeStep = false, bool bChapterOverride = false) override;
   void SeekPercentage(float fPercent = 0) override;
-  float GetCachePercentage() override;
+  float GetCachePercentage() const override;
   void SetMute(bool bOnOff) override;
   void SeekTime(int64_t iTime = 0) override;
   bool SeekTimeRelative(int64_t iTime) override;
@@ -65,11 +67,17 @@ public:
   bool SetPlayerState(const std::string& state) override;
   void FrameMove() override;
   void Render(bool clear, uint32_t alpha = 255, bool gui = true) override;
-  bool IsRenderingVideo() override;
-  bool HasGameAgent() override;
+  bool IsRenderingVideo() const override;
+  bool HasGameAgent() const override;
 
   // Implementation of IGameCallback
   std::string GameClientID() const override;
+  std::string GetPlayingGame() const override;
+  std::string CreateSavestate(bool autosave) override;
+  bool UpdateSavestate(const std::string& savestatePath) override;
+  bool LoadSavestate(const std::string& savestatePath) override;
+  void FreeSavestateResources(const std::string& savestatePath) override;
+  void CloseOSDCallback() override;
 
   // Implementation of IPlaybackCallback
   void SetPlaybackSpeed(double speed) override;
@@ -77,7 +85,7 @@ public:
 
   // Implementation of IAutoSaveCallback
   bool IsAutoSaveEnabled() const override;
-  std::string CreateSavestate() override;
+  std::string CreateAutosave() override;
 
 private:
   void SetSpeedInternal(double speed);
@@ -89,7 +97,7 @@ private:
   void OnSpeedChange(double newSpeed);
 
   // Playback functions
-  void CreatePlayback(bool bRestoreState);
+  void CreatePlayback(const std::string& savestatePath);
   void ResetPlayback();
 
   /*!
@@ -118,12 +126,14 @@ private:
 
   // Subsystems
   std::unique_ptr<CRPProcessInfo> m_processInfo;
+  std::unique_ptr<CGUIGameMessenger> m_guiMessenger;
   std::unique_ptr<CRPRenderManager> m_renderManager;
   std::unique_ptr<CRPStreamManager> m_streamManager;
   std::unique_ptr<CRetroPlayerInput> m_input;
   std::unique_ptr<IPlayback> m_playback;
   std::unique_ptr<IPlaybackControl> m_playbackControl;
   std::unique_ptr<CRetroPlayerAutoSave> m_autoSave;
+  std::shared_ptr<CCheevos> m_cheevos;
 
   // Game parameters
   GAME::GameClientPtr m_gameClient;

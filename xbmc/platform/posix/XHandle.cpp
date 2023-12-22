@@ -8,12 +8,12 @@
 
 #include "XHandle.h"
 
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 
 #include <cassert>
+#include <mutex>
 
-int CXHandle::m_objectTracker[10] = {0};
+int CXHandle::m_objectTracker[10] = {};
 
 HANDLE WINAPI GetCurrentProcess(void) {
   return (HANDLE)-1; // -1 a special value - pseudo handle
@@ -34,9 +34,9 @@ CXHandle::CXHandle(HandleType nType)
 
 CXHandle::CXHandle(const CXHandle &src)
 {
-  // we shouldnt get here EVER. however, if we do - try to make the best. copy what we can
+  // we shouldn't get here EVER. however, if we do - try to make the best. copy what we can
   // and most importantly - not share any pointer.
-  CLog::Log(LOGWARNING,"%s, copy handle.", __FUNCTION__);
+  CLog::Log(LOGWARNING, "{}, copy handle.", __FUNCTION__);
 
   Init();
 
@@ -60,12 +60,13 @@ CXHandle::~CXHandle()
   m_objectTracker[m_type]--;
 
   if (RecursionCount > 0) {
-    CLog::Log(LOGERROR,"%s, destroying handle with recursion count %d", __FUNCTION__, RecursionCount);
+    CLog::Log(LOGERROR, "{}, destroying handle with recursion count {}", __FUNCTION__,
+              RecursionCount);
     assert(false);
   }
 
   if (m_nRefCount > 1) {
-    CLog::Log(LOGERROR,"%s, destroying handle with ref count %d", __FUNCTION__, m_nRefCount);
+    CLog::Log(LOGERROR, "{}, destroying handle with ref count {}", __FUNCTION__, m_nRefCount);
     assert(false);
   }
 
@@ -110,7 +111,7 @@ void CXHandle::ChangeType(HandleType newType) {
 
 void CXHandle::DumpObjectTracker() {
   for (int i=0; i< 10; i++) {
-    CLog::Log(LOGDEBUG, "object %d --> %d instances", i, m_objectTracker[i]);
+    CLog::Log(LOGDEBUG, "object {} --> {} instances", i, m_objectTracker[i]);
   }
 }
 
@@ -123,7 +124,7 @@ bool CloseHandle(HANDLE hObject) {
 
   bool bDelete = false;
   {
-    CSingleLock lock((*hObject->m_internalLock));
+    std::unique_lock<CCriticalSection> lock((*hObject->m_internalLock));
     if (--hObject->m_nRefCount == 0)
       bDelete = true;
   }

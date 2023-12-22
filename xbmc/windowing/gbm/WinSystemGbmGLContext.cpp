@@ -25,9 +25,13 @@
 #include "utils/log.h"
 #include "windowing/WindowSystemFactory.h"
 
+#include <mutex>
+
 #include <EGL/eglext.h>
 
 using namespace KODI::WINDOWING::GBM;
+
+using namespace std::chrono_literals;
 
 CWinSystemGbmGLContext::CWinSystemGbmGLContext()
 : CWinSystemGbmEGLContext(EGL_PLATFORM_GBM_MESA, "EGL_MESA_platform_gbm")
@@ -60,7 +64,7 @@ bool CWinSystemGbmGLContext::InitWindowSystem()
   bool general, deepColor;
   m_vaapiProxy.reset(VaapiProxyCreate(m_DRM->GetRenderNodeFileDescriptor()));
   VaapiProxyConfig(m_vaapiProxy.get(), m_eglContext.GetEGLDisplay());
-  VAAPIRegisterRender(m_vaapiProxy.get(), general, deepColor);
+  VAAPIRegisterRenderGL(m_vaapiProxy.get(), general, deepColor);
 
   if (general)
   {
@@ -89,7 +93,8 @@ bool CWinSystemGbmGLContext::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res
   if (res.iWidth != m_nWidth ||
       res.iHeight != m_nHeight)
   {
-    CLog::Log(LOGDEBUG, "CWinSystemGbmGLContext::%s - resolution changed, creating a new window", __FUNCTION__);
+    CLog::Log(LOGDEBUG, "CWinSystemGbmGLContext::{} - resolution changed, creating a new window",
+              __FUNCTION__);
     CreateNewWindow("", fullScreen, res);
   }
 
@@ -114,20 +119,44 @@ void CWinSystemGbmGLContext::PresentRender(bool rendered, bool videoLayer)
   {
     if (rendered)
     {
+#if defined(EGL_ANDROID_native_fence_sync) && defined(EGL_KHR_fence_sync)
+      if (m_eglFence)
+      {
+        int fd = m_DRM->TakeOutFenceFd();
+        if (fd != -1)
+        {
+          m_eglFence->CreateKMSFence(fd);
+          m_eglFence->WaitSyncGPU();
+        }
+
+        m_eglFence->CreateGPUFence();
+      }
+#endif
+
       if (!m_eglContext.TrySwapBuffers())
       {
         CEGLUtils::Log(LOGERROR, "eglSwapBuffers failed");
         throw std::runtime_error("eglSwapBuffers failed");
       }
+
+#if defined(EGL_ANDROID_native_fence_sync) && defined(EGL_KHR_fence_sync)
+      if (m_eglFence)
+      {
+        int fd = m_eglFence->FlushFence();
+        m_DRM->SetInFenceFd(fd);
+
+        m_eglFence->WaitSyncCPU();
+      }
+#endif
     }
-    CWinSystemGbm::FlipPage(rendered, videoLayer);
+    CWinSystemGbm::FlipPage(rendered, videoLayer, static_cast<bool>(m_eglFence));
 
     if (m_dispReset && m_dispResetTimer.IsTimePast())
     {
-      CLog::Log(LOGDEBUG, "CWinSystemGbmGLContext::%s - Sending display reset to all clients",
+      CLog::Log(LOGDEBUG, "CWinSystemGbmGLContext::{} - Sending display reset to all clients",
                 __FUNCTION__);
       m_dispReset = false;
-      CSingleLock lock(m_resourceSection);
+      std::unique_lock<CCriticalSection> lock(m_resourceSection);
 
       for (auto resource : m_resources)
         resource->OnResetDisplay();
@@ -135,7 +164,7 @@ void CWinSystemGbmGLContext::PresentRender(bool rendered, bool videoLayer)
   }
   else
   {
-    KODI::TIME::Sleep(10);
+    KODI::TIME::Sleep(10ms);
   }
 }
 

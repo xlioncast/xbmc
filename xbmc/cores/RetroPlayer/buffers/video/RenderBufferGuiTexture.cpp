@@ -26,7 +26,7 @@ bool CRenderBufferGuiTexture::Allocate(AVPixelFormat format,
 
   if (m_format != AV_PIX_FMT_NONE)
   {
-    m_texture.reset(CTexture::CreateTexture(width, height, m_textureFormat));
+    m_texture = CTexture::CreateTexture(width, height, m_textureFormat);
     m_texture->SetScalingMethod(TranslateScalingMethod(m_scalingMethod));
     m_texture->SetCacheMemory(true);
 
@@ -75,7 +75,7 @@ void CRenderBufferGuiTexture::BindToUnit(unsigned int unit)
     m_texture->BindToUnit(unit);
 }
 
-AVPixelFormat CRenderBufferGuiTexture::TranslateFormat(unsigned int textureFormat)
+AVPixelFormat CRenderBufferGuiTexture::TranslateFormat(XB_FMT textureFormat)
 {
   switch (textureFormat)
   {

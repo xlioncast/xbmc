@@ -27,9 +27,19 @@ namespace UTILS
 {
 namespace GL
 {
-
 void GlErrorCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
 
+int glFormatElementByteCount(GLenum format);
+
+enum class ColorChannel
+{
+  A,
+  R,
+  G,
+  B,
+};
+
+uint8_t GetChannelFromARGB(const ColorChannel colorChannel, const uint32_t argb);
 }
 }
 }
@@ -42,5 +52,3 @@ void _VerifyGLState(const char* szfile, const char* szfunction, int lineno);
 #endif
 
 void LogGraphicsInfo();
-
-int glFormatElementByteCount(GLenum format);

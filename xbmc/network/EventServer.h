@@ -11,11 +11,11 @@
 #include "EventClient.h"
 #include "Socket.h"
 #include "threads/CriticalSection.h"
-#include "threads/SingleLock.h"
 #include "threads/Thread.h"
 
 #include <atomic>
 #include <map>
+#include <mutex>
 #include <queue>
 #include <vector>
 
@@ -30,6 +30,8 @@ namespace EVENTSERVER
   public:
     static void RemoveInstance();
     static CEventServer* GetInstance();
+
+    CEventServer();
     ~CEventServer() override = default;
 
     // IRunnable entry point for thread
@@ -42,7 +44,7 @@ namespace EVENTSERVER
 
     void RefreshSettings()
     {
-      CSingleLock lock(m_critSection);
+      std::unique_lock<CCriticalSection> lock(m_critSection);
       m_bRefreshSettings = true;
     }
 
@@ -57,21 +59,20 @@ namespace EVENTSERVER
     int GetNumberOfClients();
 
   protected:
-    CEventServer();
     void Cleanup();
     void Run();
     void ProcessPacket(SOCKETS::CAddress& addr, int packetSize);
     void ProcessEvents();
     void RefreshClients();
 
-    std::map<unsigned long, EVENTCLIENT::CEventClient*>  m_clients;
-    static CEventServer* m_pInstance;
-    SOCKETS::CUDPSocket* m_pSocket;
+    std::map<unsigned long, std::unique_ptr<EVENTCLIENT::CEventClient>> m_clients;
+    static std::unique_ptr<CEventServer> m_pInstance;
+    std::unique_ptr<SOCKETS::CUDPSocket> m_pSocket;
     int              m_iPort;
     int              m_iListenTimeout;
     int              m_iMaxClients;
-    unsigned char*   m_pPacketBuffer;
-    std::atomic<bool>  m_bRunning;
+    std::vector<uint8_t> m_pPacketBuffer;
+    std::atomic<bool> m_bRunning = false;
     CCriticalSection m_critSection;
     bool             m_bRefreshSettings;
   };

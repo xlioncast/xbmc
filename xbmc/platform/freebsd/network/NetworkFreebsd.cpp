@@ -11,6 +11,7 @@
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 
+#include <array>
 #include <errno.h>
 
 #include <arpa/inet.h>
@@ -24,8 +25,6 @@
 #include <resolv.h>
 #include <sys/sockio.h>
 #include <sys/wait.h>
-
-#define ARRAY_SIZE(X) (sizeof(X) / sizeof((X)[0]))
 
 CNetworkInterfaceFreebsd::CNetworkInterfaceFreebsd(CNetworkPosix* network,
                                                    std::string interfaceName,
@@ -92,23 +91,18 @@ bool CNetworkInterfaceFreebsd::GetHostMacAddress(unsigned long host_ip, std::str
   struct rt_msghdr* rtm;
   struct sockaddr_inarp* sin;
   struct sockaddr_dl* sdl;
-  int mib[6];
+  constexpr std::array<int, 6> mib = {
+      CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_FLAGS, RTF_LLINFO,
+  };
 
   mac = "";
 
-  mib[0] = CTL_NET;
-  mib[1] = PF_ROUTE;
-  mib[2] = 0;
-  mib[3] = AF_INET;
-  mib[4] = NET_RT_FLAGS;
-  mib[5] = RTF_LLINFO;
-
-  if (sysctl(mib, ARRAY_SIZE(mib), NULL, &needed, NULL, 0) == 0)
+  if (sysctl(mib.data(), mib.size(), nullptr, &needed, nullptr, 0) == 0)
   {
     buf = (char*)malloc(needed);
     if (buf)
     {
-      if (sysctl(mib, ARRAY_SIZE(mib), buf, &needed, NULL, 0) == 0)
+      if (sysctl(mib.data(), mib.size(), buf, &needed, nullptr, 0) == 0)
       {
         for (next = buf; next < buf + needed; next += rtm->rtm_msglen)
         {
@@ -122,8 +116,8 @@ bool CNetworkInterfaceFreebsd::GetHostMacAddress(unsigned long host_ip, std::str
 
           u_char* cp = (u_char*)LLADDR(sdl);
 
-          mac = StringUtils::Format("%02X:%02X:%02X:%02X:%02X:%02X", cp[0], cp[1], cp[2], cp[3],
-                                    cp[4], cp[5]);
+          mac = StringUtils::Format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", cp[0], cp[1],
+                                    cp[2], cp[3], cp[4], cp[5]);
           ret = true;
           break;
         }
@@ -132,6 +126,11 @@ bool CNetworkInterfaceFreebsd::GetHostMacAddress(unsigned long host_ip, std::str
     }
   }
   return ret;
+}
+
+std::unique_ptr<CNetworkBase> CNetworkBase::GetNetwork()
+{
+  return std::make_unique<CNetworkFreebsd>();
 }
 
 CNetworkFreebsd::CNetworkFreebsd() : CNetworkPosix()
@@ -229,8 +228,8 @@ bool CNetworkFreebsd::PingHost(unsigned long remote_ip, unsigned int timeout_ms)
   struct in_addr host_ip;
   host_ip.s_addr = remote_ip;
 
-  sprintf(cmd_line, "ping -c 1 -t %d %s", timeout_ms / 1000 + (timeout_ms % 1000) != 0,
-          inet_ntoa(host_ip));
+  snprintf(cmd_line, sizeof(cmd_line), "ping -c 1 -t %d %s",
+           timeout_ms / 1000 + (timeout_ms % 1000) != 0, inet_ntoa(host_ip));
 
   int status = -1;
   status = system(cmd_line);
@@ -242,7 +241,7 @@ bool CNetworkFreebsd::PingHost(unsigned long remote_ip, unsigned int timeout_ms)
   // else some error
 
   if (result < 0 || result > 1)
-    CLog::Log(LOGERROR, "Ping fail : status = %d, errno = %d : '%s'", status, errno, cmd_line);
+    CLog::Log(LOGERROR, "Ping fail : status = {}, errno = {} : '{}'", status, errno, cmd_line);
 
   return result == 0;
 }

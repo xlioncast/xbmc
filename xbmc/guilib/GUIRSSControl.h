@@ -33,13 +33,13 @@ public:
                  const KODI::GUILIB::GUIINFO::CGUIInfoColor &headlineColor, std::string& strRSSTags);
   CGUIRSSControl(const CGUIRSSControl &from);
   ~CGUIRSSControl(void) override;
-  CGUIRSSControl *Clone() const override { return new CGUIRSSControl(*this); };
+  CGUIRSSControl* Clone() const override { return new CGUIRSSControl(*this); }
 
   void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
   void Render() override;
   void OnFeedUpdate(const vecText &feed) override;
   void OnFeedRelease() override;
-  bool CanFocus() const override { return true; };
+  bool CanFocus() const override { return true; }
   CRect CalcRenderRegion() const override;
 
   void OnFocus() override;
@@ -48,7 +48,7 @@ public:
   void SetUrlSet(const int urlset);
 
 protected:
-  bool UpdateColors() override;
+  bool UpdateColors(const CGUIListItem* item) override;
 
   CCriticalSection m_criticalSection;
 
@@ -65,7 +65,7 @@ protected:
   std::vector<int> m_vecIntervals;
   bool m_rtl;
   CScrollInfo m_scrollInfo;
-  bool m_dirty;
+  bool m_dirty = true;
   bool m_stopped;
   int  m_urlset;
 };

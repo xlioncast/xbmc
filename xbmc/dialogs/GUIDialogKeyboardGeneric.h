@@ -12,10 +12,13 @@
 #include "guilib/GUIKeyboard.h"
 #include "input/KeyboardLayout.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
 class CGUIFont;
+
+class CSpeechRecognitionListener;
 
 enum KEYBOARD {CAPS, LOWER, SYMBOLS};
 
@@ -32,9 +35,9 @@ class CGUIDialogKeyboardGeneric : public CGUIDialog, public CGUIKeyboard
     void SetHeading(const std::string& heading);
     void SetText(const std::string& text);
     const std::string &GetText() const;
-    bool IsConfirmed() { return m_bIsConfirmed; };
-    void SetHiddenInput(bool hiddenInput) { m_hiddenInput = hiddenInput; };
-    bool IsInputHidden() const { return m_hiddenInput; };
+    bool IsConfirmed() { return m_bIsConfirmed; }
+    void SetHiddenInput(bool hiddenInput) { m_hiddenInput = hiddenInput; }
+    bool IsInputHidden() const { return m_hiddenInput; }
 
   protected:
     void OnWindowLoaded() override;
@@ -46,6 +49,7 @@ class CGUIDialogKeyboardGeneric : public CGUIDialog, public CGUIKeyboard
     void OnShift();
     void MoveCursor(int iAmount);
     void OnLayout();
+    void OnReveal();
     void OnSymbols();
     void OnIPAddress();
     void OnVoiceRecognition();
@@ -86,4 +90,6 @@ class CGUIDialogKeyboardGeneric : public CGUIDialog, public CGUIKeyboard
     CCriticalSection  m_CS;
 
     char_callback_t m_pCharCallback;
+
+    std::shared_ptr<CSpeechRecognitionListener> m_speechRecognitionListener;
 };

@@ -9,6 +9,7 @@
 
 #include "EventsDirectory.h"
 
+#include "FileItem.h"
 #include "ServiceBroker.h"
 #include "URL.h"
 #include "events/EventLog.h"
@@ -21,12 +22,12 @@ bool CEventsDirectory::GetDirectory(const CURL& url, CFileItemList &items)
   items.ClearProperties();
   items.SetContent("events");
 
-  CEventLog& log = CServiceBroker::GetEventLog();
+  auto log = CServiceBroker::GetEventLog();
   Events events;
 
   std::string hostname = url.GetHostName();
   if (hostname.empty())
-    events = log.Get();
+    events = log->Get();
   else
   {
     bool includeHigherLevels = false;
@@ -37,13 +38,13 @@ bool CEventsDirectory::GetDirectory(const CURL& url, CFileItemList &items)
       includeHigherLevels = true;
 
       // remove the "+" from the end of the hostname
-      hostname = hostname.substr(0, hostname.size() - 1);
+      hostname.pop_back();
     }
 
     EventLevel level = CEventLog::EventLevelFromString(hostname);
 
     // get the events of the specified level(s)
-    events = log.Get(level, includeHigherLevels);
+    events = log->Get(level, includeHigherLevels);
   }
 
   for (const auto& eventItem : events)
@@ -52,7 +53,8 @@ bool CEventsDirectory::GetDirectory(const CURL& url, CFileItemList &items)
   return true;
 }
 
-CFileItemPtr CEventsDirectory::EventToFileItem(const EventPtr& eventItem)
+std::shared_ptr<CFileItem> CEventsDirectory::EventToFileItem(
+    const std::shared_ptr<const IEvent>& eventItem)
 {
   if (!eventItem)
     return CFileItemPtr();

@@ -22,6 +22,9 @@ class CControllerInstaller;
 class IControllerList;
 class IFeatureList;
 
+/*!
+ * \ingroup games
+ */
 class CGUIControllerWindow : public CGUIDialog
 {
 public:
@@ -58,8 +61,9 @@ private:
   IControllerList* m_controllerList = nullptr;
   IFeatureList* m_featureList = nullptr;
 
-  // Game paremeters
+  // Game parameters
   GameClientPtr m_gameClient;
+  std::string m_controllerId;
 
   // Controller parameters
   std::unique_ptr<CControllerInstaller> m_installer;

@@ -8,13 +8,15 @@
 
 #include "WinEventsAndroid.h"
 
-#include "AppInboundProtocol.h"
 #include "ServiceBroker.h"
+#include "application/AppInboundProtocol.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "input/InputManager.h"
 #include "input/XBMC_vkeys.h"
 #include "utils/log.h"
+
+#include <mutex>
 
 #define ALMOST_ZERO 0.125f
 enum {
@@ -51,14 +53,14 @@ CWinEventsAndroid::~CWinEventsAndroid()
 
 void CWinEventsAndroid::MessagePush(XBMC_Event *newEvent)
 {
-  CSingleLock lock(m_eventsCond);
+  std::unique_lock<CCriticalSection> lock(m_eventsCond);
 
   m_events.push_back(*newEvent);
 }
 
 void CWinEventsAndroid::MessagePushRepeat(XBMC_Event *repeatEvent)
 {
-  CSingleLock lock(m_eventsCond);
+  std::unique_lock<CCriticalSection> lock(m_eventsCond);
 
   std::list<XBMC_Event>::iterator itt;
   for (itt = m_events.begin(); itt != m_events.end(); ++itt)
@@ -87,7 +89,7 @@ bool CWinEventsAndroid::MessagePump()
     // deeper message loop and call the deeper MessagePump from there.
     XBMC_Event pumpEvent;
     {
-      CSingleLock lock(m_eventsCond);
+      std::unique_lock<CCriticalSection> lock(m_eventsCond);
       if (m_events.empty())
         return ret;
       pumpEvent = m_events.front();
@@ -107,7 +109,7 @@ bool CWinEventsAndroid::MessagePump()
 
 size_t CWinEventsAndroid::GetQueueSize()
 {
-  CSingleLock lock(m_eventsCond);
+  std::unique_lock<CCriticalSection> lock(m_eventsCond);
   return m_events.size();
 }
 
@@ -123,9 +125,9 @@ void CWinEventsAndroid::Process()
   while (!m_bStop)
   {
     // run a 10ms (timeout) wait cycle
-    CThread::Sleep(timeout);
+    CThread::Sleep(std::chrono::milliseconds(timeout));
 
-    CSingleLock lock(m_lasteventCond);
+    std::unique_lock<CCriticalSection> lock(m_lasteventCond);
 
     switch(state)
     {
@@ -153,7 +155,8 @@ void CWinEventsAndroid::Process()
 
         if (repeatDuration >= holdTimeout)
         {
-          CLog::Log(LOGDEBUG, "hold  ->repeat, size(%d), repeatDuration(%d)", m_lastevent.size(), repeatDuration);
+          CLog::Log(LOGDEBUG, "hold  ->repeat, size({}), repeatDuration({})", m_lastevent.size(),
+                    repeatDuration);
           state = EVENT_STATE_REPEAT;
         }
         break;

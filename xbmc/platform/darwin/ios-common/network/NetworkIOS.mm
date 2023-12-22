@@ -264,6 +264,10 @@ std::string CNetworkInterfaceIOS::GetCurrentDefaultGateway() const
   return gateway;
 }
 
+std::unique_ptr<CNetworkBase> CNetworkBase::GetNetwork()
+{
+  return std::make_unique<CNetworkIOS>();
+}
 
 CNetworkIOS::CNetworkIOS() : CNetworkBase()
 {
@@ -370,7 +374,7 @@ std::vector<std::string> CNetworkIOS::GetNameServers()
 
   if (result != 0)
   {
-    CLog::Log(LOGERROR, "GetNameServers - no nameservers could be fetched (error %d)", result);
+    CLog::Log(LOGERROR, "GetNameServers - no nameservers could be fetched (error {})", result);
     free(res);
     return nameServers;
   }
@@ -388,7 +392,7 @@ std::vector<std::string> CNetworkIOS::GetNameServers()
                       static_cast<socklen_t>(s.sin.sin_len), static_cast<char*>(hostBuffer),
                       sizeof(hostBuffer), nullptr, 0, NI_NUMERICHOST) == 0)
       {
-        nameServers.push_back(hostBuffer);
+        nameServers.emplace_back(hostBuffer);
       }
     }
   }

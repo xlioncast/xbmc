@@ -22,6 +22,8 @@
 #include "utils/URIUtils.h"
 #include "utils/log.h"
 
+#include <memory>
+
 using namespace XFILE;
 
 CFileOperationJob::CFileOperationJob()
@@ -49,14 +51,16 @@ CFileOperationJob::CFileOperationJob(FileAction action, CFileItemList & items,
   SetFileOperation(action, items, strDestFile);
 }
 
-void CFileOperationJob::SetFileOperation(FileAction action, CFileItemList &items, const std::string &strDestFile)
+void CFileOperationJob::SetFileOperation(FileAction action,
+                                         const CFileItemList& items,
+                                         const std::string& strDestFile)
 {
   m_action = action;
   m_strDestFile = strDestFile;
 
   m_items.Clear();
   for (int i = 0; i < items.Size(); i++)
-    m_items.Add(CFileItemPtr(new CFileItem(*items[i])));
+    m_items.Add(std::make_shared<CFileItem>(*items[i]));
 }
 
 bool CFileOperationJob::DoWork()
@@ -97,7 +101,7 @@ bool CFileOperationJob::DoProcessFile(FileAction action, const std::string& strF
       time += data.st_size;
   }
 
-  fileOperations.push_back(CFileOperation(action, strFileA, strFileB, time));
+  fileOperations.emplace_back(action, strFileA, strFileB, time);
 
   totalTime += time;
 
@@ -125,20 +129,24 @@ bool CFileOperationJob::DoProcessFolder(FileAction action, const std::string& st
 
   if (!DoProcess(action, items, strDestFile, fileOperations, totalTime))
   {
-    CLog::Log(LOGERROR,"FileManager: error while processing folder: %s", strPath.c_str());
+    CLog::Log(LOGERROR, "FileManager: error while processing folder: {}", strPath);
     return false;
   }
 
   if (action == ActionMove)
   {
-    fileOperations.push_back(CFileOperation(ActionDeleteFolder, strPath, "", 1));
+    fileOperations.emplace_back(ActionDeleteFolder, strPath, "", 1);
     totalTime += 1.0;
   }
 
   return true;
 }
 
-bool CFileOperationJob::DoProcess(FileAction action, CFileItemList & items, const std::string& strDestFile, FileOperationList &fileOperations, double &totalTime)
+bool CFileOperationJob::DoProcess(FileAction action,
+                                  const CFileItemList& items,
+                                  const std::string& strDestFile,
+                                  FileOperationList& fileOperations,
+                                  double& totalTime)
 {
   for (int iItem = 0; iItem < items.Size(); ++iItem)
   {
@@ -162,7 +170,7 @@ bool CFileOperationJob::DoProcess(FileAction action, CFileItemList & items, cons
           strFileName += URIUtils::GetExtension(pItem->GetPath());
         }
 
-        strFileName = CUtil::MakeLegalFileName(strFileName);
+        strFileName = CUtil::MakeLegalFileName(std::move(strFileName));
       }
 
       std::string strnewDestFile;
@@ -316,14 +324,13 @@ bool CFileOperationJob::CFileOperation::OnFileCallback(void* pContext, int iperc
   double current = data->current + ((double)ipercent * data->opWeight * (double)m_time)/ 100.0;
 
   if (avgSpeed > 1000000.0f)
-    data->base->m_avgSpeed = StringUtils::Format("%.1f MB/s", avgSpeed / 1000000.0f);
+    data->base->m_avgSpeed = StringUtils::Format("{:.1f} MB/s", avgSpeed / 1000000.0f);
   else
-    data->base->m_avgSpeed = StringUtils::Format("%.1f KB/s", avgSpeed / 1000.0f);
+    data->base->m_avgSpeed = StringUtils::Format("{:.1f} KB/s", avgSpeed / 1000.0f);
 
   std::string line;
-  line = StringUtils::Format("%s (%s)",
-                              data->base->GetCurrentFile().c_str(),
-                              data->base->GetAverageSpeed().c_str());
+  line =
+      StringUtils::Format("{} ({})", data->base->GetCurrentFile(), data->base->GetAverageSpeed());
   data->base->SetText(line);
   return !data->base->ShouldCancel((unsigned)current, 100);
 }

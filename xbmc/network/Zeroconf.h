@@ -10,7 +10,6 @@
 
 #include "utils/Job.h"
 
-#include <atomic>
 #include <map>
 #include <string>
 #include <utility>
@@ -74,7 +73,7 @@ public:
   static CZeroconf* GetInstance();
   // release the singleton; (save to call multiple times)
   static void   ReleaseInstance();
-  // returns false if ReleaseInstance() was called befores
+  // returns false if ReleaseInstance() was called before
   static bool   IsInstantiated() { return  smp_instance != 0; }
   // win32: process results from the bonjour daemon
   virtual void  ProcessResults() {}
@@ -123,8 +122,6 @@ private:
   tServiceMap m_service_map;
   bool m_started = false;
 
-  //protects singleton creation/destruction
-  static std::atomic_flag sm_singleton_guard;
   static CZeroconf* smp_instance;
 
   class CPublish : public CJob

@@ -12,6 +12,8 @@
 #include "guilib/GUIDialog.h"
 #include "threads/Event.h"
 
+#include <memory>
+
 class CGUIDialogSongInfo :
       public CGUIDialog
 {
@@ -23,13 +25,13 @@ public:
   void SetArtTypeList(CFileItemList& artlist);
   bool OnAction(const CAction& action) override;
   bool OnBack(int actionID) override;
-  bool HasUpdatedUserrating() const { return m_hasUpdatedUserrating; };
+  bool HasUpdatedUserrating() const { return m_hasUpdatedUserrating; }
 
-  bool HasListItems() const override { return true; };
+  bool HasListItems() const override { return true; }
   CFileItemPtr GetCurrentListItem(int offset = 0) override;
   std::string GetContent();
-  //const CFileItemList& CurrentDirectory() const { return m_artTypeList; };
-  bool IsCancelled() const { return m_cancelled; };
+  //const CFileItemList& CurrentDirectory() const { return m_artTypeList; }
+  bool IsCancelled() const { return m_cancelled; }
   void FetchComplete();
 
   static void ShowFor(CFileItem* pItem);
@@ -39,6 +41,7 @@ protected:
   void OnGetArt();
   void SetUserrating(int userrating);
   void OnSetUserrating();
+  void OnPlaySong(const std::shared_ptr<CFileItem>& item);
 
   CFileItemPtr m_song;
   CFileItemList m_artTypeList;

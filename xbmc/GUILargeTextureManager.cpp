@@ -8,28 +8,29 @@
 
 #include "GUILargeTextureManager.h"
 
+#include "ServiceBroker.h"
 #include "TextureCache.h"
+#include "commons/ilog.h"
+#include "guilib/GUIComponent.h"
 #include "guilib/Texture.h"
-#include "threads/SingleLock.h"
-#include "threads/SystemClock.h"
 #include "utils/JobManager.h"
 #include "utils/TimeUtils.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
+#include "windowing/WinSystem.h"
 
 #include <cassert>
+#include <chrono>
+#include <exception>
+#include <mutex>
 
-CImageLoader::CImageLoader(const std::string &path, const bool useCache):
-  m_path(path)
+CImageLoader::CImageLoader(const std::string& path, const bool useCache)
+  : m_path(path), m_texture(nullptr)
 {
-  m_texture = NULL;
   m_use_cache = useCache;
 }
 
-CImageLoader::~CImageLoader()
-{
-  delete(m_texture);
-}
+CImageLoader::~CImageLoader() = default;
 
 bool CImageLoader::DoWork()
 {
@@ -41,38 +42,41 @@ bool CImageLoader::DoWork()
     return false;
 
   if (m_use_cache)
-    loadPath = CTextureCache::GetInstance().CheckCachedImage(texturePath, needsChecking);
+    loadPath = CServiceBroker::GetTextureCache()->CheckCachedImage(texturePath, needsChecking);
   else
     loadPath = texturePath;
 
   if (!loadPath.empty())
   {
     // direct route - load the image
-    unsigned int start = XbmcThreads::SystemClockMillis();
+    auto start = std::chrono::steady_clock::now();
     m_texture =
         CTexture::LoadFromFile(loadPath, CServiceBroker::GetWinSystem()->GetGfxContext().GetWidth(),
                                CServiceBroker::GetWinSystem()->GetGfxContext().GetHeight());
 
-    if (XbmcThreads::SystemClockMillis() - start > 100)
-      CLog::Log(LOGDEBUG, "%s - took %u ms to load %s", __FUNCTION__, XbmcThreads::SystemClockMillis() - start, loadPath.c_str());
+    auto end = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    if (duration.count() > 100)
+      CLog::Log(LOGDEBUG, "{} - took {} ms to load {}", __FUNCTION__, duration.count(), loadPath);
 
     if (m_texture)
     {
       if (needsChecking)
-        CTextureCache::GetInstance().BackgroundCacheImage(texturePath);
+        CServiceBroker::GetTextureCache()->BackgroundCacheImage(texturePath);
 
       return true;
     }
 
     // Fallthrough on failure:
-    CLog::Log(LOGERROR, "%s - Direct texture file loading failed for %s", __FUNCTION__, loadPath.c_str());
+    CLog::Log(LOGERROR, "{} - Direct texture file loading failed for {}", __FUNCTION__, loadPath);
   }
 
   if (!m_use_cache)
     return false; // We're done
 
   // not in our texture cache or it failed to load from it, so try and load directly and then cache the result
-  CTextureCache::GetInstance().CacheImage(texturePath, &m_texture);
+  CServiceBroker::GetTextureCache()->CacheImage(texturePath, &m_texture);
   return (m_texture != NULL);
 }
 
@@ -119,11 +123,15 @@ bool CGUILargeTextureManager::CLargeTexture::DeleteIfRequired(bool deleteImmedia
   return false;
 }
 
-void CGUILargeTextureManager::CLargeTexture::SetTexture(CTexture* texture)
+void CGUILargeTextureManager::CLargeTexture::SetTexture(std::unique_ptr<CTexture> texture)
 {
   assert(!m_texture.size());
   if (texture)
-    m_texture.Set(texture, texture->GetWidth(), texture->GetHeight());
+  {
+    const auto width = texture->GetWidth();
+    const auto height = texture->GetHeight();
+    m_texture.Set(std::move(texture), width, height);
+  }
 }
 
 CGUILargeTextureManager::CGUILargeTextureManager() = default;
@@ -132,7 +140,7 @@ CGUILargeTextureManager::~CGUILargeTextureManager() = default;
 
 void CGUILargeTextureManager::CleanupUnusedImages(bool immediately)
 {
-  CSingleLock lock(m_listSection);
+  std::unique_lock<CCriticalSection> lock(m_listSection);
   // check for items to remove from allocated list, and remove
   listIterator it = m_allocated.begin();
   while (it != m_allocated.end())
@@ -149,7 +157,7 @@ void CGUILargeTextureManager::CleanupUnusedImages(bool immediately)
 // else, add to the queue list if appropriate.
 bool CGUILargeTextureManager::GetImage(const std::string &path, CTextureArray &texture, bool firstRequest, const bool useCache)
 {
-  CSingleLock lock(m_listSection);
+  std::unique_lock<CCriticalSection> lock(m_listSection);
   for (listIterator it = m_allocated.begin(); it != m_allocated.end(); ++it)
   {
     CLargeTexture *image = *it;
@@ -170,7 +178,7 @@ bool CGUILargeTextureManager::GetImage(const std::string &path, CTextureArray &t
 
 void CGUILargeTextureManager::ReleaseImage(const std::string &path, bool immediately)
 {
-  CSingleLock lock(m_listSection);
+  std::unique_lock<CCriticalSection> lock(m_listSection);
   for (listIterator it = m_allocated.begin(); it != m_allocated.end(); ++it)
   {
     CLargeTexture *image = *it;
@@ -188,7 +196,7 @@ void CGUILargeTextureManager::ReleaseImage(const std::string &path, bool immedia
     if (image->GetPath() == path && image->DecrRef(true))
     {
       // cancel this job
-      CJobManager::GetInstance().CancelJob(id);
+      CServiceBroker::GetJobManager()->CancelJob(id);
       m_queued.erase(it);
       return;
     }
@@ -201,7 +209,7 @@ void CGUILargeTextureManager::QueueImage(const std::string &path, bool useCache)
   if (path.empty())
     return;
 
-  CSingleLock lock(m_listSection);
+  std::unique_lock<CCriticalSection> lock(m_listSection);
   for (queueIterator it = m_queued.begin(); it != m_queued.end(); ++it)
   {
     CLargeTexture *image = it->second;
@@ -214,21 +222,22 @@ void CGUILargeTextureManager::QueueImage(const std::string &path, bool useCache)
 
   // queue the item
   CLargeTexture *image = new CLargeTexture(path);
-  unsigned int jobID = CJobManager::GetInstance().AddJob(new CImageLoader(path, useCache), this, CJob::PRIORITY_NORMAL);
+  unsigned int jobID = CServiceBroker::GetJobManager()->AddJob(new CImageLoader(path, useCache),
+                                                               this, CJob::PRIORITY_NORMAL);
   m_queued.emplace_back(jobID, image);
 }
 
 void CGUILargeTextureManager::OnJobComplete(unsigned int jobID, bool success, CJob *job)
 {
   // see if we still have this job id
-  CSingleLock lock(m_listSection);
+  std::unique_lock<CCriticalSection> lock(m_listSection);
   for (queueIterator it = m_queued.begin(); it != m_queued.end(); ++it)
   {
     if (it->first == jobID)
     { // found our job
       CImageLoader *loader = static_cast<CImageLoader*>(job);
       CLargeTexture *image = it->second;
-      image->SetTexture(loader->m_texture);
+      image->SetTexture(std::move(loader->m_texture));
       loader->m_texture = NULL; // we want to keep the texture, and jobs are auto-deleted.
       m_queued.erase(it);
       m_allocated.push_back(image);

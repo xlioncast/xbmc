@@ -12,8 +12,14 @@
 #include "system_egl.h"
 #include "threads/CriticalSection.h"
 
+#include <cstdint>
+
 #include <EGL/eglext.h>
+#ifdef HAVE_EGLEXTANGLE
+#include <EGL/eglext_angle.h>
+#else
 #include <EGL/eglextchromium.h>
+#endif
 #include <X11/Xutil.h>
 
 class CGLContextEGL : public CGLContext
@@ -31,9 +37,9 @@ public:
   uint64_t GetVblankTiming(uint64_t &msc, uint64_t &interval) override;
 
   EGLint m_renderingApi;
-  EGLDisplay m_eglDisplay;
-  EGLSurface m_eglSurface;
-  EGLContext m_eglContext;
+  EGLDisplay m_eglDisplay = EGL_NO_DISPLAY;
+  EGLSurface m_eglSurface = EGL_NO_SURFACE;
+  EGLContext m_eglContext = EGL_NO_CONTEXT;
   EGLConfig m_eglConfig;
 protected:
   bool SuitableCheck(EGLDisplay eglDisplay, EGLConfig config);

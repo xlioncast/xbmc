@@ -66,6 +66,13 @@ CBaseRenderer* CRendererDRMPRIME::Create(CVideoBuffer* buffer)
 
     buf->ReleaseDescriptor();
 
+    auto gui = drm->GetGuiPlane();
+    if (!gui)
+      return nullptr;
+
+    if (!gui->SupportsFormat(CDRMUtils::FourCCWithAlpha(gui->GetFormat())))
+      return nullptr;
+
     auto plane = drm->GetVideoPlane();
     if (!plane)
       return nullptr;
@@ -124,10 +131,14 @@ void CRendererDRMPRIME::ManageRenderArea()
   RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
   if (info.iScreenWidth != info.iWidth)
   {
-    CalcNormalRenderRect(0, 0, info.iScreenWidth, info.iScreenHeight,
-                         GetAspectRatio() * CDisplaySettings::GetInstance().GetPixelRatio(),
-                         CDisplaySettings::GetInstance().GetZoomAmount(),
-                         CDisplaySettings::GetInstance().GetVerticalShift());
+    CalcDestRect(0, 0, info.iScreenWidth, info.iScreenHeight,
+                 GetAspectRatio() * CDisplaySettings::GetInstance().GetPixelRatio(),
+                 CDisplaySettings::GetInstance().GetZoomAmount(),
+                 CDisplaySettings::GetInstance().GetVerticalShift(), m_planeDestRect);
+  }
+  else
+  {
+    m_planeDestRect = m_destRect;
   }
 }
 
@@ -166,10 +177,6 @@ void CRendererDRMPRIME::ReleaseBuffer(int index)
 bool CRendererDRMPRIME::NeedBuffer(int index)
 {
   if (m_iLastRenderBuffer == index)
-    return true;
-
-  CVideoBufferDRMPRIME* buffer = dynamic_cast<CVideoBufferDRMPRIME*>(m_buffers[index].videoBuffer);
-  if (buffer && buffer->m_fb_id)
     return true;
 
   return false;
@@ -217,7 +224,7 @@ void CRendererDRMPRIME::RenderUpdate(
   if (m_iLastRenderBuffer == -1)
     m_videoLayerBridge->Configure(buffer);
 
-  m_videoLayerBridge->SetVideoPlane(buffer, m_destRect);
+  m_videoLayerBridge->SetVideoPlane(buffer, m_planeDestRect);
 
   m_iLastRenderBuffer = index;
 }
@@ -237,7 +244,7 @@ bool CRendererDRMPRIME::ConfigChanged(const VideoPicture& picture)
   return false;
 }
 
-bool CRendererDRMPRIME::Supports(ERENDERFEATURE feature)
+bool CRendererDRMPRIME::Supports(ERENDERFEATURE feature) const
 {
   switch (feature)
   {
@@ -251,7 +258,7 @@ bool CRendererDRMPRIME::Supports(ERENDERFEATURE feature)
   }
 }
 
-bool CRendererDRMPRIME::Supports(ESCALINGMETHOD method)
+bool CRendererDRMPRIME::Supports(ESCALINGMETHOD method) const
 {
   return false;
 }

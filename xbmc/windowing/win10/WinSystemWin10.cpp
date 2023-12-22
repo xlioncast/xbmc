@@ -6,26 +6,31 @@
  *  See LICENSES/README.md for more information.
  */
 
-#include "Application.h"
+#include "WinSystemWin10.h"
+
+#include "ServiceBroker.h"
+#include "WIN32Util.h"
+#include "WinEventsWin10.h"
+#include "application/Application.h"
 #include "cores/AudioEngine/AESinkFactory.h"
-#include "cores/AudioEngine/Sinks/AESinkXAudio.h"
 #include "cores/AudioEngine/Sinks/AESinkWASAPI.h"
-#include "windowing/GraphicContext.h"
-#include "platform/win10/AsyncHelpers.h"
-#include "platform/win32/CharsetConverter.h"
+#include "cores/AudioEngine/Sinks/AESinkXAudio.h"
 #include "rendering/dx/DirectXHelper.h"
 #include "rendering/dx/RenderContext.h"
 #include "rendering/dx/ScreenshotSurfaceWindows.h"
-#include "ServiceBroker.h"
 #include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SingleLock.h"
-#include "utils/log.h"
 #include "utils/SystemInfo.h"
+#include "utils/log.h"
+#include "windowing/GraphicContext.h"
 #include "windowing/windows/VideoSyncD3D.h"
-#include "WinEventsWin10.h"
-#include "WinSystemWin10.h"
+
+#include "platform/win10/AsyncHelpers.h"
+#include "platform/win32/CharsetConverter.h"
+
+#include <cmath>
+#include <mutex>
 
 #pragma pack(push,8)
 
@@ -43,6 +48,8 @@ using namespace winrt::Windows::Graphics::Display::Core;
 using namespace winrt::Windows::UI::Core;
 using namespace winrt::Windows::UI::ViewManagement;
 
+using namespace std::chrono_literals;
+
 CWinSystemWin10::CWinSystemWin10()
   : CWinSystemBase()
   , m_ValidWindowedPosition(false)
@@ -58,12 +65,8 @@ CWinSystemWin10::CWinSystemWin10()
 
   AE::CAESinkFactory::ClearSinks();
   CAESinkXAudio::Register();
+  CAESinkWASAPI::Register();
   CScreenshotSurfaceWindows::Register();
-
-  if (CSysInfo::GetWindowsDeviceFamily() == CSysInfo::WindowsDeviceFamily::Desktop)
-  {
-    CAESinkWASAPI::Register();
-  }
 }
 
 CWinSystemWin10::~CWinSystemWin10()
@@ -80,7 +83,7 @@ bool CWinSystemWin10::InitWindowSystem()
 
   if (m_displays.empty())
   {
-    CLog::Log(LOGERROR, "%s - no suitable monitor found, aborting...", __FUNCTION__);
+    CLog::Log(LOGERROR, "{} - no suitable monitor found, aborting...", __FUNCTION__);
     return false;
   }
 
@@ -152,6 +155,11 @@ void CWinSystemWin10::FinishWindowResize(int newWidth, int newHeight)
   ApplicationView::PreferredLaunchWindowingMode(ApplicationViewWindowingMode::PreferredLaunchViewSize);
 }
 
+void CWinSystemWin10::ForceFullScreen(const RESOLUTION_INFO& resInfo)
+{
+  ResizeWindow(resInfo.iScreenWidth, resInfo.iScreenHeight, 0, 0);
+}
+
 void CWinSystemWin10::AdjustWindow()
 {
   CLog::Log(LOGDEBUG, __FUNCTION__": adjusting window if required.");
@@ -199,8 +207,9 @@ bool CWinSystemWin10::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool 
   CWinSystemWin10::UpdateStates(fullScreen);
   WINDOW_STATE state = GetState(fullScreen);
 
-  CLog::Log(LOGDEBUG, "%s (%s) with size %dx%d, refresh %f%s", __FUNCTION__, window_state_names[state]
-          , res.iWidth, res.iHeight, res.fRefreshRate, (res.dwFlags & D3DPRESENTFLAG_INTERLACED) ? "i" : "");
+  CLog::Log(LOGDEBUG, "{} ({}) with size {}x{}, refresh {:f}{}", __FUNCTION__,
+            window_state_names[state], res.iWidth, res.iHeight, res.fRefreshRate,
+            (res.dwFlags & D3DPRESENTFLAG_INTERLACED) ? "i" : "");
 
   bool forceChange = false;    // resolution/display is changed but window state isn't changed
   bool stereoChange = IsStereoEnabled() != (CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() == RENDER_STEREO_MODE_HARDWAREBASED);
@@ -248,7 +257,7 @@ bool CWinSystemWin10::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool 
   {
     if (state == WINDOW_STATE_WINDOWED) // go to a windowed state
     {
-      // need to restore resoultion if it was changed to not native
+      // need to restore resolution if it was changed to not native
       // because we do not support resolution change in windowed mode
       RestoreDesktopResolution();
     }
@@ -307,11 +316,15 @@ bool CWinSystemWin10::ChangeResolution(const RESOLUTION_INFO& res, bool forceCha
   {
     bool changed = false;
     auto hdmiInfo = HdmiDisplayInformation::GetForCurrentView();
+    const bool needHDR = DX::DeviceResources::Get()->IsHDROutput();
+
     if (hdmiInfo != nullptr)
     {
       // default mode not in list of supported display modes
-      if (res.iScreenWidth == details->ScreenWidth && res.iScreenHeight == details->ScreenHeight
-        && fabs(res.fRefreshRate - details->RefreshRate) <= 0.00001)
+      // TO DO: is still necessary? (or now all modes are listed?)
+      if (!needHDR && res.iScreenWidth == details->ScreenWidth &&
+          res.iScreenHeight == details->ScreenHeight &&
+          fabs(res.fRefreshRate - details->RefreshRate) <= 0.00001)
       {
         Wait(hdmiInfo.SetDefaultDisplayModeAsync());
         changed = true;
@@ -321,11 +334,17 @@ bool CWinSystemWin10::ChangeResolution(const RESOLUTION_INFO& res, bool forceCha
         bool needStereo = CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode() == RENDER_STEREO_MODE_HARDWAREBASED;
         auto hdmiModes = hdmiInfo.GetSupportedDisplayModes();
 
+        // For backward compatibility (also old Xbox models) only match color space for HDR modes
+        // and keep SDR modes selection as it is (any color space). Assumes SDR modes listed first.
+        // TO DO: for HDR modes make use of IsSmpte2084Supported() but has issues with current code.
+        // TO DO: for SDR implement preference for BT.709 color space but also fallback to sRGB.
         HdmiDisplayMode selected = nullptr;
-        for (auto& mode : hdmiModes)
+        for (const auto& mode : hdmiModes)
         {
-          if (res.iScreenWidth == mode.ResolutionWidthInRawPixels() && res.iScreenHeight == mode.ResolutionHeightInRawPixels()
-            && fabs(res.fRefreshRate - mode.RefreshRate()) <= 0.00001)
+          if ((!needHDR || (needHDR && mode.ColorSpace() == HdmiDisplayColorSpace::BT2020)) &&
+              res.iScreenWidth == mode.ResolutionWidthInRawPixels() &&
+              res.iScreenHeight == mode.ResolutionHeightInRawPixels() &&
+              fabs(res.fRefreshRate - mode.RefreshRate()) <= 0.00001)
           {
             selected = mode;
             if (needStereo == mode.StereoEnabled())
@@ -335,7 +354,8 @@ bool CWinSystemWin10::ChangeResolution(const RESOLUTION_INFO& res, bool forceCha
 
         if (selected != nullptr)
         {
-          changed = Wait(hdmiInfo.RequestSetCurrentDisplayModeAsync(selected));
+          changed = Wait(hdmiInfo.RequestSetCurrentDisplayModeAsync(
+              selected, needHDR ? HdmiDisplayHdrOption::Eotf2084 : HdmiDisplayHdrOption::None));
         }
       }
     }
@@ -355,7 +375,7 @@ bool CWinSystemWin10::ChangeResolution(const RESOLUTION_INFO& res, bool forceCha
     return changed;
   }
 
-  CLog::LogFunction(LOGDEBUG, __FUNCTION__, "Not supported.");
+  CLog::LogF(LOGDEBUG, "Not supported.");
   return false;
 }
 
@@ -382,7 +402,7 @@ void CWinSystemWin10::UpdateResolutions()
 
   RESOLUTION_INFO& primary_info = CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP);
   UpdateDesktopResolution(primary_info, "Default", w, h, refreshRate, dwFlags);
-  CLog::Log(LOGINFO, "Primary mode: %s", primary_info.strMode.c_str());
+  CLog::Log(LOGINFO, "Primary mode: {}", primary_info.strMode);
 
   // erase previous stored modes
   CDisplaySettings::GetInstance().ClearCustomResolutions();
@@ -393,7 +413,7 @@ void CWinSystemWin10::UpdateResolutions()
     if (hdmiInfo != nullptr)
     {
       auto hdmiModes = hdmiInfo.GetSupportedDisplayModes();
-      for (auto& mode : hdmiModes)
+      for (const auto& mode : hdmiModes)
       {
         RESOLUTION_INFO res;
         res.iWidth = mode.ResolutionWidthInRawPixels();
@@ -404,13 +424,13 @@ void CWinSystemWin10::UpdateResolutions()
         res.fPixelRatio = 1.0f;
         res.iScreenWidth = res.iWidth;
         res.iScreenHeight = res.iHeight;
-        res.iSubtitles = (int)(0.965 * res.iHeight);
-        res.strMode = StringUtils::Format("Default: %dx%d @ %.2fHz",
-                                          res.iWidth, res.iHeight, res.fRefreshRate);
+        res.iSubtitles = res.iHeight;
+        res.strMode = StringUtils::Format("Default: {}x{} @ {:.2f}Hz", res.iWidth, res.iHeight,
+                                          res.fRefreshRate);
         GetGfxContext().ResetOverscan(res);
 
         if (AddResolution(res))
-          CLog::Log(LOGINFO, "Additional mode: %s %s", res.strMode.c_str(),
+          CLog::Log(LOGINFO, "Additional mode: {} {}", res.strMode,
                     mode.Is2086MetadataSupported() ? "(HDR)" : "");
       }
     }
@@ -476,6 +496,10 @@ void CWinSystemWin10::GetConnectedDisplays(std::vector<MONITOR_DETAILS>& outputs
       if (hdmiInfo != nullptr)
       {
         auto currentMode = hdmiInfo.GetCurrentDisplayMode();
+        // On Xbox, 4K resolutions only are reported by HdmiDisplayInformation API
+        // so ScreenHeight & ScreenWidth are updated with info provided here
+        md.ScreenHeight = currentMode.ResolutionHeightInRawPixels();
+        md.ScreenWidth = currentMode.ResolutionWidthInRawPixels();
         md.RefreshRate = currentMode.RefreshRate();
         md.Bpp = currentMode.BitsPerPixel();
       }
@@ -523,34 +547,34 @@ void CWinSystemWin10::ShowOSMouse(bool show)
 
 bool CWinSystemWin10::Minimize()
 {
-  CLog::Log(LOGDEBUG, "%s is not implemented", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "{} is not implemented", __FUNCTION__);
   return true;
 }
 bool CWinSystemWin10::Restore()
 {
-  CLog::Log(LOGDEBUG, "%s is not implemented", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "{} is not implemented", __FUNCTION__);
   return true;
 }
 bool CWinSystemWin10::Hide()
 {
-  CLog::Log(LOGDEBUG, "%s is not implemented", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "{} is not implemented", __FUNCTION__);
   return true;
 }
 bool CWinSystemWin10::Show(bool raise)
 {
-  CLog::Log(LOGDEBUG, "%s is not implemented", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "{} is not implemented", __FUNCTION__);
   return true;
 }
 
 void CWinSystemWin10::Register(IDispResource *resource)
 {
-  CSingleLock lock(m_resourceSection);
+  std::unique_lock<CCriticalSection> lock(m_resourceSection);
   m_resources.push_back(resource);
 }
 
 void CWinSystemWin10::Unregister(IDispResource* resource)
 {
-  CSingleLock lock(m_resourceSection);
+  std::unique_lock<CCriticalSection> lock(m_resourceSection);
   std::vector<IDispResource*>::iterator i = find(m_resources.begin(), m_resources.end(), resource);
   if (i != m_resources.end())
     m_resources.erase(i);
@@ -558,10 +582,10 @@ void CWinSystemWin10::Unregister(IDispResource* resource)
 
 void CWinSystemWin10::OnDisplayLost()
 {
-  CLog::Log(LOGDEBUG, "%s - notify display lost event", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "{} - notify display lost event", __FUNCTION__);
 
   {
-    CSingleLock lock(m_resourceSection);
+    std::unique_lock<CCriticalSection> lock(m_resourceSection);
     for (std::vector<IDispResource *>::iterator i = m_resources.begin(); i != m_resources.end(); ++i)
       (*i)->OnLostDisplay();
   }
@@ -571,8 +595,8 @@ void CWinSystemWin10::OnDisplayReset()
 {
   if (!m_delayDispReset)
   {
-    CLog::Log(LOGDEBUG, "%s - notify display reset event", __FUNCTION__);
-    CSingleLock lock(m_resourceSection);
+    CLog::Log(LOGDEBUG, "{} - notify display reset event", __FUNCTION__);
+    std::unique_lock<CCriticalSection> lock(m_resourceSection);
     for (std::vector<IDispResource *>::iterator i = m_resources.begin(); i != m_resources.end(); ++i)
       (*i)->OnResetDisplay();
   }
@@ -580,11 +604,14 @@ void CWinSystemWin10::OnDisplayReset()
 
 void CWinSystemWin10::OnDisplayBack()
 {
-  int delay = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt("videoscreen.delayrefreshchange");
-  if (delay > 0)
+  auto delay =
+      std::chrono::milliseconds(CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+                                    "videoscreen.delayrefreshchange") *
+                                100);
+  if (delay > 0ms)
   {
     m_delayDispReset = true;
-    m_dispResetTimer.Set(delay * 100);
+    m_dispResetTimer.Set(delay);
   }
   OnDisplayReset();
 }
@@ -595,7 +622,7 @@ void CWinSystemWin10::ResolutionChanged()
   OnDisplayBack();
 }
 
-std::unique_ptr<CVideoSync> CWinSystemWin10::GetVideoSync(void *clock)
+std::unique_ptr<CVideoSync> CWinSystemWin10::GetVideoSync(CVideoReferenceClock* clock)
 {
   std::unique_ptr<CVideoSync> pVSync(new CVideoSyncD3D(clock));
   return pVSync;
@@ -639,6 +666,43 @@ WINDOW_STATE CWinSystemWin10::GetState(bool fullScreen) const
 bool CWinSystemWin10::MessagePump()
 {
   return m_winEvents->MessagePump();
+}
+
+/*!
+ * \brief Max luminance for GUI SDR content in HDR mode.
+ * \return Max luminance in nits, lower than 10000.
+*/
+float CWinSystemWin10::GetGuiSdrPeakLuminance() const
+{
+  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+
+  // use cached system value as this is called for each frame
+  if (settings->GetBool(CSettings::SETTING_VIDEOSCREEN_USESYSTEMSDRPEAKLUMINANCE) &&
+      m_validSystemSdrPeakLuminance)
+    return m_systemSdrPeakLuminance;
+
+  // Max nits for 100% UI setting = 1000 nits, < 10000 nits, min 80 nits for 0%
+  const int guiSdrPeak = settings->GetInt(CSettings::SETTING_VIDEOSCREEN_GUISDRPEAKLUMINANCE);
+  return (80.0f * std::pow(std::exp(1.0f), 0.025257f * guiSdrPeak));
+}
+
+/*!
+ * \brief Test support of the OS for a SDR max luminance in HDR mode setting
+ * \return true when the OS supports that setting, false otherwise
+*/
+bool CWinSystemWin10::HasSystemSdrPeakLuminance()
+{
+  return CWIN32Util::GetSystemSdrWhiteLevel(std::wstring(), nullptr);
+}
+
+/*!
+ * \brief Cache the system HDR/SDR balance for use during rendering, instead of querying the API
+ for each frame.
+*/
+void CWinSystemWin10::CacheSystemSdrPeakLuminance()
+{
+  m_validSystemSdrPeakLuminance =
+      CWIN32Util::GetSystemSdrWhiteLevel(std::wstring(), &m_systemSdrPeakLuminance);
 }
 
 #pragma pack(pop)

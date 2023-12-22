@@ -130,7 +130,7 @@ void CGUIDialogLibExportSettings::OnSettingChanged(const std::shared_ptr<const C
     if (m_settings.IsItemExported(ELIBEXPORT_ALBUMS) && (m_settings.m_skipnfo && !m_settings.m_artwork))
     {
       m_settings.m_artwork = true;
-      m_settingArt->SetValue(true);     
+      m_settingArt->SetValue(true);
     }
     UpdateToggles();
   }
@@ -145,8 +145,8 @@ void CGUIDialogLibExportSettings::OnSettingAction(const std::shared_ptr<const CS
 
   const std::string &settingId = setting->GetId();
 
-  if (settingId == CSettings::SETTING_MUSICLIBRARY_EXPORT_FOLDER && 
-      !m_settings.IsToLibFolders() && !m_settings.IsArtistFoldersOnly())
+  if (settingId == CSettings::SETTING_MUSICLIBRARY_EXPORT_FOLDER && !m_settings.IsToLibFolders() &&
+      !m_settings.IsArtistFoldersOnly())
   {
     VECSOURCES shares;
     CServiceBroker::GetMediaManager().GetLocalDrives(shares);
@@ -211,7 +211,7 @@ void CGUIDialogLibExportSettings::OnOK()
     {
       //"Unable to export to library folders as the system artist information folder setting is empty"
       //Settings (YES) button takes user to enter the artist info folder setting
-      if (HELPERS::ShowYesNoDialogText(20223, 38317, 186, 10004) == DialogResponse::YES)
+      if (HELPERS::ShowYesNoDialogText(20223, 38317, 186, 10004) == DialogResponse::CHOICE_YES)
       {
         m_confirmed = false;
         Close();
@@ -298,8 +298,8 @@ void CGUIDialogLibExportSettings::UpdateToggles()
 }
 
 void CGUIDialogLibExportSettings::UpdateDescription()
-{ 
-  if (m_settings.IsToLibFolders())  
+{
+  if (m_settings.IsToLibFolders())
   {
     // Destination button is description of what to library means
     SetLabel(CSettings::SETTING_MUSICLIBRARY_EXPORT_FOLDER, "");
@@ -348,23 +348,21 @@ void CGUIDialogLibExportSettings::InitializeSettings()
 
   TranslatableIntegerSettingOptions entries;
 
-  entries.push_back(TranslatableIntegerSettingOption(38301, ELIBEXPORT_SINGLEFILE));
-  entries.push_back(TranslatableIntegerSettingOption(38303, ELIBEXPORT_TOLIBRARYFOLDER));
-  entries.push_back(TranslatableIntegerSettingOption(38302, ELIBEXPORT_SEPARATEFILES));
-  entries.push_back(TranslatableIntegerSettingOption(38321, ELIBEXPORT_ARTISTFOLDERS));
+  entries.emplace_back(38301, ELIBEXPORT_SINGLEFILE);
+  entries.emplace_back(38303, ELIBEXPORT_TOLIBRARYFOLDER);
+  entries.emplace_back(38302, ELIBEXPORT_SEPARATEFILES);
+  entries.emplace_back(38321, ELIBEXPORT_ARTISTFOLDERS);
   AddList(groupDetails, CSettings::SETTING_MUSICLIBRARY_EXPORT_FILETYPE, 38304, SettingLevel::Basic, m_settings.GetExportType(), entries, 38304); // "Choose kind of export output"
   AddButton(groupDetails, CSettings::SETTING_MUSICLIBRARY_EXPORT_FOLDER, 38305, SettingLevel::Basic);
 
   entries.clear();
   if (!m_settings.IsArtistFoldersOnly())
-    entries.push_back(TranslatableIntegerSettingOption(132, ELIBEXPORT_ALBUMS)); //ablums
+    entries.emplace_back(132, ELIBEXPORT_ALBUMS); //ablums
   if (m_settings.IsSingleFile())
-    entries.push_back(TranslatableIntegerSettingOption(134, ELIBEXPORT_SONGS)); //songs
-  entries.push_back(
-      TranslatableIntegerSettingOption(38043, ELIBEXPORT_ALBUMARTISTS)); //album artists
-  entries.push_back(TranslatableIntegerSettingOption(38312, ELIBEXPORT_SONGARTISTS)); //song artists
-  entries.push_back(
-      TranslatableIntegerSettingOption(38313, ELIBEXPORT_OTHERARTISTS)); //other artists
+    entries.emplace_back(134, ELIBEXPORT_SONGS); //songs
+  entries.emplace_back(38043, ELIBEXPORT_ALBUMARTISTS); //album artists
+  entries.emplace_back(38312, ELIBEXPORT_SONGARTISTS); //song artists
+  entries.emplace_back(38313, ELIBEXPORT_OTHERARTISTS); //other artists
 
   std::vector<int> items;
   if (m_settings.IsArtistFoldersOnly())
@@ -383,7 +381,7 @@ void CGUIDialogLibExportSettings::InitializeSettings()
   }
   else
    items = m_settings.GetExportItems();
-  
+
   AddList(groupDetails, CSettings::SETTING_MUSICLIBRARY_EXPORT_ITEMS, 38306, SettingLevel::Basic, items, entries, 133, 1);
 
   if (m_settings.IsToLibFolders() || m_settings.IsSeparateFiles())
@@ -434,7 +432,7 @@ int CGUIDialogLibExportSettings::GetExportItemsFromSetting(const SettingConstPtr
   std::shared_ptr<const CSettingList> settingList = std::static_pointer_cast<const CSettingList>(setting);
   if (settingList->GetElementType() != SettingType::Integer)
   {
-    CLog::Log(LOGERROR, "CGUIDialogLibExportSettings::%s - wrong items element type", __FUNCTION__);
+    CLog::Log(LOGERROR, "CGUIDialogLibExportSettings::{} - wrong items element type", __FUNCTION__);
     return 0;
   }
   int exportitems = 0;
@@ -443,7 +441,7 @@ int CGUIDialogLibExportSettings::GetExportItemsFromSetting(const SettingConstPtr
   {
     if (!value.isInteger())
     {
-      CLog::Log(LOGERROR, "CGUIDialogLibExportSettings::%s - wrong items value type", __FUNCTION__);
+      CLog::Log(LOGERROR, "CGUIDialogLibExportSettings::{} - wrong items value type", __FUNCTION__);
       return 0;
     }
     exportitems += static_cast<int>(value.asInteger());

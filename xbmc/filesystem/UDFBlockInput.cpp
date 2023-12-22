@@ -8,7 +8,9 @@
 
 #include "UDFBlockInput.h"
 
-#include "threads/SingleLock.h"
+#include "filesystem/File.h"
+
+#include <mutex>
 
 #include <udfread/udfread.h>
 
@@ -32,7 +34,7 @@ int CUDFBlockInput::Read(
     udfread_block_input* bi, uint32_t lba, void* buf, uint32_t blocks, int flags)
 {
   auto m_bi = reinterpret_cast<UDF_BI*>(bi);
-  CSingleLock lock(m_bi->lock);
+  std::unique_lock<CCriticalSection> lock(m_bi->lock);
 
   int64_t pos = static_cast<int64_t>(lba) * UDF_BLOCK_SIZE;
 

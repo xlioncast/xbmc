@@ -1,31 +1,10 @@
 # Android packaging
 
-find_program(AAPT_EXECUTABLE aapt PATHS ${SDK_BUILDTOOLS_PATH})
-if(NOT AAPT_EXECUTABLE)
-  message(FATAL_ERROR "Could NOT find aapt executable")
-endif()
-find_program(DX_EXECUTABLE dx PATHS ${SDK_BUILDTOOLS_PATH})
-if(NOT DX_EXECUTABLE)
-  message(FATAL_ERROR "Could NOT find dx executable")
-endif()
-find_program(ZIPALIGN_EXECUTABLE zipalign PATHS ${SDK_BUILDTOOLS_PATH})
-if(NOT ZIPALIGN_EXECUTABLE)
-  message(FATAL_ERROR "Could NOT find zipalign executable")
-endif()
-
-if(CMAKE_BUILD_TYPE STREQUAL Debug)
-  set(ANDROID_DEBUGGABLE true)
-else()
-  set(ANDROID_DEBUGGABLE false)
-endif()
-
 # Configure files into packaging environment.
 configure_file(${CMAKE_SOURCE_DIR}/tools/android/packaging/Makefile.in
                ${CMAKE_BINARY_DIR}/tools/android/packaging/Makefile @ONLY)
-configure_file(${CMAKE_SOURCE_DIR}/tools/android/packaging/apksign
-               ${CMAKE_BINARY_DIR}/tools/android/packaging/apksign COPYONLY)
-configure_file(${CMAKE_SOURCE_DIR}/tools/android/packaging/make_symbols.sh
-               ${CMAKE_BINARY_DIR}/tools/android/packaging/make_symbols.sh COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/tools/android/packaging/gradle.properties
+               ${CMAKE_BINARY_DIR}/tools/android/packaging/gradle.properties COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/tools/android/packaging/build.gradle
                ${CMAKE_BINARY_DIR}/tools/android/packaging/build.gradle COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/tools/android/packaging/gradlew
@@ -36,6 +15,8 @@ configure_file(${CMAKE_SOURCE_DIR}/tools/android/packaging/gradle/wrapper/gradle
                ${CMAKE_BINARY_DIR}/tools/android/packaging/gradle/wrapper/gradle-wrapper.jar COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/tools/android/packaging/gradle/wrapper/gradle-wrapper.properties
                ${CMAKE_BINARY_DIR}/tools/android/packaging/gradle/wrapper/gradle-wrapper.properties COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/tools/android/packaging/xbmc/jni/Android.mk
+               ${CMAKE_BINARY_DIR}/tools/android/packaging/xbmc/jni/Android.mk COPYONLY)
 file(WRITE ${CMAKE_BINARY_DIR}/tools/depends/Makefile.include
      "$(PREFIX)/lib/${APP_NAME_LC}/lib${APP_NAME_LC}.so: ;\n")
 
@@ -84,6 +65,8 @@ set(package_files strings.xml
                   src/interfaces/XBMCNsdManagerDiscoveryListener.java
                   src/interfaces/XBMCMediaDrmOnEventListener.java
                   src/interfaces/XBMCDisplayManagerDisplayListener.java
+                  src/interfaces/XBMCSpeechRecognitionListener.java
+		  src/interfaces/XBMCConnectivityManagerNetworkCallback.java
                   src/model/TVEpisode.java
                   src/model/Movie.java
                   src/model/TVShow.java
@@ -121,6 +104,19 @@ function(add_bundle_file file destination relative)
     file(REMOVE ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/BundleFiles.cmake)
     add_custom_target(bundle_files COMMAND ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/BundleFiles.cmake)
     add_dependencies(bundle bundle_files)
+    add_dependencies(bundle_files ${APP_NAME_LC})
+  endif()
+
+  if(TARGET ${file})
+    # Add support for IMPORTED lib targets
+    # If we need specific properties from other target types later, we can add them
+    # here with some validity checks
+    get_target_property(imploc_file ${file} IMPORTED_LOCATION)
+    if(imploc_file)
+      set(file ${imploc_file})
+    else()
+      return()
+    endif()
   endif()
 
   string(REPLACE "${relative}/" "" outfile ${file})
@@ -142,28 +138,22 @@ foreach(file IN LISTS XBT_FILES install_data)
   add_bundle_file(${CMAKE_BINARY_DIR}/${file} ${datarootdir}/${APP_NAME_LC} ${CMAKE_BINARY_DIR})
 endforeach()
 
+# libdvdnav is currently the only LIBRARY_FILES item remaining for android
 foreach(library IN LISTS LIBRARY_FILES)
   add_bundle_file(${library} ${libdir}/${APP_NAME_LC} ${CMAKE_BINARY_DIR})
 endforeach()
 
-foreach(lib IN LISTS required_dyload dyload_optional ITEMS Shairplay)
-  string(TOUPPER ${lib} lib_up)
-  set(lib_so ${${lib_up}_SONAME})
-  if(lib_so AND EXISTS ${DEPENDS_PATH}/lib/${lib_so})
-    add_bundle_file(${DEPENDS_PATH}/lib/${lib_so} ${libdir} "")
-  endif()
-endforeach()
-add_bundle_file(${ASS_LIBRARY} ${libdir} "")
-add_bundle_file(${SHAIRPLAY_LIBRARY} ${libdir} "")
-add_bundle_file(${SMBCLIENT_LIBRARY} ${libdir} "")
+if(TARGET Shairplay::Shairplay)
+  add_bundle_file(Shairplay::Shairplay ${libdir} "")
+endif()
 
 # Main targets from Makefile.in
 if(CPU MATCHES i686)
   set(CPU x86)
 endif()
-foreach(target apk obb apk-unsigned apk-obb apk-obb-unsigned apk-noobb apk-clean apk-sign)
+foreach(target apk apk-clean)
   add_custom_target(${target}
-      COMMAND PATH=${NATIVEPREFIX}/bin:$ENV{PATH} ${CMAKE_MAKE_PROGRAM}
+      COMMAND env PATH=${NATIVEPREFIX}/bin:$ENV{PATH} ${CMAKE_MAKE_PROGRAM} -j1
               -C ${CMAKE_BINARY_DIR}/tools/android/packaging
               CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}
               CC=${CMAKE_C_COMPILER}
@@ -175,11 +165,9 @@ foreach(target apk obb apk-unsigned apk-obb apk-obb-unsigned apk-noobb apk-clean
               NDKROOT=${NDKROOT}
               SDKROOT=${SDKROOT}
               STRIP=${CMAKE_STRIP}
-              AAPT=${AAPT_EXECUTABLE}
-              DX=${DX_EXECUTABLE}
-              ZIPALIGN=${ZIPALIGN_EXECUTABLE}
               ${target}
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/tools/android/packaging
+      VERBATIM
   )
   if(NOT target STREQUAL apk-clean)
     add_dependencies(${target} bundle)

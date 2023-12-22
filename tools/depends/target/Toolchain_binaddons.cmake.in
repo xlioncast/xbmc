@@ -41,9 +41,9 @@ endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
   set(CMAKE_OSX_SYSROOT @use_sdk_path@)
+  set(CMAKE_LIBRARY_PATH ${CMAKE_FIND_ROOT_PATH}/lib:@use_sdk_path@/lib:/usr/X11R6/lib)
+  set(CMAKE_INCLUDE_PATH ${CMAKE_FIND_ROOT_PATH}/include:@use_sdk_path@/include:/usr/X11R6/include)
   list(APPEND CMAKE_FIND_ROOT_PATH ${CMAKE_OSX_SYSROOT} ${CMAKE_OSX_SYSROOT}/usr /usr/X11R6)
-  set(CMAKE_LIBRARY_PATH @CMAKE_FIND_ROOT_PATH@/lib:@use_sdk_path@/lib:/usr/X11R6/lib)
-  set(CMAKE_INCLUDE_PATH @CMAKE_FIND_ROOT_PATH@/include:@use_sdk_path@/include:/usr/X11R6/include)
 endif()
 set(CMAKE_SYSTEM_VERSION 1)
 
@@ -56,13 +56,18 @@ set(CMAKE_NM @NM@ CACHE FILEPATH "Nm")
 set(CMAKE_OBJDUMP @OBJDUMP@ CACHE FILEPATH "Objdump")
 set(CMAKE_RANLIB @RANLIB@ CACHE FILEPATH "Ranlib")
 
-if(@use_ccache@ STREQUAL "yes")
-  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "@CCACHE@")
+if(NOT "@use_ccache@" STREQUAL "")
+  set(CMAKE_CXX_COMPILER_LAUNCHER @CCACHE@)
+  set(CMAKE_C_COMPILER_LAUNCHER @CCACHE@)
 endif()
 
 # where is the target environment
 if(NOT "@use_toolchain@" STREQUAL "")
-  list(APPEND CMAKE_FIND_ROOT_PATH @use_toolchain@/sysroot/usr)
+  if("@target_platform@" STREQUAL "webos")
+    list(APPEND CMAKE_FIND_ROOT_PATH @use_toolchain@/@use_host@/sysroot)
+  else()
+    list(APPEND CMAKE_FIND_ROOT_PATH @use_toolchain@/sysroot/usr)
+  endif()
 endif()
 
 # add Android directories and tools
@@ -82,11 +87,11 @@ set(CMAKE_CXX_FLAGS_RELEASE "@platform_cxxflags_release@ @platform_includes@")
 set(CMAKE_C_FLAGS_DEBUG "@platform_cflags_debug@ @platform_includes@")
 set(CMAKE_CXX_FLAGS_DEBUG "@platform_cxxflags_debug@ @platform_includes@")
 set(CMAKE_CPP_FLAGS "@platform_cflags@ @platform_includes@")
-set(CMAKE_LD_FLAGS "@platform_ldflags@")
+set(CMAKE_EXE_LINKER_FLAGS "@platform_ldflags@")
 set(ENV{CFLAGS} ${CMAKE_C_FLAGS})
 set(ENV{CXXFLAGS} ${CMAKE_CXX_FLAGS})
 set(ENV{CPPFLAGS} ${CMAKE_CPP_FLAGS})
-set(ENV{LDFLAGS} ${CMAKE_LD_FLAGS})
+set(ENV{LDFLAGS} ${CMAKE_EXE_LINKER_FLAGS})
 # search for programs in the build host directories
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 # for libraries and headers in the target directories

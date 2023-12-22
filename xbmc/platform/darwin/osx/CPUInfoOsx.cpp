@@ -8,14 +8,17 @@
 
 #include "CPUInfoOsx.h"
 
+#include "ServiceBroker.h"
+#include "settings/AdvancedSettings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/Temperature.h"
 
-#include "platform/darwin/osx/smc.h"
 #include "platform/posix/PosixResourceCounter.h"
 
 #include <array>
 #include <string>
 
+#include <smctemp.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
 
@@ -37,6 +40,8 @@ CCPUInfoOsx::CCPUInfoOsx() : m_resourceCounter(new CPosixResourceCounter())
   size_t bufferLength = buffer.size();
   if (sysctlbyname("machdep.cpu.brand_string", buffer.data(), &bufferLength, nullptr, 0) == 0)
     m_cpuModel = buffer.data();
+
+  m_cpuModel = m_cpuModel.substr(0, m_cpuModel.find(char(0))); // remove extra null terminations
 
   buffer = {};
   if (sysctlbyname("machdep.cpu.vendor", buffer.data(), &bufferLength, nullptr, 0) == 0)
@@ -116,9 +121,19 @@ float CCPUInfoOsx::GetCPUFrequency()
 
 bool CCPUInfoOsx::GetTemperature(CTemperature& temperature)
 {
-  int value = SMCGetTemperature(SMC_KEY_CPU_TEMP);
+  if (!CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_cpuTempCmd.empty())
+  {
+    return CheckUserTemperatureCommand(temperature);
+  }
+
+  smctemp::SmcTemp smcTemp = smctemp::SmcTemp();
+  const double value = smcTemp.GetCpuTemp();
+  if (value <= 0.0)
+  {
+    temperature.SetValid(false);
+    return false;
+  }
 
   temperature = CTemperature::CreateFromCelsius(value);
-
   return true;
 }

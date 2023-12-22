@@ -10,6 +10,8 @@
 
 #include "CompileInfo.h"
 #include "LangInfo.h"
+#include "addons/Repository.h"
+#include "addons/addoninfo/AddonInfo.h"
 #include "addons/addoninfo/AddonType.h"
 #include "filesystem/File.h"
 #include "filesystem/SpecialProtocol.h"
@@ -34,7 +36,158 @@ const std::string VALID_ADDON_IDENTIFIER_CHARACTERS = "abcdefghijklmnopqrstuvwxy
 namespace ADDON
 {
 
-AddonInfoPtr CAddonInfoBuilder::Generate(const std::string& id, TYPE type)
+CAddonInfoBuilderFromDB::CAddonInfoBuilderFromDB() : m_addonInfo(std::make_shared<CAddonInfo>())
+{
+}
+
+void CAddonInfoBuilderFromDB::SetId(std::string id)
+{
+  m_addonInfo->m_id = std::move(id);
+}
+
+void CAddonInfoBuilderFromDB::SetName(std::string name)
+{
+  m_addonInfo->m_name = std::move(name);
+}
+
+void CAddonInfoBuilderFromDB::SetLicense(std::string license)
+{
+  m_addonInfo->m_license = std::move(license);
+}
+
+void CAddonInfoBuilderFromDB::SetSummary(std::string summary)
+{
+  m_addonInfo->m_summary.insert(std::pair<std::string, std::string>("unk", std::move(summary)));
+}
+
+void CAddonInfoBuilderFromDB::SetDescription(std::string description)
+{
+  m_addonInfo->m_description.insert(
+      std::pair<std::string, std::string>("unk", std::move(description)));
+}
+
+void CAddonInfoBuilderFromDB::SetDisclaimer(std::string disclaimer)
+{
+  m_addonInfo->m_disclaimer.insert(
+      std::pair<std::string, std::string>("unk", std::move(disclaimer)));
+}
+
+void CAddonInfoBuilderFromDB::SetAuthor(std::string author)
+{
+  m_addonInfo->m_author = std::move(author);
+}
+
+void CAddonInfoBuilderFromDB::SetSource(std::string source)
+{
+  m_addonInfo->m_source = std::move(source);
+}
+
+void CAddonInfoBuilderFromDB::SetWebsite(std::string website)
+{
+  m_addonInfo->m_website = std::move(website);
+}
+
+void CAddonInfoBuilderFromDB::SetForum(std::string forum)
+{
+  m_addonInfo->m_forum = std::move(forum);
+}
+
+void CAddonInfoBuilderFromDB::SetEMail(std::string email)
+{
+  m_addonInfo->m_email = std::move(email);
+}
+
+void CAddonInfoBuilderFromDB::SetIcon(std::string icon)
+{
+  m_addonInfo->m_icon = std::move(icon);
+}
+
+void CAddonInfoBuilderFromDB::SetArt(const std::string& type, std::string value)
+{
+  m_addonInfo->m_art[type] = std::move(value);
+}
+
+void CAddonInfoBuilderFromDB::SetArt(std::map<std::string, std::string> art)
+{
+  m_addonInfo->m_art = std::move(art);
+}
+
+void CAddonInfoBuilderFromDB::SetScreenshots(std::vector<std::string> screenshots)
+{
+  m_addonInfo->m_screenshots = std::move(screenshots);
+}
+
+void CAddonInfoBuilderFromDB::SetChangelog(std::string changelog)
+{
+  m_addonInfo->m_changelog.insert(std::pair<std::string, std::string>("unk", std::move(changelog)));
+}
+
+void CAddonInfoBuilderFromDB::SetLifecycleState(AddonLifecycleState state, std::string description)
+{
+  m_addonInfo->m_lifecycleState = state;
+  m_addonInfo->m_lifecycleStateDescription.emplace("unk", std::move(description));
+}
+
+void CAddonInfoBuilderFromDB::SetPath(std::string path)
+{
+  m_addonInfo->m_path = std::move(path);
+}
+
+void CAddonInfoBuilderFromDB::SetLibName(std::string libname)
+{
+  m_addonInfo->m_libname = std::move(libname);
+}
+
+void CAddonInfoBuilderFromDB::SetVersion(CAddonVersion version)
+{
+  m_addonInfo->m_version = std::move(version);
+}
+
+void CAddonInfoBuilderFromDB::SetDependencies(std::vector<DependencyInfo> dependencies)
+{
+  m_addonInfo->m_dependencies = std::move(dependencies);
+}
+
+void CAddonInfoBuilderFromDB::SetExtrainfo(InfoMap extrainfo)
+{
+  m_addonInfo->m_extrainfo = std::move(extrainfo);
+}
+
+void CAddonInfoBuilderFromDB::SetInstallDate(const CDateTime& installDate)
+{
+  m_addonInfo->m_installDate = installDate;
+}
+
+void CAddonInfoBuilderFromDB::SetLastUpdated(const CDateTime& lastUpdated)
+{
+  m_addonInfo->m_lastUpdated = lastUpdated;
+}
+
+void CAddonInfoBuilderFromDB::SetLastUsed(const CDateTime& lastUsed)
+{
+  m_addonInfo->m_lastUsed = lastUsed;
+}
+
+void CAddonInfoBuilderFromDB::SetOrigin(std::string origin)
+{
+  m_addonInfo->m_origin = std::move(origin);
+}
+
+void CAddonInfoBuilderFromDB::SetPackageSize(uint64_t size)
+{
+  m_addonInfo->m_packageSize = size;
+}
+
+void CAddonInfoBuilderFromDB::SetExtensions(CAddonType addonType)
+{
+  if (!addonType.GetValue("provides").empty())
+    addonType.SetProvides(addonType.GetValue("provides").asString());
+
+  m_addonInfo->m_types.push_back(std::move(addonType));
+  m_addonInfo->m_mainType = addonType.m_type;
+}
+
+AddonInfoPtr CAddonInfoBuilder::Generate(const std::string& id, AddonType type)
 {
   // Check addon identifier for forbidden characters
   // The identifier is used e.g. in URLs so we shouldn't allow just
@@ -76,7 +229,9 @@ AddonInfoPtr CAddonInfoBuilder::Generate(const std::string& addonPath, bool plat
   return nullptr;
 }
 
-AddonInfoPtr CAddonInfoBuilder::Generate(const TiXmlElement* baseElement, const CRepository::DirInfo& repo, bool platformCheck /*= true*/)
+AddonInfoPtr CAddonInfoBuilder::Generate(const TiXmlElement* baseElement,
+                                         const RepositoryDirInfo& repo,
+                                         bool platformCheck /*= true*/)
 {
   AddonInfoPtr addon = std::make_shared<CAddonInfo>();
   if (!ParseXML(addon, baseElement, repo.datadir, repo))
@@ -100,7 +255,17 @@ void CAddonInfoBuilder::SetInstallData(const AddonInfoPtr& addon, const CDateTim
   addon->m_origin = origin;
 }
 
-bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* element, const std::string& addonPath, const CRepository::DirInfo& repo)
+bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon,
+                                 const TiXmlElement* element,
+                                 const std::string& addonPath)
+{
+  return ParseXML(addon, element, addonPath, {});
+}
+
+bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon,
+                                 const TiXmlElement* element,
+                                 const std::string& addonPath,
+                                 const RepositoryDirInfo& repo)
 {
   /*
    * Following values currently not set from creator:
@@ -109,10 +274,6 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
    * - CDateTime lastUsed;
    * - std::string origin;
    */
-  const char* cstring; /* "C" string point where parts from TinyXML becomes
-                          stored, is used as this to prevent double use of
-                          calls and to prevent not wanted "C++" throws if
-                          std::string want to become set with nullptr! */
 
   if (!StringUtils::EqualsNoCase(element->Value(), "addon"))
   {
@@ -121,20 +282,25 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
   }
 
   /*
+   * The function variable "repo" is only used when reading data stored on the internet.
+   * A boolean value is then set here for easier identification.
+   */
+  const bool isRepoXMLContent = !repo.datadir.empty();
+
+  /*
    * Parse addon.xml:
    * <addon id="???"
    *        name="???"
    *        version="???"
    *        provider-name="???">
    */
-  cstring = element->Attribute("id");
-  addon->m_id = cstring ? cstring : "";
-  cstring = element->Attribute("name");
-  addon->m_name = cstring ? cstring : "";
-  cstring = element->Attribute("version");
-  addon->m_version = AddonVersion(cstring ? cstring : "");
-  cstring = element->Attribute("provider-name");
-  addon->m_author = cstring ? cstring : "";
+  addon->m_id = StringUtils::CreateFromCString(element->Attribute("id"));
+  addon->m_name = StringUtils::CreateFromCString(element->Attribute("name"));
+  addon->m_author = StringUtils::CreateFromCString(element->Attribute("provider-name"));
+
+  const std::string version = StringUtils::CreateFromCString(element->Attribute("version"));
+  addon->m_version = CAddonVersion(version);
+
   if (addon->m_id.empty() || addon->m_version.empty())
   {
     CLog::Log(LOGERROR, "CAddonInfoBuilder::{}: file '{}' doesn't contain required values on <addon ... > id='{}', version='{}'",
@@ -161,8 +327,8 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
   const TiXmlElement* backwards = element->FirstChildElement("backwards-compatibility");
   if (backwards)
   {
-    cstring = backwards->Attribute("abi");
-    addon->m_minversion = AddonVersion(cstring ? cstring : "");
+    const std::string minVersion = StringUtils::CreateFromCString(backwards->Attribute("abi"));
+    addon->m_minversion = CAddonVersion(minVersion);
   }
 
   /*
@@ -171,27 +337,29 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
    *   <import addon="???" minversion="???" version="???" optional="???"/>
    * </requires>
    */
-  const TiXmlElement* requires = element->FirstChildElement("requires");
-  if (requires)
+  const TiXmlElement* _requires = element->FirstChildElement("requires");
+  if (_requires)
   {
-    for (const TiXmlElement* child = requires->FirstChildElement("import"); child != nullptr; child = child->NextSiblingElement("import"))
+    for (const TiXmlElement* child = _requires->FirstChildElement("import"); child != nullptr;
+         child = child->NextSiblingElement("import"))
     {
-      cstring = child->Attribute("addon");
-      if (cstring)
+      if (child->Attribute("addon"))
       {
-        const char* versionMin = child->Attribute("minversion");
-        const char* version = child->Attribute("version");
+        const std::string minVersion =
+            StringUtils::CreateFromCString(child->Attribute("minversion"));
+        const std::string version = StringUtils::CreateFromCString(child->Attribute("version"));
+
         bool optional = false;
         child->QueryBoolAttribute("optional", &optional);
 
-        addon->m_dependencies.emplace_back(cstring, AddonVersion(versionMin), AddonVersion(version),
-                                           optional);
+        addon->m_dependencies.emplace_back(child->Attribute("addon"), CAddonVersion(minVersion),
+                                           CAddonVersion(version), optional);
       }
     }
   }
 
   std::string assetBasePath;
-  if (repo.artdir.empty() && !addonPath.empty())
+  if (!isRepoXMLContent && !addonPath.empty())
   {
     // Default for add-on information not loaded from repository
     assetBasePath = addonPath;
@@ -203,6 +371,8 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
     addon->m_path = URIUtils::AddFileToFolder(repo.datadir, addon->m_id, StringUtils::Format("{}-{}.zip", addon->m_id, addon->m_version.asString()));
   }
 
+  addon->m_profilePath = StringUtils::Format("special://profile/addon_data/{}/", addon->m_id);
+
   /*
    * Parse addon.xml:
    * <extension>
@@ -211,8 +381,7 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
    */
   for (const TiXmlElement* child = element->FirstChildElement("extension"); child != nullptr; child = child->NextSiblingElement("extension"))
   {
-    cstring = child->Attribute("point");
-    std::string point = cstring ? cstring : "";
+    const std::string point = StringUtils::CreateFromCString(child->Attribute("point"));
 
     if (point == "kodi.addon.metadata" || point == "xbmc.addon.metadata")
     {
@@ -277,6 +446,12 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
             if (elementsAssets->GetText() != nullptr)
               addon->m_art[value] = URIUtils::AddFileToFolder(assetBasePath, elementsAssets->GetText());
           }
+          else if (value == "thumb")
+          {
+            if (elementsAssets->GetText() != nullptr)
+              addon->m_art[value] =
+                  URIUtils::AddFileToFolder(assetBasePath, elementsAssets->GetText());
+          }
         }
       }
 
@@ -323,7 +498,8 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
       if (element && element->GetText() != nullptr)
       {
         addon->m_lifecycleState = AddonLifecycleState::BROKEN;
-        addon->m_lifecycleStateDescription.emplace("en_gb", element->GetText());
+        addon->m_lifecycleStateDescription.emplace(KODI_ADDON_DEFAULT_LANGUAGE_CODE,
+                                                   element->GetText());
       }
 
       /* Parse addon.xml "<lifecyclestate">...</lifecyclestate>" */
@@ -359,13 +535,31 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
       if (element && element->GetText() != nullptr)
         addon->m_packageSize = StringUtils::ToUint64(element->GetText(), 0);
 
-      /* Parse addon.xml "<news lang="..">...</news>" */
+      /* Parse addon.xml "<news lang="..">...</news>"
+       *
+       * In the event that the changelog (news) in addon.xml is empty, check
+       * whether it is an installed addon and read a changelog.txt as a
+       * replacement, if available. */
       GetTextList(child, "news", addon->m_changelog);
+      if (addon->m_changelog.empty() && !isRepoXMLContent && !addonPath.empty())
+      {
+        using XFILE::CFile;
+
+        const std::string changelog = URIUtils::AddFileToFolder(addonPath, "changelog.txt");
+        if (CFile::Exists(changelog))
+        {
+          CFile file;
+          std::vector<uint8_t> buf;
+          if (file.LoadFile(changelog, buf) > 0)
+            addon->m_changelog[KODI_ADDON_DEFAULT_LANGUAGE_CODE].assign(
+                reinterpret_cast<char*>(buf.data()), buf.size());
+        }
+      }
     }
     else
     {
-      TYPE type = CAddonInfo::TranslateType(point);
-      if (type == ADDON_UNKNOWN || type >= ADDON_MAX)
+      AddonType type = CAddonInfo::TranslateType(point);
+      if (type == AddonType::UNKNOWN || type >= AddonType::MAX_TYPES)
       {
         CLog::Log(LOGERROR, "CAddonInfoBuilder::{}: file '{}' doesn't contain a valid add-on type name ({})", __FUNCTION__, addon->m_path, point);
         return false;
@@ -373,7 +567,7 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
 
       CAddonType addonType(type);
       if (ParseXMLTypes(addonType, addon, child))
-        addon->m_types.push_back(std::move(addonType));
+        addon->m_types.emplace_back(std::move(addonType));
     }
   }
 
@@ -383,8 +577,8 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
    */
   if (addon->m_types.empty())
   {
-    CAddonType addonType(ADDON_UNKNOWN);
-    addon->m_types.push_back(std::move(addonType));
+    CAddonType addonType(AddonType::UNKNOWN);
+    addon->m_types.emplace_back(std::move(addonType));
   }
 
   addon->m_mainType = addon->m_types[0].Type();
@@ -393,27 +587,34 @@ bool CAddonInfoBuilder::ParseXML(const AddonInfoPtr& addon, const TiXmlElement* 
     addon->AddExtraInfo("provides", addon->m_types[0].GetValue("provides").asString());
 
   // Ensure binary types have a valid library for the platform
-  if (addon->m_mainType == ADDON_VIZ ||
-      addon->m_mainType == ADDON_SCREENSAVER ||
-      addon->m_mainType == ADDON_PVRDLL ||
-      addon->m_mainType == ADDON_AUDIOENCODER ||
-      addon->m_mainType == ADDON_AUDIODECODER ||
-      addon->m_mainType == ADDON_VFS ||
-      addon->m_mainType == ADDON_IMAGEDECODER ||
-      addon->m_mainType == ADDON_INPUTSTREAM ||
-      addon->m_mainType == ADDON_PERIPHERALDLL ||
-      addon->m_mainType == ADDON_GAMEDLL)
+  if (addon->m_mainType == AddonType::VISUALIZATION ||
+      addon->m_mainType == AddonType::SCREENSAVER || addon->m_mainType == AddonType::PVRDLL ||
+      addon->m_mainType == AddonType::AUDIOENCODER ||
+      addon->m_mainType == AddonType::AUDIODECODER || addon->m_mainType == AddonType::VFS ||
+      addon->m_mainType == AddonType::IMAGEDECODER || addon->m_mainType == AddonType::INPUTSTREAM ||
+      addon->m_mainType == AddonType::PERIPHERALDLL || addon->m_mainType == AddonType::GAMEDLL)
   {
     if (addon->m_libname.empty())
     {
       // Prevent log file entry if data is from repository, there normal on
       // addons for other OS's
-      if (repo.datadir.empty())
+      if (!isRepoXMLContent)
         CLog::Log(LOGERROR, "CAddonInfoBuilder::{}: addon.xml from '{}' for binary type '{}' doesn't contain library and addon becomes ignored",
                       __FUNCTION__, addon->ID(), CAddonInfo::TranslateType(addon->m_mainType));
       return false;
     }
   }
+
+  if (!isRepoXMLContent)
+  {
+    using XFILE::CFile;
+    if (CFile::Exists(URIUtils::AddFileToFolder(addonPath, "resources", "settings.xml")))
+      addon->m_supportsAddonSettings = true;
+    if (CFile::Exists(URIUtils::AddFileToFolder(addonPath, "resources", "instance-settings.xml")))
+      addon->m_supportsInstanceSettings = true;
+  }
+
+  addon->m_addonInstanceSupportType = CAddonInfo::InstanceSupportType(addon->m_mainType);
 
   return true;
 }
@@ -468,13 +669,7 @@ bool CAddonInfoBuilder::ParseXMLTypes(CAddonType& addonType,
 
 bool CAddonInfoBuilder::ParseXMLExtension(CAddonExtensions& addonExt, const TiXmlElement* element)
 {
-  const char* cstring; /* "C" string point where parts from TinyXML becomes
-                          stored, is used as this to prevent double use of
-                          calls and to prevent not wanted "C++" throws if
-                          std::string want to become set with nullptr! */
-
-  cstring = element->Attribute("point");
-  addonExt.m_point = cstring ? cstring : "";
+  addonExt.m_point = StringUtils::CreateFromCString(element->Attribute("point"));
 
   EXT_VALUE extension;
   const TiXmlAttribute* attribute = element->FirstAttribute();
@@ -483,27 +678,24 @@ bool CAddonInfoBuilder::ParseXMLExtension(CAddonExtensions& addonExt, const TiXm
     std::string name = attribute->Name();
     if (name != "point")
     {
-      cstring = attribute->Value();
-      if (cstring)
+      const std::string value = StringUtils::CreateFromCString(attribute->Value());
+      if (!value.empty())
       {
-        std::string value = cstring;
         name = "@" + name;
-        extension.push_back(std::make_pair(name, SExtValue(value)));
+        extension.emplace_back(std::make_pair(name, SExtValue(value)));
       }
     }
     attribute = attribute->Next();
   }
   if (!extension.empty())
-    addonExt.m_values.push_back(std::pair<std::string, EXT_VALUE>("", std::move(extension)));
+    addonExt.m_values.emplace_back(std::pair<std::string, EXT_VALUE>("", std::move(extension)));
 
   const TiXmlElement* childElement = element->FirstChildElement();
   while (childElement)
   {
-    cstring = childElement->Value();
-    if (cstring)
+    const std::string id = StringUtils::CreateFromCString(childElement->Value());
+    if (!id.empty())
     {
-      std::string id = cstring;
-
       EXT_VALUE extension;
       const TiXmlAttribute* attribute = childElement->FirstAttribute();
       while (attribute)
@@ -511,34 +703,34 @@ bool CAddonInfoBuilder::ParseXMLExtension(CAddonExtensions& addonExt, const TiXm
         std::string name = attribute->Name();
         if (name != "point")
         {
-          cstring = attribute->Value();
-          if (cstring)
+          const std::string value = StringUtils::CreateFromCString(attribute->Value());
+          if (!value.empty())
           {
-            std::string value = cstring;
             name = id + "@" + name;
-            extension.push_back(std::make_pair(name, SExtValue(value)));
+            extension.emplace_back(std::make_pair(name, SExtValue(value)));
           }
         }
         attribute = attribute->Next();
       }
 
-      cstring = childElement->GetText();
-      if (cstring)
+      const std::string childElementText = StringUtils::CreateFromCString(childElement->GetText());
+
+      if (!childElementText.empty())
       {
-        extension.push_back(std::make_pair(id, SExtValue(cstring)));
+        extension.emplace_back(std::make_pair(id, SExtValue(childElementText)));
       }
 
       if (!extension.empty())
-        addonExt.m_values.push_back(std::make_pair(id, std::move(extension)));
+        addonExt.m_values.emplace_back(std::make_pair(id, std::move(extension)));
 
-      if (!cstring)
+      if (childElementText.empty())
       {
         const TiXmlElement* childSubElement = childElement->FirstChildElement();
         if (childSubElement)
         {
           CAddonExtensions subElement;
           if (ParseXMLExtension(subElement, childElement))
-            addonExt.m_children.push_back(std::make_pair(id, std::move(subElement)));
+            addonExt.m_children.emplace_back(std::make_pair(id, std::move(subElement)));
         }
       }
     }
@@ -567,7 +759,8 @@ bool CAddonInfoBuilder::GetTextList(const TiXmlElement* element, const std::stri
         translatedValues.insert(std::make_pair(lang, text != nullptr ? text : ""));
     }
     else
-      translatedValues.insert(std::make_pair("en_GB", text != nullptr ? text : ""));
+      translatedValues.insert(
+          std::make_pair(KODI_ADDON_DEFAULT_LANGUAGE_CODE, text != nullptr ? text : ""));
   }
 
   return !translatedValues.empty();
@@ -625,6 +818,17 @@ bool CAddonInfoBuilder::PlatformSupportsAddon(const AddonInfoPtr& addon)
     "freebsd",
 #elif defined(TARGET_LINUX)
     "linux",
+#if defined(__ARM_ARCH_7A__)
+    "linux-armv7",
+#elif defined(__aarch64__)
+    "linux-aarch64",
+#elif defined(__i686__)
+    "linux-i686",
+#elif defined(__x86_64__)
+    "linux-x86_64",
+#else
+    #warning no architecture dependant platform tag
+#endif
 #elif defined(TARGET_WINDOWS_DESKTOP)
     "windx",
     "windows",
@@ -655,6 +859,9 @@ bool CAddonInfoBuilder::PlatformSupportsAddon(const AddonInfoPtr& addon)
 #if defined(__x86_64__)
     "osx64",
     "osx-x86_64",
+#elif defined(__aarch64__)
+    "osxarm64",
+    "osx-arm64",
 #else
 #warning no architecture dependant platform tag
 #endif

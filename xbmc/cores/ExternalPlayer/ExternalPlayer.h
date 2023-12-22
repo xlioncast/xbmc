@@ -31,7 +31,7 @@ public:
   void Pause() override;
   bool HasVideo() const override;
   bool HasAudio() const override;
-  bool CanSeek() override;
+  bool CanSeek() const override;
   void Seek(bool bPlus, bool bLargeStep, bool bChapterOverride) override;
   void SeekPercentage(float iPercent) override;
   void SetVolume(float volume) override {}
@@ -44,9 +44,7 @@ public:
 
   void SeekTime(int64_t iTime) override;
   void SetSpeed(float speed) override;
-  void DoAudioWork() override {}
 
-  std::string GetPlayerState() override;
   bool SetPlayerState(const std::string& state) override;
 
 #if defined(TARGET_WINDOWS_DESKTOP)
@@ -64,7 +62,7 @@ private:
 
   bool m_bAbortRequest;
   bool m_bIsPlaying;
-  int64_t m_playbackStartTime;
+  std::chrono::time_point<std::chrono::steady_clock> m_playbackStartTime;
   float m_speed;
   int m_time;
   std::string m_launchFilename;

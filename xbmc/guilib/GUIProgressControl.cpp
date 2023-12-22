@@ -203,9 +203,9 @@ void CGUIProgressControl::SetInfo(int iInfo, int iInfo2)
   m_iInfoCode2 = iInfo2;
 }
 
-bool CGUIProgressControl::UpdateColors()
+bool CGUIProgressControl::UpdateColors(const CGUIListItem* item)
 {
-  bool changed = CGUIControl::UpdateColors();
+  bool changed = CGUIControl::UpdateColors(nullptr);
   changed |= m_guiBackground->SetDiffuseColor(m_diffuseColor);
   changed |= m_guiRight->SetDiffuseColor(m_diffuseColor);
   changed |= m_guiLeft->SetDiffuseColor(m_diffuseColor);
@@ -217,7 +217,7 @@ bool CGUIProgressControl::UpdateColors()
 
 std::string CGUIProgressControl::GetDescription() const
 {
-  return StringUtils::Format("{:2.0f}", m_fPercent);
+  return StringUtils::Format("{:1.0f}", m_fPercent);
 }
 
 bool CGUIProgressControl::UpdateLayout(void)

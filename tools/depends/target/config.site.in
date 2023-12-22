@@ -20,6 +20,7 @@ if test "@platform_os@" = "darwin_embedded" ; then
   export CCAS="--tag CC @prefix@/@tool_dir@/bin/gas-preprocessor.pl @CCACHE@ @CC@ -arch @use_cpu@"
 fi
 
+ASFLAGS="@platform_asflags@"
 CFLAGS="@platform_cflags@ @platform_includes@ -isystem @prefix@/@deps_dir@/include $CFLAGS"
 LDFLAGS="-L@prefix@/@deps_dir@/lib @platform_ldflags@ $LDFLAGS"
 CXXFLAGS="@platform_cxxflags@ @platform_includes@ -isystem @prefix@/@deps_dir@/include $CXXFLAGS"
@@ -27,22 +28,13 @@ CPPFLAGS="@platform_cflags@ @platform_includes@ -isystem @prefix@/@deps_dir@/inc
 
 export PKG_CONFIG=@prefix@/@tool_dir@/bin/pkg-config
 export PKG_CONFIG_LIBDIR=@prefix@/@deps_dir@/lib/pkgconfig
-export YASM=@prefix@/@tool_dir@/bin/yasm
 export NASM=@prefix@/@tool_dir@/bin/nasm
 LIBGCRYPT_CONFIG=@prefix@/@deps_dir@/bin/libgcrypt-config
 
 PATH=@prefix@/@tool_dir@/bin:@use_toolchain@/usr/bin:@use_toolchain@/bin:$PATH
 LD_LIBRARY_PATH=@prefix@/@tool_dir@/lib:$LD_LIBRARY_PATH
 
-PYTHON_VERSION=3.8
-PYTHON_LDFLAGS="-L@prefix@/@deps_dir@/lib -lpython${PYTHON_VERSION} -lc -ldl -lm -lexpat -lffi -lintl -lutil -lssl -lcrypto"
-PYTHON_CPPFLAGS=-I@prefix@/@deps_dir@/include/python${PYTHON_VERSION}
-PYTHON_SITE_PKG=@prefix@/@deps_dir@/lib/python${PYTHON_VERSION}/site-packages
-PYTHON_NOVERSIONCHECK=no-check
 NATIVE_ROOT=@prefix@/@tool_dir@
-
-#libomxil-bellagio
-ac_cv_func_malloc_0_nonnull=yes
 
 #curl
 ac_cv_file__dev_urandom=yes
@@ -53,13 +45,6 @@ gl_cv_header_working_stdint_h=yes
 
 #libcec
 ac_cv_search_dlopen=-ldl
-
-#libgcrypt
-if test "${PACKAGE_NAME}" = "libgcrypt"; then
-  ac_cv_path_GPG_ERROR_CONFIG=@prefix@/@deps_dir@/bin/gpg-error-config
-  ac_cv_sys_symbol_underscore=no
-  CFLAGS="$CFLAGS -std=gnu99"
-fi
 
 #python
 ac_cv_func_gethostbyname_r=no
@@ -82,10 +67,6 @@ fi
 if test "@platform_os@" = "android"; then
   ac_cv_func_srand=yes
   ac_cv_func_rand=yes
-
-  #python: android doesn't have libutil
-  PYTHON_LDFLAGS="-L@prefix@/@deps_dir@/lib -lpython${PYTHON_VERSION} -lc -ldl -lm -lexpat -lffi -lintl -lssl -lcrypto"
-
 fi
 
 if test "@platform_os@" = "darwin_embedded"; then

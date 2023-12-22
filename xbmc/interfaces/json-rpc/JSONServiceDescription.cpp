@@ -30,12 +30,16 @@
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 
+#include <memory>
+
 using namespace JSONRPC;
 
 std::map<std::string, CVariant> CJSONServiceDescription::m_notifications = std::map<std::string, CVariant>();
 CJSONServiceDescription::CJsonRpcMethodMap CJSONServiceDescription::m_actionMap;
 std::map<std::string, JSONSchemaTypeDefinitionPtr> CJSONServiceDescription::m_types = std::map<std::string, JSONSchemaTypeDefinitionPtr>();
 CJSONServiceDescription::IncompleteSchemaDefinitionMap CJSONServiceDescription::m_incompleteDefinitions = CJSONServiceDescription::IncompleteSchemaDefinitionMap();
+
+// clang-format off
 
 JsonRpcMethodMap CJSONServiceDescription::m_methodMaps[] = {
 // JSON-RPC
@@ -55,6 +59,8 @@ JsonRpcMethodMap CJSONServiceDescription::m_methodMaps[] = {
 
   { "Player.PlayPause",                             CPlayerOperations::PlayPause },
   { "Player.Stop",                                  CPlayerOperations::Stop },
+  { "Player.GetAudioDelay",                         CPlayerOperations::GetAudioDelay },
+  { "Player.SetAudioDelay",                         CPlayerOperations::SetAudioDelay },
   { "Player.SetSpeed",                              CPlayerOperations::SetSpeed },
   { "Player.Seek",                                  CPlayerOperations::Seek },
   { "Player.Move",                                  CPlayerOperations::Move },
@@ -240,11 +246,16 @@ JsonRpcMethodMap CJSONServiceDescription::m_methodMaps[] = {
   { "Settings.GetSettingValue",                     CSettingsOperations::GetSettingValue },
   { "Settings.SetSettingValue",                     CSettingsOperations::SetSettingValue },
   { "Settings.ResetSettingValue",                   CSettingsOperations::ResetSettingValue },
+  { "Settings.GetSkinSettings",                     CSettingsOperations::GetSkinSettings },
+  { "Settings.GetSkinSettingValue",                 CSettingsOperations::GetSkinSettingValue },
+  { "Settings.SetSkinSettingValue",                 CSettingsOperations::SetSkinSettingValue },
 
 // XBMC operations
   { "XBMC.GetInfoLabels",                           CXBMCOperations::GetInfoLabels },
   { "XBMC.GetInfoBooleans",                         CXBMCOperations::GetInfoBooleans }
 };
+
+// clang-format on
 
 JSONSchemaTypeDefinition::JSONSchemaTypeDefinition()
   : missingReference(),
@@ -278,7 +289,8 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
     JSONSchemaTypeDefinitionPtr referencedTypeDef = CJSONServiceDescription::GetType(refType);
     if (refType.length() <= 0 || referencedTypeDef.get() == NULL)
     {
-      CLog::Log(LOGDEBUG, "JSONRPC: JSON schema type %s references an unknown type %s", name.c_str(), refType.c_str());
+      CLog::Log(LOGDEBUG, "JSONRPC: JSON schema type {} references an unknown type {}", name,
+                refType);
       missingReference = refType;
       return false;
     }
@@ -340,7 +352,8 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
         JSONSchemaTypeDefinitionPtr extendedTypeDef = CJSONServiceDescription::GetType(extendsName);
         if (extendedTypeDef.get() == NULL)
         {
-          CLog::Log(LOGDEBUG, "JSONRPC: JSON schema type %s extends an unknown type %s", name.c_str(), extendsName.c_str());
+          CLog::Log(LOGDEBUG, "JSONRPC: JSON schema type {} extends an unknown type {}", name,
+                    extendsName);
           missingReference = extendsName;
           return false;
         }
@@ -361,7 +374,8 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
           if (extendedTypeDef.get() == NULL)
           {
             extends.clear();
-            CLog::Log(LOGDEBUG, "JSONRPC: JSON schema type %s extends an unknown type %s", name.c_str(), extendsName.c_str());
+            CLog::Log(LOGDEBUG, "JSONRPC: JSON schema type {} extends an unknown type {}", name,
+                      extendsName);
             missingReference = extendsName;
             return false;
           }
@@ -371,7 +385,10 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
           else if (extendedType != extendedTypeDef->type)
           {
             extends.clear();
-            CLog::Log(LOGDEBUG, "JSONRPC: JSON schema type %s extends multiple JSON schema types of mismatching types", name.c_str());
+            CLog::Log(LOGDEBUG,
+                      "JSONRPC: JSON schema type {} extends multiple JSON schema types of "
+                      "mismatching types",
+                      name);
             return false;
           }
 
@@ -407,7 +424,7 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
         // of the current property into it, parse it
         // recursively and add its default value
         // to the current type's default value
-        JSONSchemaTypeDefinitionPtr propertyType = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+        JSONSchemaTypeDefinitionPtr propertyType = std::make_shared<JSONSchemaTypeDefinition>();
         propertyType->name = itr->first;
         if (!propertyType->Parse(itr->second))
         {
@@ -420,7 +437,7 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
     }
 
     hasAdditionalProperties = true;
-    additionalProperties = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+    additionalProperties = std::make_shared<JSONSchemaTypeDefinition>();
     if (value.isMember("additionalProperties"))
     {
       if (value["additionalProperties"].isBoolean())
@@ -439,13 +456,14 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
           hasAdditionalProperties = false;
           additionalProperties.reset();
 
-          CLog::Log(LOGDEBUG, "JSONRPC: Invalid additionalProperties schema definition in type %s", name.c_str());
+          CLog::Log(LOGDEBUG, "JSONRPC: Invalid additionalProperties schema definition in type {}",
+                    name);
           return false;
         }
       }
       else
       {
-        CLog::Log(LOGDEBUG, "JSONRPC: Invalid additionalProperties definition in type %s", name.c_str());
+        CLog::Log(LOGDEBUG, "JSONRPC: Invalid additionalProperties definition in type {}", name);
         return false;
       }
     }
@@ -468,12 +486,12 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
       // If it is an object, there is only one schema for it
       if (value["additionalItems"].isObject())
       {
-        JSONSchemaTypeDefinitionPtr additionalItem = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+        JSONSchemaTypeDefinitionPtr additionalItem = std::make_shared<JSONSchemaTypeDefinition>();
         if (additionalItem->Parse(value["additionalItems"]))
           additionalItems.push_back(additionalItem);
         else
         {
-          CLog::Log(LOGDEBUG, "Invalid \"additionalItems\" value for type %s", name.c_str());
+          CLog::Log(LOGDEBUG, "Invalid \"additionalItems\" value for type {}", name);
           missingReference = additionalItem->missingReference;
           return false;
         }
@@ -483,13 +501,14 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
       {
         for (unsigned int itemIndex = 0; itemIndex < value["additionalItems"].size(); itemIndex++)
         {
-          JSONSchemaTypeDefinitionPtr additionalItem = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+          JSONSchemaTypeDefinitionPtr additionalItem = std::make_shared<JSONSchemaTypeDefinition>();
 
           if (additionalItem->Parse(value["additionalItems"][itemIndex]))
             additionalItems.push_back(additionalItem);
           else
           {
-            CLog::Log(LOGDEBUG, "Invalid \"additionalItems\" value (item %d) for type %s", itemIndex, name.c_str());
+            CLog::Log(LOGDEBUG, "Invalid \"additionalItems\" value (item {}) for type {}",
+                      itemIndex, name);
             missingReference = additionalItem->missingReference;
             return false;
           }
@@ -499,7 +518,7 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
       // it has an invalid value
       else if (!value["additionalItems"].isBoolean())
       {
-        CLog::Log(LOGDEBUG, "Invalid \"additionalItems\" definition for type %s", name.c_str());
+        CLog::Log(LOGDEBUG, "Invalid \"additionalItems\" definition for type {}", name);
         return false;
       }
     }
@@ -510,10 +529,10 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
     {
       if (value["items"].isObject())
       {
-        JSONSchemaTypeDefinitionPtr item = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+        JSONSchemaTypeDefinitionPtr item = std::make_shared<JSONSchemaTypeDefinition>();
         if (!item->Parse(value["items"]))
         {
-          CLog::Log(LOGDEBUG, "Invalid item definition in \"items\" for type %s", name.c_str());
+          CLog::Log(LOGDEBUG, "Invalid item definition in \"items\" for type {}", name);
           missingReference = item->missingReference;
           return false;
         }
@@ -525,10 +544,10 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
       {
         for (CVariant::const_iterator_array itemItr = value["items"].begin_array(); itemItr != value["items"].end_array(); ++itemItr)
         {
-          JSONSchemaTypeDefinitionPtr item = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+          JSONSchemaTypeDefinitionPtr item = std::make_shared<JSONSchemaTypeDefinition>();
           if (!item->Parse(*itemItr))
           {
-            CLog::Log(LOGDEBUG, "Invalid item definition in \"items\" array for type %s", name.c_str());
+            CLog::Log(LOGDEBUG, "Invalid item definition in \"items\" array for type {}", name);
             missingReference = item->missingReference;
             return false;
           }
@@ -622,7 +641,7 @@ bool JSONSchemaTypeDefinition::Parse(const CVariant &value, bool isParameter /* 
       // If the type of the default value definition does not
       // match the type of the parameter we have to log this
       if (value.isMember("default") && !IsType(value["default"], type))
-        CLog::Log(LOGDEBUG, "JSONRPC: Parameter %s has an invalid default value", name.c_str());
+        CLog::Log(LOGDEBUG, "JSONRPC: Parameter {} has an invalid default value", name);
 
       // If the type contains an "enum" we need to get the
       // default value from the first enum value
@@ -649,7 +668,7 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
   // Let's check the type of the provided parameter
   if (!IsType(value, type))
   {
-    errorMessage = StringUtils::Format("Invalid type %s received", ValueTypeToString(value.type()));
+    errorMessage = StringUtils::Format("Invalid type {} received", ValueTypeToString(value.type()));
     errorData["message"] = errorMessage.c_str();
     return InvalidParams;
   }
@@ -693,8 +712,10 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
 
       if (status != OK)
       {
-        CLog::Log(LOGDEBUG, "JSONRPC: Value does not match extended type %s of type %s", extends.at(extendsIndex)->ID.c_str(), name.c_str());
-        errorMessage = StringUtils::Format("value does not match extended type %s", extends.at(extendsIndex)->ID.c_str());
+        CLog::Log(LOGDEBUG, "JSONRPC: Value does not match extended type {} of type {}",
+                  extends.at(extendsIndex)->ID, name);
+        errorMessage = StringUtils::Format("value does not match extended type {}",
+                                           extends.at(extendsIndex)->ID);
         errorData["message"] = errorMessage.c_str();
         return status;
       }
@@ -710,13 +731,19 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
     // Check the number of items against minItems and maxItems
     if ((minItems > 0 && value.size() < minItems) || (maxItems > 0 && value.size() > maxItems))
     {
-      CLog::Log(LOGDEBUG, "JSONRPC: Number of array elements does not match minItems and/or maxItems in type %s", name.c_str());
+      CLog::Log(
+          LOGDEBUG,
+          "JSONRPC: Number of array elements does not match minItems and/or maxItems in type {}",
+          name);
       if (minItems > 0 && maxItems > 0)
-        errorMessage = StringUtils::Format("Between %d and %d array items expected but %d received", minItems, maxItems, value.size());
+        errorMessage = StringUtils::Format("Between {} and {} array items expected but {} received",
+                                           minItems, maxItems, value.size());
       else if (minItems > 0)
-        errorMessage = StringUtils::Format("At least %d array items expected but only %d received", minItems, value.size());
+        errorMessage = StringUtils::Format("At least {} array items expected but only {} received",
+                                           minItems, value.size());
       else
-        errorMessage = StringUtils::Format("Only %d array items expected but %d received", maxItems, value.size());
+        errorMessage = StringUtils::Format("Only {} array items expected but {} received", maxItems,
+                                           value.size());
       errorData["message"] = errorMessage.c_str();
       return InvalidParams;
     }
@@ -735,8 +762,10 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
         outputValue.push_back(temp);
         if (status != OK)
         {
-          CLog::Log(LOGDEBUG, "JSONRPC: Array element at index %u does not match in type %s", arrayIndex, name.c_str());
-          errorMessage = StringUtils::Format("array element at index %u does not match", arrayIndex);
+          CLog::Log(LOGDEBUG, "JSONRPC: Array element at index {} does not match in type {}",
+                    arrayIndex, name);
+          errorMessage =
+              StringUtils::Format("array element at index {} does not match", arrayIndex);
           errorData["message"] = errorMessage.c_str();
           return status;
         }
@@ -755,7 +784,7 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
       // allowed there is no need to check every element
       if (value.size() < items.size() || (value.size() != items.size() && additionalItems.size() == 0))
       {
-        CLog::Log(LOGDEBUG, "JSONRPC: One of the array elements does not match in type %s", name.c_str());
+        CLog::Log(LOGDEBUG, "JSONRPC: One of the array elements does not match in type {}", name);
         errorMessage = StringUtils::Format("{0} array elements expected but {1} received", items.size(), value.size());
         errorData["message"] = errorMessage.c_str();
         return InvalidParams;
@@ -770,7 +799,10 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
         JSONRPC_STATUS status = items.at(arrayIndex)->Check(value[arrayIndex], outputValue[arrayIndex], errorData["property"]);
         if (status != OK)
         {
-          CLog::Log(LOGDEBUG, "JSONRPC: Array element at index %u does not match with items schema in type %s", arrayIndex, name.c_str());
+          CLog::Log(
+              LOGDEBUG,
+              "JSONRPC: Array element at index {} does not match with items schema in type {}",
+              arrayIndex, name);
           return status;
         }
       }
@@ -795,8 +827,11 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
 
           if (!ok)
           {
-            CLog::Log(LOGDEBUG, "JSONRPC: Array contains non-conforming additional items in type %s", name.c_str());
-            errorMessage = StringUtils::Format("Array element at index %u does not match the \"additionalItems\" schema", arrayIndex);
+            CLog::Log(LOGDEBUG,
+                      "JSONRPC: Array contains non-conforming additional items in type {}", name);
+            errorMessage = StringUtils::Format(
+                "Array element at index {} does not match the \"additionalItems\" schema",
+                arrayIndex);
             errorData["message"] = errorMessage.c_str();
             return InvalidParams;
           }
@@ -814,8 +849,11 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
           // If two elements are the same they are not unique
           if (outputValue[checkingIndex] == outputValue[checkedIndex])
           {
-            CLog::Log(LOGDEBUG, "JSONRPC: Not unique array element at index %u and %u in type %s", checkingIndex, checkedIndex, name.c_str());
-            errorMessage = StringUtils::Format("Array element at index %u is not unique (same as array element at index %u)", checkingIndex, checkedIndex);
+            CLog::Log(LOGDEBUG, "JSONRPC: Not unique array element at index {} and {} in type {}",
+                      checkingIndex, checkedIndex, name);
+            errorMessage = StringUtils::Format(
+                "Array element at index {} is not unique (same as array element at index {})",
+                checkingIndex, checkedIndex);
             errorData["message"] = errorMessage.c_str();
             return InvalidParams;
           }
@@ -840,7 +878,8 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
         JSONRPC_STATUS status = propertiesIterator->second->Check(value[propertiesIterator->second->name], outputValue[propertiesIterator->second->name], errorData["property"]);
         if (status != OK)
         {
-          CLog::Log(LOGDEBUG, "JSONRPC: Invalid property \"%s\" in type %s", propertiesIterator->second->name.c_str(), name.c_str());
+          CLog::Log(LOGDEBUG, "JSONRPC: Invalid property \"{}\" in type {}",
+                    propertiesIterator->second->name, name);
           return status;
         }
         handled++;
@@ -865,7 +904,7 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
       {
         CVariant::const_iterator_map iter;
         CVariant::const_iterator_map iterEnd = value.end_map();
-        for (iter = value.begin_map(); iter != iterEnd; iter++)
+        for (iter = value.begin_map(); iter != iterEnd; ++iter)
         {
           if (properties.find(iter->first) != properties.end())
             continue;
@@ -882,7 +921,8 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
           JSONRPC_STATUS status = additionalProperties->Check(value[iter->first], outputValue[iter->first], errorData["property"]);
           if (status != OK)
           {
-            CLog::Log(LOGDEBUG, "JSONRPC: Invalid additional property \"%s\" in type %s", iter->first.c_str(), name.c_str());
+            CLog::Log(LOGDEBUG, "JSONRPC: Invalid additional property \"{}\" in type {}",
+                      iter->first, name);
             return status;
           }
         }
@@ -918,7 +958,7 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
 
     if (!valid)
     {
-      CLog::Log(LOGDEBUG, "JSONRPC: Value does not match any of the enum values in type %s", name.c_str());
+      CLog::Log(LOGDEBUG, "JSONRPC: Value does not match any of the enum values in type {}", name);
       errorData["message"] = "Received value does not match any of the defined enum values";
       return InvalidParams;
     }
@@ -938,21 +978,27 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
     // Check maximum
         (exclusiveMaximum && numberValue >= maximum) || (!exclusiveMaximum && numberValue > maximum))
     {
-      CLog::Log(LOGDEBUG, "JSONRPC: Value does not lay between minimum and maximum in type %s", name.c_str());
+      CLog::Log(LOGDEBUG, "JSONRPC: Value does not lay between minimum and maximum in type {}",
+                name);
       if (value.isDouble())
-        errorMessage = StringUtils::Format("Value between %f (%s) and %f (%s) expected but %f received",
-          minimum, exclusiveMinimum ? "exclusive" : "inclusive", maximum, exclusiveMaximum ? "exclusive" : "inclusive", numberValue);
+        errorMessage =
+            StringUtils::Format("Value between {:f} ({}) and {:f} ({}) expected but {:f} received",
+                                minimum, exclusiveMinimum ? "exclusive" : "inclusive", maximum,
+                                exclusiveMaximum ? "exclusive" : "inclusive", numberValue);
       else
-        errorMessage = StringUtils::Format("Value between %d (%s) and %d (%s) expected but %d received",
-          (int)minimum, exclusiveMinimum ? "exclusive" : "inclusive", (int)maximum, exclusiveMaximum ? "exclusive" : "inclusive", (int)numberValue);
+        errorMessage = StringUtils::Format(
+            "Value between {} ({}) and {} ({}) expected but {} received", (int)minimum,
+            exclusiveMinimum ? "exclusive" : "inclusive", (int)maximum,
+            exclusiveMaximum ? "exclusive" : "inclusive", (int)numberValue);
       errorData["message"] = errorMessage.c_str();
       return InvalidParams;
     }
     // Check divisibleBy
     if ((HasType(type, IntegerValue) && divisibleBy > 0 && ((int)numberValue % divisibleBy) != 0))
     {
-      CLog::Log(LOGDEBUG, "JSONRPC: Value does not meet divisibleBy requirements in type %s", name.c_str());
-      errorMessage = StringUtils::Format("Value should be divisible by %d but %d received", divisibleBy, (int)numberValue);
+      CLog::Log(LOGDEBUG, "JSONRPC: Value does not meet divisibleBy requirements in type {}", name);
+      errorMessage = StringUtils::Format("Value should be divisible by {} but {} received",
+                                         divisibleBy, (int)numberValue);
       errorData["message"] = errorMessage.c_str();
       return InvalidParams;
     }
@@ -964,16 +1010,18 @@ JSONRPC_STATUS JSONSchemaTypeDefinition::Check(const CVariant& value,
     int size = static_cast<int>(value.asString().size());
     if (size < minLength)
     {
-      CLog::Log(LOGDEBUG, "JSONRPC: Value does not meet minLength requirements in type %s", name.c_str());
-      errorMessage = StringUtils::Format("Value should have a minimum length of %d but has a length of %d", minLength, size);
+      CLog::Log(LOGDEBUG, "JSONRPC: Value does not meet minLength requirements in type {}", name);
+      errorMessage = StringUtils::Format(
+          "Value should have a minimum length of {} but has a length of {}", minLength, size);
       errorData["message"] = errorMessage.c_str();
       return InvalidParams;
     }
 
     if (maxLength >= 0 && size > maxLength)
     {
-      CLog::Log(LOGDEBUG, "JSONRPC: Value does not meet maxLength requirements in type %s", name.c_str());
-      errorMessage = StringUtils::Format("Value should have a maximum length of %d but has a length of %d", maxLength, size);
+      CLog::Log(LOGDEBUG, "JSONRPC: Value does not meet maxLength requirements in type {}", name);
+      errorMessage = StringUtils::Format(
+          "Value should have a maximum length of {} but has a length of {}", maxLength, size);
       errorData["message"] = errorMessage.c_str();
       return InvalidParams;
     }
@@ -1283,13 +1331,13 @@ bool JsonRpcMethod::Parse(const CVariant &value)
          (parameter.isMember("$ref") && !parameter["$ref"].isString()) ||
          (parameter.isMember("extends") && !parameter["extends"].isString() && !parameter["extends"].isArray()))
       {
-        CLog::Log(LOGDEBUG, "JSONRPC: Method %s has a badly defined parameter", name.c_str());
+        CLog::Log(LOGDEBUG, "JSONRPC: Method {} has a badly defined parameter", name);
         return false;
       }
 
       // Parse the parameter and add it to the list
       // of defined parameters
-      JSONSchemaTypeDefinitionPtr param = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+      JSONSchemaTypeDefinitionPtr param = std::make_shared<JSONSchemaTypeDefinition>();
       if (!parseParameter(parameter, param))
       {
         missingReference = param->missingReference;
@@ -1441,7 +1489,7 @@ bool CJSONServiceDescription::prepareDescription(std::string &description, CVari
 {
   if (description.empty())
   {
-    CLog::Log(LOGERROR, "JSONRPC: Missing JSON Schema definition for \"%s\"", name.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Missing JSON Schema definition for \"{}\"", name);
     return false;
   }
 
@@ -1451,7 +1499,7 @@ bool CJSONServiceDescription::prepareDescription(std::string &description, CVari
   // Make sure the method description actually exists and represents an object
   if (!CJSONVariantParser::Parse(description, descriptionObject) || !descriptionObject.isObject())
   {
-    CLog::Log(LOGERROR, "JSONRPC: Unable to parse JSON Schema definition for \"%s\"", name.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Unable to parse JSON Schema definition for \"{}\"", name);
     return false;
   }
 
@@ -1462,7 +1510,7 @@ bool CJSONServiceDescription::prepareDescription(std::string &description, CVari
   if (name.empty() ||
      (!descriptionObject[name].isMember("type") && !descriptionObject[name].isMember("$ref") && !descriptionObject[name].isMember("extends")))
   {
-    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON Schema definition for \"%s\"", name.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON Schema definition for \"{}\"", name);
     return false;
   }
 
@@ -1478,20 +1526,20 @@ bool CJSONServiceDescription::addMethod(const std::string &jsonMethod, MethodCal
   // Make sure the method description actually exists and represents an object
   if (!prepareDescription(modJsonMethod, descriptionObject, methodName))
   {
-    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON Schema definition for method \"%s\"", methodName.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON Schema definition for method \"{}\"", methodName);
     return false;
   }
 
   if (m_actionMap.find(methodName) != m_actionMap.end())
   {
-    CLog::Log(LOGERROR, "JSONRPC: There already is a method with the name \"%s\"", methodName.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: There already is a method with the name \"{}\"", methodName);
     return false;
   }
 
   std::string type = GetString(descriptionObject[methodName]["type"], "");
   if (type.compare("method") != 0)
   {
-    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON type for method \"%s\"", methodName.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON type for method \"{}\"", methodName);
     return false;
   }
 
@@ -1509,7 +1557,7 @@ bool CJSONServiceDescription::addMethod(const std::string &jsonMethod, MethodCal
 
     if (method == NULL)
     {
-      CLog::Log(LOGERROR, "JSONRPC: Missing implementation for method \"%s\"", methodName.c_str());
+      CLog::Log(LOGERROR, "JSONRPC: Missing implementation for method \"{}\"", methodName);
       return false;
     }
   }
@@ -1521,7 +1569,7 @@ bool CJSONServiceDescription::addMethod(const std::string &jsonMethod, MethodCal
 
   if (!newMethod.Parse(descriptionObject[newMethod.name]))
   {
-    CLog::Log(LOGERROR, "JSONRPC: Could not parse method \"%s\"", methodName.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Could not parse method \"{}\"", methodName);
     if (!newMethod.missingReference.empty())
     {
       IncompleteSchemaDefinition incomplete;
@@ -1533,7 +1581,10 @@ bool CJSONServiceDescription::addMethod(const std::string &jsonMethod, MethodCal
       if (iter == m_incompleteDefinitions.end())
         m_incompleteDefinitions[newMethod.missingReference] = std::vector<IncompleteSchemaDefinition>();
 
-      CLog::Log(LOGINFO, "JSONRPC: Adding method \"%s\" to list of incomplete definitions (waiting for \"%s\")", methodName.c_str(), newMethod.missingReference.c_str());
+      CLog::Log(
+          LOGINFO,
+          "JSONRPC: Adding method \"{}\" to list of incomplete definitions (waiting for \"{}\")",
+          methodName, newMethod.missingReference);
       m_incompleteDefinitions[newMethod.missingReference].push_back(incomplete);
     }
 
@@ -1553,27 +1604,27 @@ bool CJSONServiceDescription::AddType(const std::string &jsonType)
   std::string modJsonType = jsonType;
   if (!prepareDescription(modJsonType, descriptionObject, typeName))
   {
-    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON Schema definition for type \"%s\"", typeName.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON Schema definition for type \"{}\"", typeName);
     return false;
   }
 
   if (m_types.find(typeName) != m_types.end())
   {
-    CLog::Log(LOGERROR, "JSONRPC: There already is a type with the name \"%s\"", typeName.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: There already is a type with the name \"{}\"", typeName);
     return false;
   }
 
   // Make sure the "id" attribute is correctly populated
   descriptionObject[typeName]["id"] = typeName;
 
-  JSONSchemaTypeDefinitionPtr globalType = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+  JSONSchemaTypeDefinitionPtr globalType = std::make_shared<JSONSchemaTypeDefinition>();
   globalType->name = typeName;
   globalType->ID = typeName;
   CJSONServiceDescription::addReferenceTypeDefinition(globalType);
 
   if (!globalType->Parse(descriptionObject[typeName]))
   {
-    CLog::Log(LOGWARNING, "JSONRPC: Could not parse type \"%s\"", typeName.c_str());
+    CLog::Log(LOGWARNING, "JSONRPC: Could not parse type \"{}\"", typeName);
     CJSONServiceDescription::removeReferenceTypeDefinition(typeName);
     if (!globalType->missingReference.empty())
     {
@@ -1585,7 +1636,10 @@ bool CJSONServiceDescription::AddType(const std::string &jsonType)
       if (iter == m_incompleteDefinitions.end())
         m_incompleteDefinitions[globalType->missingReference] = std::vector<IncompleteSchemaDefinition>();
 
-      CLog::Log(LOGINFO, "JSONRPC: Adding type \"%s\" to list of incomplete definitions (waiting for \"%s\")", typeName.c_str(), globalType->missingReference.c_str());
+      CLog::Log(
+          LOGINFO,
+          "JSONRPC: Adding type \"{}\" to list of incomplete definitions (waiting for \"{}\")",
+          typeName, globalType->missingReference);
       m_incompleteDefinitions[globalType->missingReference].push_back(incomplete);
     }
 
@@ -1622,20 +1676,22 @@ bool CJSONServiceDescription::AddNotification(const std::string &jsonNotificatio
   // Make sure the notification description actually exists and represents an object
   if (!prepareDescription(modJsonNotification, descriptionObject, notificationName))
   {
-    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON Schema definition for notification \"%s\"", notificationName.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON Schema definition for notification \"{}\"",
+              notificationName);
     return false;
   }
 
   if (m_notifications.find(notificationName) != m_notifications.end())
   {
-    CLog::Log(LOGERROR, "JSONRPC: There already is a notification with the name \"%s\"", notificationName.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: There already is a notification with the name \"{}\"",
+              notificationName);
     return false;
   }
 
   std::string type = GetString(descriptionObject[notificationName]["type"], "");
   if (type.compare("notification") != 0)
   {
-    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON type for notification \"%s\"", notificationName.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Invalid JSON type for notification \"{}\"", notificationName);
     return false;
   }
 
@@ -1650,7 +1706,7 @@ bool CJSONServiceDescription::AddEnum(const std::string &name, const std::vector
       values.size() == 0)
     return false;
 
-  JSONSchemaTypeDefinitionPtr definition = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+  JSONSchemaTypeDefinitionPtr definition = std::make_shared<JSONSchemaTypeDefinition>();
   definition->ID = name;
 
   std::vector<CVariant::VariantType> types;
@@ -1940,7 +1996,7 @@ bool CJSONServiceDescription::parseJSONSchemaType(const CVariant &value, std::ve
     // to handle a union type
     for (unsigned int typeIndex = 0; typeIndex < value.size(); typeIndex++)
     {
-      JSONSchemaTypeDefinitionPtr definition = JSONSchemaTypeDefinitionPtr(new JSONSchemaTypeDefinition());
+      JSONSchemaTypeDefinitionPtr definition = std::make_shared<JSONSchemaTypeDefinition>();
       // If the type is a string try to parse it
       if (value[typeIndex].isString())
         definition->type = StringToSchemaValueType(value[typeIndex].asString());
@@ -1999,7 +2055,8 @@ void CJSONServiceDescription::addReferenceTypeDefinition(
   if (iter == m_incompleteDefinitions.end())
     return;
 
-  CLog::Log(LOGINFO, "JSONRPC: Resolving incomplete types/methods referencing %s", typeDefinition->ID.c_str());
+  CLog::Log(LOGINFO, "JSONRPC: Resolving incomplete types/methods referencing {}",
+            typeDefinition->ID);
   for (unsigned int index = 0; index < iter->second.size(); index++)
   {
     if (iter->second[index].Type == SchemaDefinitionType)

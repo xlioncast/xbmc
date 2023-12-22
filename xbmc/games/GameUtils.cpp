@@ -12,72 +12,101 @@
 #include "ServiceBroker.h"
 #include "URL.h"
 #include "addons/Addon.h"
+#include "addons/AddonInstaller.h"
 #include "addons/AddonManager.h"
 #include "addons/BinaryAddonCache.h"
+#include "addons/addoninfo/AddonType.h"
+#include "cores/RetroPlayer/savestates/ISavestate.h"
+#include "cores/RetroPlayer/savestates/SavestateDatabase.h"
 #include "filesystem/SpecialProtocol.h"
 #include "games/addons/GameClient.h"
 #include "games/dialogs/GUIDialogSelectGameClient.h"
+#include "games/dialogs/GUIDialogSelectSavestate.h"
 #include "games/tags/GameInfoTag.h"
 #include "messaging/helpers/DialogOKHelper.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
+#include "utils/log.h"
 
 #include <algorithm>
 
 using namespace KODI;
 using namespace GAME;
 
-bool CGameUtils::FillInGameClient(CFileItem& item, bool bPrompt)
+bool CGameUtils::FillInGameClient(CFileItem& item, std::string& savestatePath)
 {
   using namespace ADDON;
 
   if (item.GetGameInfoTag()->GetGameClient().empty())
   {
     // If the fileitem is an add-on, fall back to that
-    if (item.HasAddonInfo() && item.GetAddonInfo()->Type() == ADDON::ADDON_GAMEDLL)
+    if (item.HasAddonInfo() && item.GetAddonInfo()->Type() == AddonType::GAMEDLL)
     {
       item.GetGameInfoTag()->SetGameClient(item.GetAddonInfo()->ID());
     }
-    else if (bPrompt)
+    else
     {
-      // No game client specified, need to ask the user
-      GameClientVector candidates;
-      GameClientVector installable;
-      bool bHasVfsGameClient;
-      GetGameClients(item, candidates, installable, bHasVfsGameClient);
+      if (!CGUIDialogSelectSavestate::ShowAndGetSavestate(item.GetPath(), savestatePath))
+        return false;
 
-      if (candidates.empty() && installable.empty())
+      if (!savestatePath.empty())
       {
-        int errorTextId = 0;
-
-        if (bHasVfsGameClient)
-        {
-          // "This game can only be played directly from a hard drive
-          // or partition. Compressed files must be extracted."
-          errorTextId = 35214;
-        }
-        else
-        {
-          // "This game isn't compatible with any available emulators."
-          errorTextId = 35212;
-        }
-
-        // "Failed to play game"
-        KODI::MESSAGING::HELPERS::ShowOKDialogText(CVariant{35210}, CVariant{errorTextId});
-      }
-      else if (candidates.size() == 1 && installable.empty())
-      {
-        // Only 1 option, avoid prompting the user
-        item.GetGameInfoTag()->SetGameClient(candidates[0]->ID());
+        RETRO::CSavestateDatabase db;
+        std::unique_ptr<RETRO::ISavestate> save = RETRO::CSavestateDatabase::AllocateSavestate();
+        db.GetSavestate(savestatePath, *save);
+        item.GetGameInfoTag()->SetGameClient(save->GameClientID());
       }
       else
       {
-        std::string gameClient = CGUIDialogSelectGameClient::ShowAndGetGameClient(
-            item.GetPath(), candidates, installable);
-        if (!gameClient.empty())
-          item.GetGameInfoTag()->SetGameClient(gameClient);
+        // No game client specified, need to ask the user
+        GameClientVector candidates;
+        GameClientVector installable;
+        bool bHasVfsGameClient;
+        GetGameClients(item, candidates, installable, bHasVfsGameClient);
+
+        if (candidates.empty() && installable.empty())
+        {
+          // if: "This game can only be played directly from a hard drive or partition. Compressed files must be extracted."
+          // else: "This game isn't compatible with any available emulators."
+          int errorTextId = bHasVfsGameClient ? 35214 : 35212;
+
+          // "Failed to play game"
+          MESSAGING::HELPERS::ShowOKDialogText(CVariant{35210}, CVariant{errorTextId});
+        }
+        else if (candidates.size() == 1 && installable.empty())
+        {
+          // Only 1 option, avoid prompting the user
+          item.GetGameInfoTag()->SetGameClient(candidates[0]->ID());
+        }
+        else
+        {
+          std::string gameClient = CGUIDialogSelectGameClient::ShowAndGetGameClient(
+              item.GetPath(), candidates, installable);
+
+          if (!gameClient.empty())
+            item.GetGameInfoTag()->SetGameClient(gameClient);
+        }
       }
     }
+  }
+
+  const std::string gameClient = item.GetGameInfoTag()->GetGameClient();
+  if (gameClient.empty())
+    return false;
+
+  if (Install(gameClient))
+  {
+    // If the addon is disabled we need to enable it
+    if (!Enable(gameClient))
+    {
+      CLog::Log(LOGDEBUG, "Failed to enable game client {}", gameClient);
+      item.GetGameInfoTag()->SetGameClient("");
+    }
+  }
+  else
+  {
+    CLog::Log(LOGDEBUG, "Failed to install game client: {}", gameClient);
+    item.GetGameInfoTag()->SetGameClient("");
   }
 
   return !item.GetGameInfoTag()->GetGameClient().empty();
@@ -98,7 +127,7 @@ void CGameUtils::GetGameClients(const CFileItem& file,
   // Get local candidates
   VECADDONS localAddons;
   CBinaryAddonCache& addonCache = CServiceBroker::GetBinaryAddonCache();
-  addonCache.GetAddons(localAddons, ADDON_GAMEDLL);
+  addonCache.GetAddons(localAddons, AddonType::GAMEDLL);
 
   bool bVfs = false;
   GetGameClients(localAddons, translatedUrl, candidates, bVfs);
@@ -106,7 +135,7 @@ void CGameUtils::GetGameClients(const CFileItem& file,
 
   // Get remote candidates
   VECADDONS remoteAddons;
-  if (CServiceBroker::GetAddonMgr().GetInstallableAddons(remoteAddons, ADDON_GAMEDLL))
+  if (CServiceBroker::GetAddonMgr().GetInstallableAddons(remoteAddons, AddonType::GAMEDLL))
   {
     GetGameClients(remoteAddons, translatedUrl, installable, bVfs);
     bHasVfsGameClient |= bVfs;
@@ -180,7 +209,7 @@ bool CGameUtils::HasGameExtension(const std::string& path)
   // Look for a game client that supports this extension
   VECADDONS gameClients;
   CBinaryAddonCache& addonCache = CServiceBroker::GetBinaryAddonCache();
-  addonCache.GetInstalledAddons(gameClients, ADDON_GAMEDLL);
+  addonCache.GetInstalledAddons(gameClients, AddonType::GAMEDLL);
   for (auto& gameClient : gameClients)
   {
     GameClientPtr gc(std::static_pointer_cast<CGameClient>(gameClient));
@@ -190,7 +219,7 @@ bool CGameUtils::HasGameExtension(const std::string& path)
 
   // Check remote add-ons
   gameClients.clear();
-  if (CServiceBroker::GetAddonMgr().GetInstallableAddons(gameClients, ADDON_GAMEDLL))
+  if (CServiceBroker::GetAddonMgr().GetInstallableAddons(gameClients, AddonType::GAMEDLL))
   {
     for (auto& gameClient : gameClients)
     {
@@ -211,7 +240,7 @@ std::set<std::string> CGameUtils::GetGameExtensions()
 
   VECADDONS gameClients;
   CBinaryAddonCache& addonCache = CServiceBroker::GetBinaryAddonCache();
-  addonCache.GetAddons(gameClients, ADDON_GAMEDLL);
+  addonCache.GetAddons(gameClients, AddonType::GAMEDLL);
   for (auto& gameClient : gameClients)
   {
     GameClientPtr gc(std::static_pointer_cast<CGameClient>(gameClient));
@@ -220,7 +249,7 @@ std::set<std::string> CGameUtils::GetGameExtensions()
 
   // Check remote add-ons
   gameClients.clear();
-  if (CServiceBroker::GetAddonMgr().GetInstallableAddons(gameClients, ADDON_GAMEDLL))
+  if (CServiceBroker::GetAddonMgr().GetInstallableAddons(gameClients, AddonType::GAMEDLL))
   {
     for (auto& gameClient : gameClients)
     {
@@ -238,17 +267,48 @@ bool CGameUtils::IsStandaloneGame(const ADDON::AddonPtr& addon)
 
   switch (addon->Type())
   {
-    case ADDON_GAMEDLL:
+    case AddonType::GAMEDLL:
     {
       return std::static_pointer_cast<GAME::CGameClient>(addon)->SupportsStandalone();
     }
-    case ADDON_SCRIPT:
+    case AddonType::SCRIPT:
     {
-      return addon->HasType(ADDON_GAME);
+      return addon->HasType(AddonType::GAME);
     }
     default:
       break;
   }
 
   return false;
+}
+
+bool CGameUtils::Install(const std::string& gameClient)
+{
+  // If the addon isn't installed we need to install it
+  bool installed = CServiceBroker::GetAddonMgr().IsAddonInstalled(gameClient);
+  if (!installed)
+  {
+    ADDON::AddonPtr installedAddon;
+    installed = ADDON::CAddonInstaller::GetInstance().InstallModal(
+        gameClient, installedAddon, ADDON::InstallModalPrompt::CHOICE_NO);
+    if (!installed)
+    {
+      CLog::Log(LOGERROR, "Game utils: Failed to install {}", gameClient);
+      // "Error"
+      // "Failed to install add-on."
+      MESSAGING::HELPERS::ShowOKDialogText(CVariant{257}, CVariant{35256});
+    }
+  }
+
+  return installed;
+}
+
+bool CGameUtils::Enable(const std::string& gameClient)
+{
+  bool bSuccess = true;
+
+  if (CServiceBroker::GetAddonMgr().IsAddonDisabled(gameClient))
+    bSuccess = CServiceBroker::GetAddonMgr().EnableAddon(gameClient);
+
+  return bSuccess;
 }

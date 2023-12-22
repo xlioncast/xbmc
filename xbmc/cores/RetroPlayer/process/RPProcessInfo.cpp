@@ -14,10 +14,11 @@
 #include "cores/RetroPlayer/rendering/RenderContext.h"
 #include "settings/DisplaySettings.h"
 #include "settings/MediaSettings.h"
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 #include "windowing/WinSystem.h"
+
+#include <mutex>
 
 extern "C"
 {
@@ -40,7 +41,9 @@ CRPProcessInfo::CRPProcessInfo(std::string platformName)
                                        CServiceBroker::GetWinSystem(),
                                        CServiceBroker::GetWinSystem()->GetGfxContext(),
                                        CDisplaySettings::GetInstance(),
-                                       CMediaSettings::GetInstance()))
+                                       CMediaSettings::GetInstance(),
+                                       CServiceBroker::GetGameServices(),
+                                       CServiceBroker::GetGUI()))
 {
   for (auto& rendererFactory : m_rendererFactories)
   {
@@ -62,19 +65,19 @@ CRPProcessInfo::CRPProcessInfo(std::string platformName)
 
 CRPProcessInfo::~CRPProcessInfo() = default;
 
-CRPProcessInfo* CRPProcessInfo::CreateInstance()
+std::unique_ptr<CRPProcessInfo> CRPProcessInfo::CreateInstance()
 {
-  CRPProcessInfo* processInfo = nullptr;
+  std::unique_ptr<CRPProcessInfo> processInfo;
 
-  CSingleLock lock(m_createSection);
+  std::unique_lock<CCriticalSection> lock(m_createSection);
 
   if (m_processControl != nullptr)
   {
     processInfo = m_processControl();
 
-    if (processInfo != nullptr)
-      CLog::Log(LOGINFO, "RetroPlayer[PROCESS]: Created process info for %s",
-                processInfo->GetPlatformName().c_str());
+    if (processInfo)
+      CLog::Log(LOGINFO, "RetroPlayer[PROCESS]: Created process info for {}",
+                processInfo->GetPlatformName());
     else
       CLog::Log(LOGERROR, "RetroPlayer[PROCESS]: Failed to create process info");
   }
@@ -86,31 +89,17 @@ CRPProcessInfo* CRPProcessInfo::CreateInstance()
   return processInfo;
 }
 
-void CRPProcessInfo::RegisterProcessControl(CreateRPProcessControl createFunc)
+void CRPProcessInfo::RegisterProcessControl(const CreateRPProcessControl& createFunc)
 {
-  std::unique_ptr<CRPProcessInfo> processInfo(createFunc());
-
-  CSingleLock lock(m_createSection);
-
-  if (processInfo)
-  {
-    CLog::Log(LOGINFO, "RetroPlayer[PROCESS]: Registering process control for %s",
-              processInfo->GetPlatformName().c_str());
-    m_processControl = createFunc;
-  }
-  else
-  {
-    CLog::Log(LOGERROR, "RetroPlayer[PROCESS]: Failed to register process control");
-    m_processControl = nullptr;
-  }
+  m_processControl = createFunc;
 }
 
 void CRPProcessInfo::RegisterRendererFactory(IRendererFactory* factory)
 {
-  CSingleLock lock(m_createSection);
+  std::unique_lock<CCriticalSection> lock(m_createSection);
 
-  CLog::Log(LOGINFO, "RetroPlayer[RENDER]: Registering renderer factory for %s",
-            factory->RenderSystemName().c_str());
+  CLog::Log(LOGINFO, "RetroPlayer[RENDER]: Registering renderer factory for {}",
+            factory->RenderSystemName());
 
   m_rendererFactories.emplace_back(factory);
 }
@@ -123,7 +112,7 @@ std::string CRPProcessInfo::GetRenderSystemName(IRenderBufferPool* renderBufferP
 CRPBaseRenderer* CRPProcessInfo::CreateRenderer(IRenderBufferPool* renderBufferPool,
                                                 const CRenderSettings& renderSettings)
 {
-  CSingleLock lock(m_createSection);
+  std::unique_lock<CCriticalSection> lock(m_createSection);
 
   for (auto& rendererFactory : m_rendererFactories)
   {

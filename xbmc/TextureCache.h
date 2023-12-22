@@ -8,14 +8,18 @@
 
 #pragma once
 
+#include "TextureCacheJob.h"
 #include "TextureDatabase.h"
+#include "threads/CriticalSection.h"
 #include "threads/Event.h"
 #include "utils/JobManager.h"
 
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
 
+class CJob;
 class CURL;
 class CTexture;
 
@@ -32,11 +36,8 @@ class CTexture;
 class CTextureCache : public CJobQueue
 {
 public:
-  /*!
-   \brief The only way through which the global instance of the CTextureCache should be accessed.
-   \return the global instance.
-   */
-  static CTextureCache &GetInstance();
+  CTextureCache();
+  ~CTextureCache() override;
 
   /*! \brief Initialize the texture cache
    */
@@ -69,6 +70,17 @@ public:
    */
   void BackgroundCacheImage(const std::string &image);
 
+  /*! \brief Updates the in-process list.
+
+   Inserts the image url into the currently processing list 
+   to avoid 2 jobs being processed at once
+
+   \param image url of the image to start processing
+   \return true if list updated, false otherwise
+   \sa CacheImage
+   */
+  bool StartCacheImage(const std::string& image);
+
   /*! \brief Cache an image to image cache, optionally return the texture
 
    Caches the given image, returning the texture if the caller wants it.
@@ -80,8 +92,8 @@ public:
    \sa CTextureCacheJob::CacheTexture
    */
   std::string CacheImage(const std::string& image,
-                         CTexture** texture = NULL,
-                         CTextureDetails* details = NULL);
+                         std::unique_ptr<CTexture>* texture = nullptr,
+                         CTextureDetails* details = nullptr);
 
   /*! \brief Cache an image to image cache if not already cached, returning the image details.
    \param image url of the image to cache.
@@ -148,10 +160,8 @@ public:
   bool Export(const std::string &image, const std::string &destination); //! @todo BACKWARD COMPATIBILITY FOR MUSIC THUMBS
 private:
   // private construction, and no assignments; use the provided singleton methods
-  CTextureCache();
   CTextureCache(const CTextureCache&) = delete;
   CTextureCache const& operator=(CTextureCache const&) = delete;
-  ~CTextureCache() override;
 
   /*! \brief Check if the given image is a cached image
    \param image url of the image
@@ -200,7 +210,6 @@ private:
   bool SetCachedTextureValid(const std::string &url, bool updateable);
 
   void OnJobComplete(unsigned int jobID, bool success, CJob *job) override;
-  void OnJobProgress(unsigned int jobID, unsigned int progress, unsigned int total, const CJob *job) override;
 
   /*! \brief Called when a caching job has completed.
    Removes the job from our processing list, updates the database

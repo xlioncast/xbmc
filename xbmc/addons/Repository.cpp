@@ -10,12 +10,13 @@
 
 #include "FileItem.h"
 #include "ServiceBroker.h"
-#include "TextureDatabase.h"
 #include "URL.h"
 #include "addons/AddonDatabase.h"
 #include "addons/AddonInstaller.h"
 #include "addons/AddonManager.h"
 #include "addons/RepositoryUpdater.h"
+#include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "filesystem/CurlFile.h"
 #include "filesystem/File.h"
 #include "filesystem/ZipFile.h"
@@ -44,8 +45,7 @@ CRepository::ResolveResult CRepository::ResolvePathAndHash(const AddonPtr& addon
 {
   std::string const& path = addon->Path();
 
-  auto dirIt = std::find_if(m_dirs.begin(), m_dirs.end(), [&path](DirInfo const& dir)
-  {
+  auto dirIt = std::find_if(m_dirs.begin(), m_dirs.end(), [&path](RepositoryDirInfo const& dir) {
     return URIUtils::PathHasParent(path, dir.datadir, true);
   });
   if (dirIt == m_dirs.end())
@@ -99,25 +99,40 @@ CRepository::ResolveResult CRepository::ResolvePathAndHash(const AddonPtr& addon
   return {location, hash};
 }
 
-CRepository::CRepository(const AddonInfoPtr& addonInfo)
-  : CAddon(addonInfo, ADDON_REPOSITORY)
+CRepository::CRepository(const AddonInfoPtr& addonInfo) : CAddon(addonInfo, AddonType::REPOSITORY)
 {
-  DirList dirs;
-  AddonVersion version;
-  AddonInfoPtr addonver = CServiceBroker::GetAddonMgr().GetAddonInfo("xbmc.addon");
+  RepositoryDirList dirs;
+  CAddonVersion version;
+  AddonInfoPtr addonver =
+      CServiceBroker::GetAddonMgr().GetAddonInfo("xbmc.addon", AddonType::UNKNOWN);
   if (addonver)
     version = addonver->Version();
 
-  for (const auto& element : Type(ADDON_REPOSITORY)->GetElements("dir"))
+  for (const auto& element : Type(AddonType::REPOSITORY)->GetElements("dir"))
   {
-    DirInfo dir = ParseDirConfiguration(element.second);
+    RepositoryDirInfo dir = ParseDirConfiguration(element.second);
     if ((dir.minversion.empty() || version >= dir.minversion) &&
         (dir.maxversion.empty() || version <= dir.maxversion))
       m_dirs.push_back(std::move(dir));
   }
-  if (!Type(ADDON_REPOSITORY)->GetValue("info").empty())
+
+  // old (dharma compatible) way of defining the addon repository structure, is no longer supported
+  // we error out so the user knows how to migrate. The <dir> way is supported since gotham.
+  //! @todo remove if block completely in v21
+  if (!Type(AddonType::REPOSITORY)->GetValue("info").empty())
   {
-    m_dirs.push_back(ParseDirConfiguration(*Type(ADDON_REPOSITORY)));
+    CLog::Log(LOGERROR,
+              "Repository add-on {} uses old schema definition for the repository extension point! "
+              "This is no longer supported, please update your addon to use <dir> definitions.",
+              ID());
+  }
+
+  if (m_dirs.empty())
+  {
+    CLog::Log(LOGERROR,
+              "Repository add-on {} does not have any directory matching {} and won't be able to "
+              "update/serve addons! Please fix the addon.xml definition",
+              ID(), version.asString());
   }
 
   for (auto const& dir : m_dirs)
@@ -155,7 +170,7 @@ bool CRepository::FetchChecksum(const std::string& url,
   std::size_t pos = checksum.find_first_of(" \n");
   if (pos != std::string::npos)
   {
-    checksum = checksum.substr(0, pos);
+    checksum.resize(pos);
   }
 
   // Determine update interval from (potential) HTTP response
@@ -183,7 +198,7 @@ bool CRepository::FetchChecksum(const std::string& url,
   return true;
 }
 
-bool CRepository::FetchIndex(const DirInfo& repo,
+bool CRepository::FetchIndex(const RepositoryDirInfo& repo,
                              std::string const& digest,
                              std::vector<AddonInfoPtr>& addons) noexcept
 {
@@ -192,7 +207,7 @@ bool CRepository::FetchIndex(const DirInfo& repo,
   std::string response;
   if (!http.Get(repo.info, response))
   {
-    CLog::Log(LOGERROR, "CRepository: failed to read %s", repo.info.c_str());
+    CLog::Log(LOGERROR, "CRepository: failed to read {}", repo.info);
     return false;
   }
 
@@ -209,11 +224,11 @@ bool CRepository::FetchIndex(const DirInfo& repo,
   if (URIUtils::HasExtension(repo.info, ".gz")
       || CMime::GetFileTypeFromMime(http.GetProperty(XFILE::FILE_PROPERTY_MIME_TYPE)) == CMime::EFileType::FileTypeGZip)
   {
-    CLog::Log(LOGDEBUG, "CRepository '%s' is gzip. decompressing", repo.info.c_str());
+    CLog::Log(LOGDEBUG, "CRepository '{}' is gzip. decompressing", repo.info);
     std::string buffer;
     if (!CZipFile::DecompressGzip(response, buffer))
     {
-      CLog::Log(LOGERROR, "CRepository: failed to decompress gzip from '%s'", repo.info.c_str());
+      CLog::Log(LOGERROR, "CRepository: failed to decompress gzip from '{}'", repo.info);
       return false;
     }
     response = std::move(buffer);
@@ -228,7 +243,7 @@ CRepository::FetchStatus CRepository::FetchIfChanged(const std::string& oldCheck
                                                      int& recheckAfter) const
 {
   checksum = "";
-  std::vector<std::tuple<DirInfo const&, std::string>> dirChecksums;
+  std::vector<std::tuple<RepositoryDirInfo const&, std::string>> dirChecksums;
   std::vector<int> recheckAfterTimes;
 
   for (const auto& dir : m_dirs)
@@ -240,7 +255,7 @@ CRepository::FetchStatus CRepository::FetchIfChanged(const std::string& oldCheck
       if (!FetchChecksum(dir.checksum, part, recheckAfterThisDir))
       {
         recheckAfter = 1 * 60 * 60; // retry after 1 hour
-        CLog::Log(LOGERROR, "CRepository: failed read '%s'", dir.checksum.c_str());
+        CLog::Log(LOGERROR, "CRepository: failed read '{}'", dir.checksum);
         return STATUS_ERROR;
       }
       dirChecksums.emplace_back(dir, part);
@@ -271,9 +286,9 @@ CRepository::FetchStatus CRepository::FetchIfChanged(const std::string& oldCheck
   return STATUS_OK;
 }
 
-CRepository::DirInfo CRepository::ParseDirConfiguration(const CAddonExtensions& configuration)
+RepositoryDirInfo CRepository::ParseDirConfiguration(const CAddonExtensions& configuration)
 {
-  DirInfo dir;
+  RepositoryDirInfo dir;
   dir.checksum = configuration.GetValue("checksum").asString();
   std::string checksumStr = configuration.GetValue("checksum@verify").asString();
   if (!checksumStr.empty())
@@ -304,76 +319,8 @@ CRepository::DirInfo CRepository::ParseDirConfiguration(const CAddonExtensions& 
     }
   }
 
-  dir.minversion = AddonVersion{configuration.GetValue("@minversion").asString()};
-  dir.maxversion = AddonVersion{configuration.GetValue("@maxversion").asString()};
+  dir.minversion = CAddonVersion{configuration.GetValue("@minversion").asString()};
+  dir.maxversion = CAddonVersion{configuration.GetValue("@maxversion").asString()};
 
   return dir;
-}
-
-CRepositoryUpdateJob::CRepositoryUpdateJob(const RepositoryPtr& repo) : m_repo(repo) {}
-
-bool CRepositoryUpdateJob::DoWork()
-{
-  CLog::Log(LOGDEBUG, "CRepositoryUpdateJob[%s] checking for updates.", m_repo->ID().c_str());
-  CAddonDatabase database;
-  database.Open();
-
-  std::string oldChecksum;
-  if (database.GetRepoChecksum(m_repo->ID(), oldChecksum) == -1)
-    oldChecksum = "";
-
-  const CAddonDatabase::RepoUpdateData updateData{database.GetRepoUpdateData(m_repo->ID())};
-  if (updateData.lastCheckedVersion != m_repo->Version())
-    oldChecksum = "";
-
-  std::string newChecksum;
-  std::vector<AddonInfoPtr> addons;
-  int recheckAfter;
-  auto status = m_repo->FetchIfChanged(oldChecksum, newChecksum, addons, recheckAfter);
-
-  database.SetRepoUpdateData(
-      m_repo->ID(), CAddonDatabase::RepoUpdateData(
-                        CDateTime::GetCurrentDateTime(), m_repo->Version(),
-                        CDateTime::GetCurrentDateTime() + CDateTimeSpan(0, 0, 0, recheckAfter)));
-
-  MarkFinished();
-
-  if (status == CRepository::STATUS_ERROR)
-    return false;
-
-  if (status == CRepository::STATUS_NOT_MODIFIED)
-  {
-    CLog::Log(LOGDEBUG, "CRepositoryUpdateJob[%s] checksum not changed.", m_repo->ID().c_str());
-    return true;
-  }
-
-  //Invalidate art.
-  {
-    CTextureDatabase textureDB;
-    textureDB.Open();
-    textureDB.BeginMultipleExecute();
-
-    for (const auto& addon : addons)
-    {
-      AddonPtr oldAddon;
-      if (database.GetAddon(addon->ID(), oldAddon) && addon->Version() > oldAddon->Version())
-      {
-        if (!oldAddon->Icon().empty() || !oldAddon->Art().empty() || !oldAddon->Screenshots().empty())
-          CLog::Log(LOGDEBUG, "CRepository: invalidating cached art for '%s'", addon->ID().c_str());
-
-        if (!oldAddon->Icon().empty())
-          textureDB.InvalidateCachedTexture(oldAddon->Icon());
-
-        for (const auto& path : oldAddon->Screenshots())
-          textureDB.InvalidateCachedTexture(path);
-
-        for (const auto& art : oldAddon->Art())
-          textureDB.InvalidateCachedTexture(art.second);
-      }
-    }
-    textureDB.CommitMultipleExecute();
-  }
-
-  database.UpdateRepositoryContent(m_repo->ID(), m_repo->Version(), newChecksum, addons);
-  return true;
 }

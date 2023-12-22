@@ -35,7 +35,7 @@ public:
   bool ResizeWindow(int newWidth, int newHeight, int newLeft, int newTop) override;
   bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
 
-  std::unique_ptr<CVideoSync> GetVideoSync(void* clock) override;
+  std::unique_ptr<CVideoSync> GetVideoSync(CVideoReferenceClock* clock) override;
 
   float GetFrameLatencyAdjustment() override;
   bool IsHDRDisplay() override;
@@ -58,5 +58,6 @@ private:
   std::unique_ptr<AVMasteringDisplayMetadata> m_displayMetadata;
   std::unique_ptr<AVContentLightMetadata> m_lightMetadata;
   EGLint m_HDRColorSpace = EGL_NONE;
-  bool m_hasEGLHDRExtensions = false;
+  bool m_hasEGL_ST2086_Extension = false;
+  bool m_hasEGL_BT2020_PQ_Colorspace_Extension = false;
 };

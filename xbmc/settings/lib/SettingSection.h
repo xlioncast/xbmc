@@ -11,7 +11,7 @@
 #include "ISetting.h"
 #include "Setting.h"
 #include "SettingCategoryAccess.h"
-#include "utils/StaticLoggerBase.h"
+#include "utils/logtypes.h"
 
 #include <string>
 #include <utility>
@@ -25,7 +25,7 @@ class CSettingsManager;
  \sa CSettingCategory
  \sa CSetting
  */
-class CSettingGroup : public ISetting, protected CStaticLoggerBase
+class CSettingGroup : public ISetting
 {
 public:
   /*!
@@ -56,6 +56,14 @@ public:
    */
   SettingList GetSettings(SettingLevel level) const;
 
+  /*
+   * \brief Determine if there are visible settings assigned to the given setting level (or below)
+   *        and that they meet the requirements conditions belonging to the setting group.
+   * \param level Level the settings should be assigned to
+   * \return True if there are visible settings belonging to the setting group, otherwise false
+   */
+  bool ContainsVisibleSettings(const SettingLevel level) const;
+
   void AddSetting(const std::shared_ptr<CSetting>& setting);
   void AddSettings(const SettingList &settings);
 
@@ -69,6 +77,8 @@ public:
 private:
   SettingList m_settings;
   std::shared_ptr<ISettingControl> m_control;
+
+  static Logger s_logger;
 };
 
 using SettingGroupPtr = std::shared_ptr<CSettingGroup>;
@@ -80,7 +90,7 @@ using SettingGroupList = std::vector<SettingGroupPtr>;
  \sa CSettingSection
  \sa CSettingGroup
  */
-class CSettingCategory : public ISetting, protected CStaticLoggerBase
+class CSettingCategory : public ISetting
 {
 public:
   /*!
@@ -120,11 +130,14 @@ public:
   bool CanAccess() const;
 
   void AddGroup(const SettingGroupPtr& group);
+  void AddGroupToFront(const SettingGroupPtr& group);
   void AddGroups(const SettingGroupList &groups);
 
 private:
   SettingGroupList m_groups;
   CSettingCategoryAccess m_accessCondition;
+
+  static Logger s_logger;
 };
 
 using SettingCategoryPtr = std::shared_ptr<CSettingCategory>;
@@ -136,7 +149,7 @@ using SettingCategoryList = std::vector<SettingCategoryPtr>;
  \sa CSettings
  \sa CSettingCategory
  */
-class CSettingSection : public ISetting, protected CStaticLoggerBase
+class CSettingSection : public ISetting
 {
 public:
   /*!
@@ -173,6 +186,8 @@ public:
 
 private:
   SettingCategoryList m_categories;
+
+  static Logger s_logger;
 };
 
 using SettingSectionPtr = std::shared_ptr<CSettingSection>;

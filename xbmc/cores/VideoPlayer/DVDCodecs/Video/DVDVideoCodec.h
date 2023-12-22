@@ -50,11 +50,12 @@ public:
   double iRepeatPicture;
   double iDuration;
   unsigned int iFrameType         : 4;  //< see defines above // 1->I, 2->P, 3->B, 0->Undef
-  unsigned int color_space;
+  AVColorSpace color_space;
   unsigned int color_range        : 1;  //< 1 indicate if we have a full range of color
-  unsigned int chroma_position;
-  unsigned int color_primaries;
-  unsigned int color_transfer;
+  AVChromaLocation chroma_position;
+  AVColorPrimaries color_primaries; // heuristics applied when original is AVCOL_PRI_UNSPECIFIED
+  AVColorPrimaries m_originalColorPrimaries;
+  AVColorTransferCharacteristic color_transfer;
   unsigned int colorBits = 8;
   std::string stereoMode;
 
@@ -67,6 +68,8 @@ public:
   AVMasteringDisplayMetadata displayMetadata;
   bool hasLightMetadata = false;
   AVContentLightMetadata lightMetadata;
+
+  AVPixelFormat pixelFormat; //< source pixel format
 
   unsigned int iWidth;
   unsigned int iHeight;
@@ -124,14 +127,14 @@ public:
 
   /**
    * Open the decoder, returns true on success
-   * Decoders not capable of runnung multiple instances should return false in case
+   * Decoders not capable of running multiple instances should return false in case
    * there is already a instance open
    */
   virtual bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options) = 0;
 
   /**
    * Reconfigure the decoder, returns true on success
-   * Decoders not capable of runnung multiple instances may be capable of reconfiguring
+   * Decoders not capable of running multiple instances may be capable of reconfiguring
    * the running instance. If Reconfigure returns false, player will close / open
    * the decoder
    */
@@ -163,7 +166,7 @@ public:
    * will be called by video player indicating the playback speed. see DVD_PLAYSPEED_NORMAL,
    * DVD_PLAYSPEED_PAUSE and friends.
    */
-  virtual void SetSpeed(int iSpeed) {};
+  virtual void SetSpeed(int iSpeed) {}
 
   /**
    * should return codecs name
@@ -233,7 +236,7 @@ public:
    * Re-open the decoder.
    * Decoder request to re-open
    */
-  virtual void Reopen() {};
+  virtual void Reopen() {}
 
 protected:
   CProcessInfo &m_processInfo;
@@ -253,7 +256,7 @@ public:
   virtual unsigned GetAllowedReferences() { return 0; }
   virtual bool CanSkipDeint() {return false; }
   virtual const std::string Name() = 0;
-  virtual void SetCodecControl(int flags) {};
+  virtual void SetCodecControl(int flags) {}
 };
 
 class ICallbackHWAccel

@@ -10,9 +10,12 @@
 
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/DRMHelpers.h"
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
+
+#include "PlatformDefs.h"
 
 using namespace KODI::WINDOWING::GBM;
 
@@ -103,7 +106,8 @@ drm_fb * CDRMUtils::DrmFbGetFromBo(struct gbm_bo *bo)
   if (modifiers[0] && modifiers[0] != DRM_FORMAT_MOD_INVALID)
   {
     flags |= DRM_MODE_FB_MODIFIERS;
-    CLog::Log(LOGDEBUG, "CDRMUtils::{} - using modifier: {:#x}", __FUNCTION__, modifiers[0]);
+    CLog::Log(LOGDEBUG, "CDRMUtils::{} - using modifier: {}", __FUNCTION__,
+              DRMHELPERS::ModifierToString(modifiers[0]));
   }
 
   int ret = drmModeAddFB2WithModifiers(m_fd,
@@ -144,6 +148,9 @@ drm_fb * CDRMUtils::DrmFbGetFromBo(struct gbm_bo *bo)
 
 bool CDRMUtils::FindPreferredMode()
 {
+  if (m_mode)
+    return true;
+
   for (int i = 0, area = 0; i < m_connector->GetModesCount(); i++)
   {
     drmModeModeInfo* current_mode = m_connector->GetModeForIndex(i);
@@ -200,7 +207,8 @@ bool CDRMUtils::FindPlanes()
           {
             return (plane->GetPlaneId() != videoPlaneId &&
                     (videoPlaneId == 0 || plane->SupportsFormat(DRM_FORMAT_ARGB8888)) &&
-                    plane->SupportsFormat(DRM_FORMAT_XRGB8888));
+                    (plane->SupportsFormat(DRM_FORMAT_XRGB2101010) ||
+                     plane->SupportsFormat(DRM_FORMAT_XRGB8888)));
           }
           return false;
         });
@@ -231,8 +239,18 @@ bool CDRMUtils::FindPlanes()
     CLog::Log(LOGDEBUG, "CDRMUtils::{} - using video plane {}", __FUNCTION__,
               m_video_plane->GetPlaneId());
 
-  CLog::Log(LOGDEBUG, "CDRMUtils::{} - using gui plane {}", __FUNCTION__,
-            m_gui_plane->GetPlaneId());
+  if (m_gui_plane->SupportsFormat(DRM_FORMAT_XRGB2101010))
+  {
+    m_gui_plane->SetFormat(DRM_FORMAT_XRGB2101010);
+    CLog::Log(LOGDEBUG, "CDRMUtils::{} - using 10bit gui plane {}", __FUNCTION__,
+              m_gui_plane->GetPlaneId());
+  }
+  else
+  {
+    m_gui_plane->SetFormat(DRM_FORMAT_XRGB8888);
+    CLog::Log(LOGDEBUG, "CDRMUtils::{} - using gui plane {}", __FUNCTION__,
+              m_gui_plane->GetPlaneId());
+  }
 
   return true;
 }
@@ -488,9 +506,40 @@ bool CDRMUtils::InitDrm()
 
 bool CDRMUtils::FindConnector()
 {
-  auto connector = std::find_if(m_connectors.begin(), m_connectors.end(), [](auto& connector) {
-    return connector->GetEncoderId() > 0 && connector->IsConnected();
-  });
+  auto settingsComponent = CServiceBroker::GetSettingsComponent();
+  if (!settingsComponent)
+    return false;
+
+  auto settings = settingsComponent->GetSettings();
+  if (!settings)
+    return false;
+
+  std::vector<std::unique_ptr<CDRMConnector>>::iterator connector;
+
+  std::string connectorName = settings->GetString(CSettings::SETTING_VIDEOSCREEN_MONITOR);
+  if (connectorName != "Default")
+  {
+    connector = std::find_if(m_connectors.begin(), m_connectors.end(),
+                             [&connectorName](auto& connector)
+                             {
+                               return connector->GetEncoderId() > 0 && connector->IsConnected() &&
+                                      connector->GetName() == connectorName;
+                             });
+
+    if (connector == m_connectors.end())
+    {
+      CLog::Log(LOGDEBUG, "CDRMUtils::{} - failed to find specified connector: {}, trying default",
+                __FUNCTION__, connectorName);
+      connectorName = "Default";
+    }
+  }
+
+  if (connectorName == "Default")
+  {
+    connector = std::find_if(m_connectors.begin(), m_connectors.end(),
+                             [](auto& connector)
+                             { return connector->GetEncoderId() > 0 && connector->IsConnected(); });
+  }
 
   if (connector == m_connectors.end())
   {
@@ -499,7 +548,7 @@ bool CDRMUtils::FindConnector()
   }
 
   CLog::Log(LOGINFO, "CDRMUtils::{} - using connector: {}", __FUNCTION__,
-            *connector->get()->GetConnectorId());
+            connector->get()->GetName());
 
   m_connector = connector->get();
   return true;
@@ -534,6 +583,13 @@ bool CDRMUtils::FindCrtc()
       if (m_crtcs[i]->GetCrtcId() == m_encoder->GetCrtcId())
       {
         m_orig_crtc = m_crtcs[i].get();
+        if (m_orig_crtc->GetModeValid())
+        {
+          m_mode = m_orig_crtc->GetMode();
+          CLog::Log(LOGDEBUG, "CDRMUtils::{} - original crtc mode: {}x{}{} @ {} Hz", __FUNCTION__,
+                    m_mode->hdisplay, m_mode->vdisplay,
+                    m_mode->flags & DRM_MODE_FLAG_INTERLACE ? "i" : "", m_mode->vrefresh);
+        }
         return true;
       }
     }
@@ -619,7 +675,7 @@ RESOLUTION_INFO CDRMUtils::GetResolutionInfo(drmModeModeInfoPtr mode)
     res.fRefreshRate = static_cast<float>(mode->vrefresh) * (1000.0f/1001.0f);
   else
     res.fRefreshRate = mode->vrefresh;
-  res.iSubtitles = static_cast<int>(0.965 * res.iHeight);
+  res.iSubtitles = res.iHeight;
   res.fPixelRatio = 1.0f;
   res.bFullScreen = true;
 
@@ -635,8 +691,9 @@ RESOLUTION_INFO CDRMUtils::GetResolutionInfo(drmModeModeInfoPtr mode)
   else
     res.dwFlags = D3DPRESENTFLAG_PROGRESSIVE;
 
-  res.strMode = StringUtils::Format("%dx%d%s @ %.6f Hz", res.iScreenWidth, res.iScreenHeight,
-                                    res.dwFlags & D3DPRESENTFLAG_INTERLACED ? "i" : "", res.fRefreshRate);
+  res.strMode =
+      StringUtils::Format("{}x{}{} @ {:.6f} Hz", res.iScreenWidth, res.iScreenHeight,
+                          res.dwFlags & D3DPRESENTFLAG_INTERLACED ? "i" : "", res.fRefreshRate);
   return res;
 }
 
@@ -660,6 +717,18 @@ std::vector<RESOLUTION_INFO> CDRMUtils::GetModes()
   return resolutions;
 }
 
+std::vector<std::string> CDRMUtils::GetConnectedConnectorNames()
+{
+  std::vector<std::string> connectorNames;
+  for (const auto& connector : m_connectors)
+  {
+    if (connector->IsConnected())
+      connectorNames.emplace_back(connector->GetName());
+  }
+
+  return connectorNames;
+}
+
 uint32_t CDRMUtils::FourCCWithAlpha(uint32_t fourcc)
 {
   return (fourcc & 0xFFFFFF00) | static_cast<uint32_t>('A');
@@ -668,15 +737,4 @@ uint32_t CDRMUtils::FourCCWithAlpha(uint32_t fourcc)
 uint32_t CDRMUtils::FourCCWithoutAlpha(uint32_t fourcc)
 {
   return (fourcc & 0xFFFFFF00) | static_cast<uint32_t>('X');
-}
-
-std::string CDRMUtils::FourCCToString(uint32_t fourcc)
-{
-  std::stringstream ss;
-  ss << static_cast<char>((fourcc & 0x000000FF));
-  ss << static_cast<char>((fourcc & 0x0000FF00) >> 8);
-  ss << static_cast<char>((fourcc & 0x00FF0000) >> 16);
-  ss << static_cast<char>((fourcc & 0xFF000000) >> 24);
-
-  return ss.str();
 }

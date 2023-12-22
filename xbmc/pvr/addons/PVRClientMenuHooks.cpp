@@ -13,6 +13,8 @@
 #include "pvr/PVRContextMenus.h"
 #include "utils/log.h"
 
+#include <memory>
+
 namespace PVR
 {
 
@@ -77,6 +79,11 @@ bool CPVRClientMenuHook::IsSettingsHook() const
   return m_hook->category == PVR_MENUHOOK_SETTING;
 }
 
+std::string CPVRClientMenuHook::GetAddonId() const
+{
+  return m_addonId;
+}
+
 unsigned int CPVRClientMenuHook::GetId() const
 {
   return m_hook->iHookId;
@@ -95,7 +102,7 @@ std::string CPVRClientMenuHook::GetLabel() const
 void CPVRClientMenuHooks::AddHook(const PVR_MENUHOOK& addonHook)
 {
   if (!m_hooks)
-    m_hooks.reset(new std::vector<CPVRClientMenuHook>());
+    m_hooks = std::make_unique<std::vector<CPVRClientMenuHook>>();
 
   const CPVRClientMenuHook hook(m_addonId, addonHook);
   m_hooks->emplace_back(hook);

@@ -13,9 +13,11 @@
 #include "cores/AudioEngine/AEResampleFactory.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
 
+#include <memory>
+
 using namespace ActiveAE;
 
-CSoundPacket::CSoundPacket(SampleConfig conf, int samples) : config(conf)
+CSoundPacket::CSoundPacket(const SampleConfig& conf, int samples) : config(conf)
 {
   data = CActiveAE::AllocSoundSample(config, samples, bytes_per_sample, planes, linesize);
   max_nb_samples = samples;
@@ -27,11 +29,6 @@ CSoundPacket::~CSoundPacket()
 {
   if (data)
     CActiveAE::FreeSoundSample(data);
-}
-
-CSampleBuffer::~CSampleBuffer()
-{
-  delete pkt;
 }
 
 CSampleBuffer* CSampleBuffer::Acquire()
@@ -47,9 +44,8 @@ void CSampleBuffer::Return()
     pool->ReturnBuffer(this);
 }
 
-CActiveAEBufferPool::CActiveAEBufferPool(const AEAudioFormat& format)
+CActiveAEBufferPool::CActiveAEBufferPool(const AEAudioFormat& format) : m_format(format)
 {
-  m_format = format;
   if (m_format.m_dataFormat == AE_FMT_RAW)
   {
     m_format.m_frameSize = 1;
@@ -113,7 +109,7 @@ bool CActiveAEBufferPool::Create(unsigned int totaltime)
   {
     buffer = new CSampleBuffer();
     buffer->pool = this;
-    buffer->pkt = new CSoundPacket(config, m_format.m_frames);
+    buffer->pkt = std::make_unique<CSoundPacket>(config, m_format.m_frames);
 
     m_allSamples.push_back(buffer);
     m_freeSamples.push_back(buffer);
@@ -128,10 +124,11 @@ bool CActiveAEBufferPool::Create(unsigned int totaltime)
 // Resample
 // ----------------------------------------------------------------------------------
 
-CActiveAEBufferPoolResample::CActiveAEBufferPoolResample(const AEAudioFormat& inputFormat, const AEAudioFormat& outputFormat, AEQuality quality)
-  : CActiveAEBufferPool(outputFormat)
+CActiveAEBufferPoolResample::CActiveAEBufferPoolResample(const AEAudioFormat& inputFormat,
+                                                         const AEAudioFormat& outputFormat,
+                                                         AEQuality quality)
+  : CActiveAEBufferPool(outputFormat), m_inputFormat(inputFormat)
 {
-  m_inputFormat = inputFormat;
   if (m_inputFormat.m_dataFormat == AE_FMT_RAW)
   {
     m_format.m_frameSize = 1;
@@ -145,8 +142,6 @@ CActiveAEBufferPoolResample::CActiveAEBufferPoolResample(const AEAudioFormat& in
 CActiveAEBufferPoolResample::~CActiveAEBufferPoolResample()
 {
   Flush();
-
-  delete m_resampler;
 }
 
 bool CActiveAEBufferPoolResample::Create(unsigned int totaltime, bool remap, bool upmix, bool normalize)
@@ -172,12 +167,6 @@ bool CActiveAEBufferPoolResample::Create(unsigned int totaltime, bool remap, boo
 
 void CActiveAEBufferPoolResample::ChangeResampler()
 {
-  if (m_resampler)
-  {
-    delete m_resampler;
-    m_resampler = NULL;
-  }
-
   m_resampler = CAEResampleFactory::Create();
 
   SampleConfig dstConfig, srcConfig;
@@ -468,6 +457,7 @@ CActiveAEBufferPoolAtempo::CActiveAEBufferPoolAtempo(const AEAudioFormat& format
   m_tempo = 1.0;
   m_changeFilter = false;
   m_procSample = nullptr;
+  m_fillPackets = false;
 }
 
 CActiveAEBufferPoolAtempo::~CActiveAEBufferPoolAtempo()
@@ -479,7 +469,7 @@ bool CActiveAEBufferPoolAtempo::Create(unsigned int totaltime)
 {
   CActiveAEBufferPool::Create(totaltime);
 
-  m_pTempoFilter.reset(new CActiveAEFilter());
+  m_pTempoFilter = std::make_unique<CActiveAEFilter>();
   m_pTempoFilter->Init(CAEUtil::GetAVSampleFormat(m_format.m_dataFormat), m_format.m_sampleRate, CAEUtil::GetAVChannelLayout(m_format.m_channelLayout));
 
   return true;
@@ -674,9 +664,9 @@ float CActiveAEBufferPoolAtempo::GetDelay()
 
 void CActiveAEBufferPoolAtempo::SetTempo(float tempo)
 {
-  if (tempo > 2.0)
+  if (tempo > 2.0f)
     tempo = 2.0;
-  else if (tempo < 0.5)
+  else if (tempo < 0.5f)
     tempo = 0.5;
 
   if (tempo != m_tempo)

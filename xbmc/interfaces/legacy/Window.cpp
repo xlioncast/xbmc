@@ -8,22 +8,20 @@
 
 #include "Window.h"
 
-#include "Application.h"
 #include "ServiceBroker.h"
 #include "WindowException.h"
 #include "WindowInterceptor.h"
+#include "application/Application.h"
 #include "guilib/GUIButtonControl.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIEditControl.h"
 #include "guilib/GUIRadioButtonControl.h"
 #include "guilib/GUIWindowManager.h"
 #include "messaging/ApplicationMessenger.h"
+#include "utils/StringUtils.h"
 #include "utils/Variant.h"
 
-using namespace KODI::MESSAGING;
-
 #define ACTIVE_WINDOW CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow()
-
 
 namespace XBMCAddon
 {
@@ -136,7 +134,7 @@ namespace XBMCAddon
       //! @todo rework locking
       // Python GIL and CServiceBroker::GetWinSystem()->GetGfxContext() are deadlock happy
       // dispose is called from GUIWindowManager and in this case DelayGuard must not be used.
-      if (!g_application.IsCurrentThread())
+      if (!CServiceBroker::GetAppMessenger()->IsProcessThread())
       {
         SingleLockWithDelayGuard gslock(CServiceBroker::GetWinSystem()->GetGfxContext(), languageHook);
       }
@@ -385,7 +383,8 @@ namespace XBMCAddon
     {
       XBMC_TRACE;
       // DO NOT MAKE THIS A DELAYED CALL!!!!
-      bool ret = languageHook == NULL ? m_actionEvent.WaitMSec(milliseconds) : languageHook->WaitForEvent(m_actionEvent,milliseconds);
+      bool ret = languageHook == NULL ? m_actionEvent.Wait(std::chrono::milliseconds(milliseconds))
+                                      : languageHook->WaitForEvent(m_actionEvent, milliseconds);
       if (ret)
         m_actionEvent.Reset();
       return ret;
@@ -489,7 +488,7 @@ namespace XBMCAddon
       DelayedCallGuard dcguard(languageHook);
       popActiveWindowId();
 
-      CApplicationMessenger::GetInstance().SendMsg(TMSG_GUI_ACTIVATE_WINDOW, iWindowId, 0);
+      CServiceBroker::GetAppMessenger()->SendMsg(TMSG_GUI_ACTIVATE_WINDOW, iWindowId, 0);
     }
 
     void Window::setFocus(Control* pControl)
@@ -551,20 +550,24 @@ namespace XBMCAddon
           throw WindowException("Control does not exist in window");
       }
 
+      CGUIMessage msg(GUI_MSG_REMOVE_CONTROL, 0, 0);
+      msg.SetPointer(pControl->pGUIControl);
+      CServiceBroker::GetAppMessenger()->SendGUIMessage(msg, iWindowId, wait);
+
       // delete control from vecControls in window object
-      std::vector<AddonClass::Ref<Control> >::iterator it = vecControls.begin();
+      std::vector<AddonClass::Ref<Control>>::iterator it = vecControls.begin();
       while (it != vecControls.end())
       {
         AddonClass::Ref<Control> control = (*it);
         if (control->iControlId == pControl->iControlId)
         {
           it = vecControls.erase(it);
-        } else ++it;
+        }
+        else
+        {
+          ++it;
+        }
       }
-
-      CGUIMessage msg(GUI_MSG_REMOVE_CONTROL, 0, 0);
-      msg.SetPointer(pControl->pGUIControl);
-      CApplicationMessenger::GetInstance().SendGUIMessage(msg, iWindowId, wait);
 
       // initialize control to zero
       pControl->pGUIControl = NULL;
@@ -645,7 +648,7 @@ namespace XBMCAddon
 
       {
         DelayedCallGuard dcguard(languageHook);
-        CApplicationMessenger::GetInstance().SendMsg(TMSG_GUI_PREVIOUS_WINDOW, iOldWindowId, 0);
+        CServiceBroker::GetAppMessenger()->SendMsg(TMSG_GUI_PREVIOUS_WINDOW, iOldWindowId, 0);
       }
 
       iOldWindowId = 0;
@@ -734,7 +737,7 @@ namespace XBMCAddon
       // This calls the CGUIWindow parent class to do the final add
       CGUIMessage msg(GUI_MSG_ADD_CONTROL, 0, 0);
       msg.SetPointer(pControl->pGUIControl);
-      CApplicationMessenger::GetInstance().SendGUIMessage(msg, iWindowId, wait);
+      CServiceBroker::GetAppMessenger()->SendGUIMessage(msg, iWindowId, wait);
     }
 
     void Window::addControls(std::vector<Control*> pControls)

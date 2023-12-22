@@ -73,7 +73,7 @@ public:
   float GetClipYFactor(void) const { return m_clipYFactor;  }
   float GetClipYOffset(void) const { return m_clipYOffset;  }
 
-  // need to use aligned allocation bacause we use XMMATRIX in structures.
+  // need to use aligned allocation because we use XMMATRIX in structures.
   void* operator new (size_t size)
   {
     void* ptr = KODI::MEMORY::AlignedMalloc(size, __alignof(CGUIShaderDX));
@@ -106,6 +106,7 @@ private:
     DirectX::XMMATRIX wvp;
     float blackLevel;
     float colorRange;
+    float sdrPeakLum;
     int PQ;
   };
 
@@ -116,8 +117,8 @@ private:
   void ClipToScissorParams(void);
 
   // GUI constants
-  cbViewPort m_cbViewPort;
-  cbWorldViewProj m_cbWorldViewProj;
+  cbViewPort m_cbViewPort = {};
+  cbWorldViewProj m_cbWorldViewProj = {};
 
   bool  m_bCreated;
   size_t m_currentShader;

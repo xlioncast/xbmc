@@ -14,53 +14,53 @@
 #include "addons/AddonDatabase.h"
 #include "addons/AddonManager.h"
 #include "addons/PluginSource.h"
-#include "filesystem/File.h"
+#include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "messaging/ApplicationMessenger.h"
+#include "utils/FileUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/Variant.h"
 
 using namespace JSONRPC;
 using namespace ADDON;
-using namespace XFILE;
-using namespace KODI::MESSAGING;
 
 JSONRPC_STATUS CAddonsOperations::GetAddons(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result)
 {
-  std::vector<TYPE> addonTypes;
-  TYPE addonType = CAddonInfo::TranslateType(parameterObject["type"].asString());
+  std::vector<AddonType> addonTypes;
+  AddonType addonType = CAddonInfo::TranslateType(parameterObject["type"].asString());
   CPluginSource::Content content = CPluginSource::Translate(parameterObject["content"].asString());
   CVariant enabled = parameterObject["enabled"];
   CVariant installed = parameterObject["installed"];
 
   // ignore the "content" parameter if the type is specified but not a plugin or script
-  if (addonType != ADDON_UNKNOWN && addonType != ADDON_PLUGIN && addonType != ADDON_SCRIPT)
+  if (addonType != AddonType::UNKNOWN && addonType != AddonType::PLUGIN &&
+      addonType != AddonType::SCRIPT)
     content = CPluginSource::UNKNOWN;
 
-  if (addonType >= ADDON_VIDEO && addonType <= ADDON_EXECUTABLE)
+  if (addonType >= AddonType::VIDEO && addonType <= AddonType::EXECUTABLE)
   {
-    addonTypes.push_back(ADDON_PLUGIN);
-    addonTypes.push_back(ADDON_SCRIPT);
+    addonTypes.push_back(AddonType::PLUGIN);
+    addonTypes.push_back(AddonType::SCRIPT);
 
     switch (addonType)
     {
-    case ADDON_VIDEO:
-      content = CPluginSource::VIDEO;
-      break;
-    case ADDON_AUDIO:
-      content = CPluginSource::AUDIO;
-      break;
-    case ADDON_IMAGE:
-      content = CPluginSource::IMAGE;
-      break;
-    case ADDON_GAME:
-      content = CPluginSource::GAME;
-      break;
-    case ADDON_EXECUTABLE:
-      content = CPluginSource::EXECUTABLE;
-      break;
-
-    default:
-      break;
+      case AddonType::VIDEO:
+        content = CPluginSource::VIDEO;
+        break;
+      case AddonType::AUDIO:
+        content = CPluginSource::AUDIO;
+        break;
+      case AddonType::IMAGE:
+        content = CPluginSource::IMAGE;
+        break;
+      case AddonType::GAME:
+        content = CPluginSource::GAME;
+        break;
+      case AddonType::EXECUTABLE:
+        content = CPluginSource::EXECUTABLE;
+        break;
+      default:
+        break;
     }
   }
   else
@@ -70,7 +70,7 @@ JSONRPC_STATUS CAddonsOperations::GetAddons(const std::string &method, ITranspor
   for (const auto& typeIt : addonTypes)
   {
     VECADDONS typeAddons;
-    if (typeIt == ADDON_UNKNOWN)
+    if (typeIt == AddonType::UNKNOWN)
     {
       if (!enabled.isBoolean()) //All
       {
@@ -105,12 +105,14 @@ JSONRPC_STATUS CAddonsOperations::GetAddons(const std::string &method, ITranspor
   // remove library addons
   for (int index = 0; index < (int)addons.size(); index++)
   {
-    PluginPtr plugin;
+    std::shared_ptr<CPluginSource> plugin;
     if (content != CPluginSource::UNKNOWN)
       plugin = std::dynamic_pointer_cast<CPluginSource>(addons.at(index));
 
-    if ((addons.at(index)->Type() <= ADDON_UNKNOWN || addons.at(index)->Type() >= ADDON_MAX) ||
-       ((content != CPluginSource::UNKNOWN && plugin == NULL) || (plugin != NULL && !plugin->Provides(content))))
+    if ((addons.at(index)->Type() <= AddonType::UNKNOWN ||
+         addons.at(index)->Type() >= AddonType::MAX_TYPES) ||
+        ((content != CPluginSource::UNKNOWN && plugin == NULL) ||
+         (plugin != NULL && !plugin->Provides(content))))
     {
       addons.erase(addons.begin() + index);
       index--;
@@ -131,8 +133,9 @@ JSONRPC_STATUS CAddonsOperations::GetAddonDetails(const std::string &method, ITr
 {
   std::string id = parameterObject["addonid"].asString();
   AddonPtr addon;
-  if (!CServiceBroker::GetAddonMgr().GetAddon(id, addon, ADDON::ADDON_UNKNOWN, OnlyEnabled::NO) ||
-      addon.get() == NULL || addon->Type() <= ADDON_UNKNOWN || addon->Type() >= ADDON_MAX)
+  if (!CServiceBroker::GetAddonMgr().GetAddon(id, addon, OnlyEnabled::CHOICE_NO) ||
+      addon.get() == NULL || addon->Type() <= AddonType::UNKNOWN ||
+      addon->Type() >= AddonType::MAX_TYPES)
     return InvalidParams;
 
   CAddonDatabase addondb;
@@ -145,8 +148,9 @@ JSONRPC_STATUS CAddonsOperations::SetAddonEnabled(const std::string &method, ITr
 {
   std::string id = parameterObject["addonid"].asString();
   AddonPtr addon;
-  if (!CServiceBroker::GetAddonMgr().GetAddon(id, addon, ADDON::ADDON_UNKNOWN, OnlyEnabled::NO) ||
-      addon == nullptr || addon->Type() <= ADDON_UNKNOWN || addon->Type() >= ADDON_MAX)
+  if (!CServiceBroker::GetAddonMgr().GetAddon(id, addon, OnlyEnabled::CHOICE_NO) ||
+      addon == nullptr || addon->Type() <= AddonType::UNKNOWN ||
+      addon->Type() >= AddonType::MAX_TYPES)
     return InvalidParams;
 
   bool disabled = false;
@@ -175,15 +179,16 @@ JSONRPC_STATUS CAddonsOperations::ExecuteAddon(const std::string &method, ITrans
 {
   std::string id = parameterObject["addonid"].asString();
   AddonPtr addon;
-  if (!CServiceBroker::GetAddonMgr().GetAddon(id, addon, ADDON_UNKNOWN, OnlyEnabled::YES) ||
-      addon.get() == NULL || addon->Type() < ADDON_VIZ || addon->Type() >= ADDON_MAX)
+  if (!CServiceBroker::GetAddonMgr().GetAddon(id, addon, OnlyEnabled::CHOICE_YES) ||
+      addon.get() == NULL || addon->Type() < AddonType::VISUALIZATION ||
+      addon->Type() >= AddonType::MAX_TYPES)
     return InvalidParams;
 
   std::string argv;
   CVariant params = parameterObject["params"];
   if (params.isObject())
   {
-    for (CVariant::const_iterator_map it = params.begin_map(); it != params.end_map(); it++)
+    for (CVariant::const_iterator_map it = params.begin_map(); it != params.end_map(); ++it)
     {
       if (it != params.begin_map())
         argv += ",";
@@ -192,7 +197,7 @@ JSONRPC_STATUS CAddonsOperations::ExecuteAddon(const std::string &method, ITrans
   }
   else if (params.isArray())
   {
-    for (CVariant::const_iterator_array it = params.begin_array(); it != params.end_array(); it++)
+    for (CVariant::const_iterator_array it = params.begin_array(); it != params.end_array(); ++it)
     {
       if (it != params.begin_array())
         argv += ",";
@@ -207,14 +212,14 @@ JSONRPC_STATUS CAddonsOperations::ExecuteAddon(const std::string &method, ITrans
 
   std::string cmd;
   if (params.empty())
-    cmd = StringUtils::Format("RunAddon(%s)", id.c_str());
+    cmd = StringUtils::Format("RunAddon({})", id);
   else
-    cmd = StringUtils::Format("RunAddon(%s, %s)", id.c_str(), argv.c_str());
+    cmd = StringUtils::Format("RunAddon({}, {})", id, argv);
 
   if (params["wait"].asBoolean())
-    CApplicationMessenger::GetInstance().SendMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr, cmd);
+    CServiceBroker::GetAppMessenger()->SendMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr, cmd);
   else
-    CApplicationMessenger::GetInstance().PostMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr, cmd);
+    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr, cmd);
 
   return ACK;
 }
@@ -264,7 +269,7 @@ static CVariant Serialize(const AddonPtr& addon)
   return variant;
 }
 
-void CAddonsOperations::FillDetails(const AddonPtr& addon,
+void CAddonsOperations::FillDetails(const std::shared_ptr<ADDON::IAddon>& addon,
                                     const CVariant& fields,
                                     CVariant& result,
                                     CAddonDatabase& addondb,
@@ -299,8 +304,8 @@ void CAddonsOperations::FillDetails(const AddonPtr& addon,
       // We need to check the existence of fanart and thumbnails as the addon simply
       // holds where the art will be, not whether it exists.
       bool needsRecaching;
-      std::string image = CTextureCache::GetInstance().CheckCachedImage(url, needsRecaching);
-      if (!image.empty() || CFile::Exists(url))
+      std::string image = CServiceBroker::GetTextureCache()->CheckCachedImage(url, needsRecaching);
+      if (!image.empty() || CFileUtils::Exists(url))
         object[field] = CTextureUtils::GetWrappedImageURL(url);
       else
         object[field] = "";

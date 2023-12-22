@@ -12,6 +12,7 @@
 #include "ServiceBroker.h"
 #include "WeatherJob.h"
 #include "addons/AddonManager.h"
+#include "addons/addoninfo/AddonType.h"
 #include "addons/gui/GUIDialogAddonSettings.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
@@ -39,7 +40,7 @@ CWeatherManager::CWeatherManager(void) : CInfoLoader(30 * 60 * 1000) // 30 minut
 
 CWeatherManager::~CWeatherManager(void)
 {
-  CSettingsComponent *settingsComponent = CServiceBroker::GetSettingsComponent();
+  const auto settingsComponent = CServiceBroker::GetSettingsComponent();
   if (!settingsComponent)
     return;
 
@@ -94,7 +95,7 @@ std::string CWeatherManager::GetLocation(int iLocation)
   CGUIWindow* window = CServiceBroker::GetGUI()->GetWindowManager().GetWindow(WINDOW_WEATHER);
   if (window)
   {
-    std::string setting = StringUtils::Format("Location%i", iLocation);
+    std::string setting = StringUtils::Format("Location{}", iLocation);
     return window->GetProperty(setting).asString();
   }
   return "";
@@ -177,7 +178,7 @@ void CWeatherManager::OnSettingAction(const std::shared_ptr<const CSetting>& set
     if (CServiceBroker::GetAddonMgr().GetAddon(
             CServiceBroker::GetSettingsComponent()->GetSettings()->GetString(
                 CSettings::SETTING_WEATHER_ADDON),
-            addon, ADDON_SCRIPT_WEATHER, OnlyEnabled::YES) &&
+            addon, AddonType::SCRIPT_WEATHER, OnlyEnabled::CHOICE_YES) &&
         addon != NULL)
     { //! @todo maybe have ShowAndGetInput return a bool if settings changed, then only reset weather if true.
       CGUIDialogAddonSettings::ShowForAddon(addon);

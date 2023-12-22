@@ -14,17 +14,18 @@
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
 #include "messaging/ApplicationMessenger.h"
-#include "threads/SingleLock.h"
 #include "threads/SystemClock.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
 
+#include <mutex>
 
-using namespace KODI::MESSAGING;
+using namespace std::chrono_literals;
 
-CGUIDialogCache::CGUIDialogCache(DWORD dwDelay, const std::string& strHeader, const std::string& strMsg) : CThread("GUIDialogCache"),
-  m_strHeader(strHeader),
-  m_strLinePrev(strMsg)
+CGUIDialogCache::CGUIDialogCache(std::chrono::milliseconds delay,
+                                 const std::string& strHeader,
+                                 const std::string& strMsg)
+  : CThread("GUIDialogCache"), m_strHeader(strHeader), m_strLinePrev(strMsg)
 {
   bSentCancel = false;
 
@@ -35,12 +36,12 @@ CGUIDialogCache::CGUIDialogCache(DWORD dwDelay, const std::string& strHeader, co
 
   /* if progress dialog is already running, take it over */
   if( m_pDlg->IsDialogRunning() )
-    dwDelay = 0;
+    delay = 0ms;
 
-  if(dwDelay == 0)
+  if (delay == 0ms)
     OpenDialog();
   else
-    m_endtime.Set((unsigned int)dwDelay);
+    m_endtime.Set(delay);
 
   Create(true);
 }
@@ -52,7 +53,8 @@ void CGUIDialogCache::Close(bool bForceClose)
   // we cannot wait for the app thread to process the close message
   // as this might happen during player startup which leads to a deadlock
   if (m_pDlg && m_pDlg->IsDialogRunning())
-    CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_WINDOW_CLOSE, -1, bForceClose ? 1 : 0, static_cast<void*>(m_pDlg));
+    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_GUI_WINDOW_CLOSE, -1, bForceClose ? 1 : 0,
+                                               static_cast<void*>(m_pDlg));
 
   //Set stop, this will kill this object, when thread stops
   CThread::m_bStop = true;
@@ -129,11 +131,11 @@ void CGUIDialogCache::Process()
 
       try
       {
-        CSingleLock lock(CServiceBroker::GetWinSystem()->GetGfxContext());
+        std::unique_lock<CCriticalSection> lock(CServiceBroker::GetWinSystem()->GetGfxContext());
         m_pDlg->Progress();
         if( bSentCancel )
         {
-          CThread::Sleep(10);
+          CThread::Sleep(10ms);
           continue;
         }
 
@@ -151,7 +153,7 @@ void CGUIDialogCache::Process()
       }
     }
 
-    CThread::Sleep(10);
+    CThread::Sleep(10ms);
   }
 }
 

@@ -8,12 +8,19 @@
 
 #include "JSONRPC.h"
 
+#include "FileItem.h"
+#include "GUIUserMessages.h"
 #include "ServiceBroker.h"
 #include "ServiceDescription.h"
 #include "TextureDatabase.h"
 #include "addons/Addon.h"
 #include "addons/IAddon.h"
+#include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "dbwrappers/DatabaseQuery.h"
+#include "guilib/GUIComponent.h"
+#include "guilib/GUIMessage.h"
+#include "guilib/GUIWindowManager.h"
 #include "input/WindowTranslator.h"
 #include "input/actions/ActionTranslator.h"
 #include "interfaces/AnnouncementManager.h"
@@ -37,8 +44,10 @@ void CJSONRPC::Initialize()
 
   // Add some types/enums at runtime
   std::vector<std::string> enumList;
-  for (int addonType = ADDON::ADDON_UNKNOWN; addonType < ADDON::ADDON_MAX; addonType++)
-    enumList.push_back(ADDON::CAddonInfo::TranslateType(static_cast<ADDON::TYPE>(addonType), false));
+  for (int addonType = static_cast<int>(ADDON::AddonType::UNKNOWN);
+       addonType < static_cast<int>(ADDON::AddonType::MAX_TYPES); addonType++)
+    enumList.push_back(
+        ADDON::CAddonInfo::TranslateType(static_cast<ADDON::AddonType>(addonType), false));
   CJSONServiceDescription::AddEnum("Addon.Types", enumList);
 
   enumList.clear();
@@ -104,7 +113,8 @@ void CJSONRPC::Initialize()
   CJSONServiceDescription::ResolveReferences();
 
   m_initialized = true;
-  CLog::Log(LOGINFO, "JSONRPC v%s: Successfully initialized", CJSONServiceDescription::GetVersion());
+  CLog::Log(LOGINFO, "JSONRPC v{}: Successfully initialized",
+            CJSONServiceDescription::GetVersion());
 }
 
 void CJSONRPC::Cleanup()
@@ -233,7 +243,7 @@ std::string CJSONRPC::MethodCall(const std::string &inputString, ITransportLayer
   CVariant inputroot, outputroot, result;
   bool hasResponse = false;
 
-  CLog::Log(LOGDEBUG, LOGJSONRPC, "JSONRPC: Incoming request: %s", inputString.c_str());
+  CLog::Log(LOGDEBUG, LOGJSONRPC, "JSONRPC: Incoming request: {}", inputString);
 
   if (CJSONVariantParser::Parse(inputString, inputroot) && !inputroot.isNull())
   {
@@ -247,7 +257,8 @@ std::string CJSONRPC::MethodCall(const std::string &inputString, ITransportLayer
       }
       else
       {
-        for (CVariant::const_iterator_array itr = inputroot.begin_array(); itr != inputroot.end_array(); itr++)
+        for (CVariant::const_iterator_array itr = inputroot.begin_array();
+             itr != inputroot.end_array(); ++itr)
         {
           CVariant response;
           if (HandleMethodCall(*itr, response, transport, client))
@@ -263,7 +274,7 @@ std::string CJSONRPC::MethodCall(const std::string &inputString, ITransportLayer
   }
   else
   {
-    CLog::Log(LOGERROR, "JSONRPC: Failed to parse '%s'", inputString.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Failed to parse '{}'", inputString);
     BuildResponse(inputroot, ParseError, CVariant(), outputroot);
     hasResponse = true;
   }
@@ -301,7 +312,7 @@ bool CJSONRPC::HandleMethodCall(const CVariant& request, CVariant& response, ITr
     std::string str;
     CJSONVariantWriter::Write(request, str, true);
 
-    CLog::Log(LOGERROR, "JSONRPC: Failed to parse '%s'", str.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Failed to parse '{}'", str);
     errorCode = InvalidRequest;
   }
 
@@ -359,4 +370,30 @@ inline void CJSONRPC::BuildResponse(const CVariant& request, JSONRPC_STATUS code
       response["error"]["message"] = "Internal error.";
       break;
   }
+}
+
+void CJSONRPCUtils::NotifyItemUpdated()
+{
+  CGUIMessage message(GUI_MSG_NOTIFY_ALL, 0, 0, GUI_MSG_UPDATE,
+                      CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow());
+  CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(message);
+}
+
+void CJSONRPCUtils::NotifyItemUpdated(const std::shared_ptr<CFileItem>& item)
+{
+  auto& wm = CServiceBroker::GetGUI()->GetWindowManager();
+  CGUIMessage message(GUI_MSG_NOTIFY_ALL, wm.GetActiveWindow(), 0, GUI_MSG_UPDATE_ITEM, 0, item);
+  wm.SendThreadMessage(message);
+}
+
+void CJSONRPCUtils::NotifyItemUpdated(const CVideoInfoTag& info,
+                                      const std::map<std::string, std::string>& artwork)
+{
+  CFileItemPtr msgItem(new CFileItem(info));
+  if (!artwork.empty())
+    msgItem->SetArt(artwork);
+  CGUIMessage message(GUI_MSG_NOTIFY_ALL,
+                      CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow(), 0,
+                      GUI_MSG_UPDATE_ITEM, 0, msgItem);
+  CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(message);
 }

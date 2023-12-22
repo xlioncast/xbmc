@@ -8,55 +8,89 @@
 
 #pragma once
 
+#include "utils/log.h"
+
 #include <chrono>
 #include <limits>
 #include <thread>
 
 namespace XbmcThreads
 {
-  /**
-   * This function returns the system clock's number of milliseconds but with
-   *  an arbitrary reference point. It handles the wrapping of any underlying
-   *  system clock by setting a starting point at the first call. It should
-   *  only be used for measuring time durations.
-   *
-   * Of course, on windows it just calls timeGetTime, so you're on your own.
-   */
-  unsigned int SystemClockMillis();
 
-  /**
-   * DO NOT compare the results from SystemClockMillis() to an expected end time
-   *  that was calculated by adding a number of milliseconds to some start time.
-   *  The reason is because the SystemClockMillis could wrap. Instead use this
-   *  class which uses differences (which are safe across a wrap).
-   */
-  class EndTime
+template<typename>
+struct is_chrono_duration : std::false_type
+{
+};
+
+template<typename Rep, typename Period>
+struct is_chrono_duration<std::chrono::duration<Rep, Period>> : std::true_type
+{
+};
+
+template<typename T = std::chrono::milliseconds, bool = is_chrono_duration<T>::value>
+class EndTime;
+
+template<typename T>
+class EndTime<T, true>
+{
+public:
+  explicit EndTime(const T duration) { Set(duration); }
+
+  EndTime() = default;
+  EndTime(const EndTime& right) = delete;
+  ~EndTime() = default;
+
+  static constexpr T Max() { return m_max; }
+
+  void Set(const T duration)
   {
-    unsigned int startTime = 0;
-    unsigned int totalWaitTime = 0;
-  public:
-    static const unsigned int InfiniteValue;
-    inline EndTime() = default;
-    inline explicit EndTime(unsigned int millisecondsIntoTheFuture) : startTime(SystemClockMillis()), totalWaitTime(millisecondsIntoTheFuture) {}
+    m_startTime = std::chrono::steady_clock::now();
 
-    inline void Set(unsigned int millisecondsIntoTheFuture) { startTime = SystemClockMillis(); totalWaitTime = millisecondsIntoTheFuture; }
-
-    inline bool IsTimePast() const { return totalWaitTime == InfiniteValue ? false : (totalWaitTime == 0 ? true : (SystemClockMillis() - startTime) >= totalWaitTime); }
-
-    inline unsigned int MillisLeft() const
+    if (duration > m_max)
     {
-      if (totalWaitTime == InfiniteValue)
-        return InfiniteValue;
-      if (totalWaitTime == 0)
-        return 0;
-      unsigned int timeWaitedAlready = (SystemClockMillis() - startTime);
-      return (timeWaitedAlready >= totalWaitTime) ? 0 : (totalWaitTime - timeWaitedAlready);
+      m_totalWaitTime = m_max;
+      CLog::Log(LOGWARNING, "duration ({}) greater than max ({}) - duration will be truncated!",
+                duration.count(), m_max.count());
     }
+    else
+    {
+      m_totalWaitTime = duration;
+    }
+  }
 
-    inline void SetExpired() { totalWaitTime = 0; }
-    inline void SetInfinite() { totalWaitTime = InfiniteValue; }
-    inline bool IsInfinite(void) const { return (totalWaitTime == InfiniteValue); }
-    inline unsigned int GetInitialTimeoutValue(void) const { return totalWaitTime; }
-    inline unsigned int GetStartTime(void) const { return startTime; }
-  };
-}
+  bool IsTimePast() const
+  {
+    const auto now = std::chrono::steady_clock::now();
+
+    return ((now - m_startTime) >= m_totalWaitTime);
+  }
+
+  T GetTimeLeft() const
+  {
+    const auto now = std::chrono::steady_clock::now();
+
+    const auto left = ((m_startTime + m_totalWaitTime) - now);
+
+    if (left < T::zero())
+      return T::zero();
+
+    return std::chrono::duration_cast<T>(left);
+  }
+
+  void SetExpired() { m_totalWaitTime = T::zero(); }
+
+  void SetInfinite() { m_totalWaitTime = m_max; }
+
+  T GetInitialTimeoutValue() const { return m_totalWaitTime; }
+
+  std::chrono::steady_clock::time_point GetStartTime() const { return m_startTime; }
+
+private:
+  std::chrono::steady_clock::time_point m_startTime;
+  T m_totalWaitTime = T::zero();
+
+  static constexpr T m_max =
+      std::chrono::duration_cast<T>(std::chrono::steady_clock::duration::max());
+};
+
+} // namespace XbmcThreads

@@ -26,17 +26,17 @@
       <group id="3">
         <setting id="audiooutput.passthroughdevice">
           <level>1</level>
-          <default>XAUDIO:default</default>
+          <default>WASAPI:default</default>
         </setting>
       </group>
     </category>
   </section>
-  <section id="pvr" >
+  <section id="pvr">
     <category id="pvrpowermanagement">
-        <setting id="pvrpowermanagement.setwakeupcmd">
-          <default></default>
-          <visible>false</visible>
-        </setting>
+      <setting id="pvrpowermanagement.setwakeupcmd">
+        <default></default>
+        <visible>false</visible>
+      </setting>
     </category>
   </section>
   <section id="games">

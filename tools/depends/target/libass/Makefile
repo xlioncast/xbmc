@@ -1,24 +1,22 @@
-include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile
+include ../../Makefile.include LIBASS-VERSION ../../download-files.include
+DEPS = ../../Makefile.include Makefile LIBASS-VERSION ../../download-files.include
 
-# lib name, version
-LIBNAME=libass
-VERSION=0.14.0
-SOURCE=$(LIBNAME)-$(VERSION)
-ARCHIVE=$(SOURCE).tar.gz
+ifeq ($(OS),android)
+  # Android API Level 21/22 requires explicit link.
+  # This doesnt appear to be required for API Level 23+ (Android 6+)
+  export LDFLAGS+= -lstdc++
+endif
 
 # configuration settings
 CONFIGURE=cp -f $(CONFIG_SUB) $(CONFIG_GUESS) .; \
-          ./configure --prefix=$(PREFIX) --disable-enca
+          ./configure --prefix=$(PREFIX) \
+                      --disable-shared
 
 LIBDYLIB=$(PLATFORM)/$(LIBNAME)/.libs/$(LIBNAME).a
 
 all: .installed-$(PLATFORM)
 
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); $(AUTORECONF) -vif
@@ -37,4 +35,3 @@ clean:
 
 distclean::
 	rm -rf $(PLATFORM) .installed-$(PLATFORM)
-

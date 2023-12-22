@@ -10,8 +10,10 @@
 
 #include "DVDDemuxers/DVDDemux.h"
 
-extern "C" {
+extern "C"
+{
 #include <libavcodec/avcodec.h>
+#include <libavutil/dovi_meta.h>
 }
 
 #define CODEC_FORCE_SOFTWARE 0x01
@@ -47,6 +49,7 @@ public:
   StreamType type;
   int uniqueId;
   int demuxerId = -1;
+  int source{STREAM_SOURCE_NONE};
   int flags;
   std::string filename;
   bool dvd;
@@ -55,6 +58,7 @@ public:
   // VIDEO
   int fpsscale; // scale of 1001 and a rate of 60000 will result in 59.94 fps
   int fpsrate;
+  bool interlaced;
   int height; // height of the stream reported by the demuxer
   int width; // width of the stream reported by the demuxer
   double aspect; // display aspect as reported by demuxer
@@ -66,6 +70,8 @@ public:
   bool forced_aspect; // aspect is forced from container
   int orientation; // orientation of the video in degrees counter clockwise
   int bitsperpixel;
+  int bitdepth;
+  StreamHdrType hdrType;
   AVColorSpace colorSpace;
   AVColorRange colorRange;
   AVColorPrimaries colorPrimaries;
@@ -73,6 +79,7 @@ public:
   std::shared_ptr<AVMasteringDisplayMetadata> masteringMetadata;
   std::shared_ptr<AVContentLightMetadata> contentLightMetadata;
   std::string stereo_mode; // stereoscopic 3d mode
+  AVDOVIDecoderConfigurationRecord dovi{};
 
   // AUDIO
   int channels;
@@ -85,8 +92,7 @@ public:
   // SUBTITLE
 
   // CODEC EXTRADATA
-  void*        extradata; // extra data for codec to use
-  unsigned int extrasize; // size of extra data
+  FFmpegExtraData extradata; // extra data for codec to use
   unsigned int codec_tag; // extra identifier hints for decoding
 
   // Crypto initialization Data

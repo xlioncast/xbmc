@@ -7,18 +7,19 @@
  */
 
 #include "SpecialProtocol.h"
+
 #include "ServiceBroker.h"
 #include "URL.h"
 #include "Util.h"
-#include "windowing/GraphicContext.h"
 #include "profiles/ProfileManager.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "utils/log.h"
 #include "utils/URIUtils.h"
+#include "utils/log.h"
+#include "windowing/GraphicContext.h"
 
-#include <cassert>
+#include "PlatformDefs.h"
 #ifdef TARGET_POSIX
 #include <dirent.h>
 #include "utils/StringUtils.h"
@@ -39,7 +40,7 @@ void CSpecialProtocol::UnregisterProfileManager()
 void CSpecialProtocol::SetProfilePath(const std::string &dir)
 {
   SetPath("profile", dir);
-  CLog::Log(LOGINFO, "special://profile/ is mapped to: %s", GetPath("profile").c_str());
+  CLog::Log(LOGINFO, "special://profile/ is mapped to: {}", GetPath("profile"));
 }
 
 void CSpecialProtocol::SetXBMCPath(const std::string &dir)
@@ -122,7 +123,7 @@ std::string CSpecialProtocol::TranslatePath(const CURL &url)
     std::string path(url.Get());
     if (path.length() >= 2 && path[1] == ':')
     {
-      CLog::Log(LOGWARNING, "Trying to access old style dir: %s", path.c_str());
+      CLog::Log(LOGWARNING, "Trying to access old style dir: {}", path);
       // printf("Trying to access old style dir: %s\n", path.c_str());
     }
 #endif
@@ -201,7 +202,7 @@ std::string CSpecialProtocol::TranslatePath(const CURL &url)
   }
 
   // Validate the final path, just in case
-  return CUtil::ValidatePath(translatedPath);
+  return CUtil::ValidatePath(std::move(translatedPath));
 }
 
 std::string CSpecialProtocol::TranslatePathConvertCase(const std::string& path)
@@ -270,19 +271,19 @@ std::string CSpecialProtocol::TranslatePathConvertCase(const std::string& path)
 
 void CSpecialProtocol::LogPaths()
 {
-  CLog::Log(LOGINFO, "special://xbmc/ is mapped to: %s", GetPath("xbmc").c_str());
-  CLog::Log(LOGINFO, "special://xbmcbin/ is mapped to: %s", GetPath("xbmcbin").c_str());
-  CLog::Log(LOGINFO, "special://xbmcbinaddons/ is mapped to: %s", GetPath("xbmcbinaddons").c_str());
-  CLog::Log(LOGINFO, "special://masterprofile/ is mapped to: %s", GetPath("masterprofile").c_str());
+  CLog::Log(LOGINFO, "special://xbmc/ is mapped to: {}", GetPath("xbmc"));
+  CLog::Log(LOGINFO, "special://xbmcbin/ is mapped to: {}", GetPath("xbmcbin"));
+  CLog::Log(LOGINFO, "special://xbmcbinaddons/ is mapped to: {}", GetPath("xbmcbinaddons"));
+  CLog::Log(LOGINFO, "special://masterprofile/ is mapped to: {}", GetPath("masterprofile"));
 #if defined(TARGET_POSIX)
-  CLog::Log(LOGINFO, "special://envhome/ is mapped to: %s", GetPath("envhome").c_str());
+  CLog::Log(LOGINFO, "special://envhome/ is mapped to: {}", GetPath("envhome"));
 #endif
-  CLog::Log(LOGINFO, "special://home/ is mapped to: %s", GetPath("home").c_str());
-  CLog::Log(LOGINFO, "special://temp/ is mapped to: %s", GetPath("temp").c_str());
-  CLog::Log(LOGINFO, "special://logpath/ is mapped to: %s", GetPath("logpath").c_str());
-  //CLog::Log(LOGINFO, "special://userhome/ is mapped to: %s", GetPath("userhome").c_str());
+  CLog::Log(LOGINFO, "special://home/ is mapped to: {}", GetPath("home"));
+  CLog::Log(LOGINFO, "special://temp/ is mapped to: {}", GetPath("temp"));
+  CLog::Log(LOGINFO, "special://logpath/ is mapped to: {}", GetPath("logpath"));
+  //CLog::Log(LOGINFO, "special://userhome/ is mapped to: {}", GetPath("userhome"));
   if (!CUtil::GetFrameworksPath().empty())
-    CLog::Log(LOGINFO, "special://frameworks/ is mapped to: %s", GetPath("frameworks").c_str());
+    CLog::Log(LOGINFO, "special://frameworks/ is mapped to: {}", GetPath("frameworks"));
 }
 
 // private routines, to ensure we only set/get an appropriate path
@@ -296,6 +297,6 @@ std::string CSpecialProtocol::GetPath(const std::string &key)
   std::map<std::string, std::string>::iterator it = m_pathMap.find(key);
   if (it != m_pathMap.end())
     return it->second;
-  assert(false);
+
   return "";
 }

@@ -106,9 +106,8 @@ bool CXBTFReader::Open(const std::string& path)
     uint32_t u32;
     uint64_t u64;
 
-    // one extra char to null terminate the string with the following memset
-    char path[CXBTFFile::MaximumPathLength + 1];
-    memset(path, 0, sizeof(path));
+    // one extra char to null terminate the string
+    char path[CXBTFFile::MaximumPathLength + 1] = {};
     if (!ReadString(m_file, path, sizeof(path) - 1))
       return false;
     xbtfFile.SetPath(path);
@@ -135,7 +134,7 @@ bool CXBTFReader::Open(const std::string& path)
 
       if (!ReadUInt32(m_file, u32))
         return false;
-      frame.SetFormat(u32);
+      frame.SetFormat(static_cast<XB_FMT>(u32));
 
       if (!ReadUInt64(m_file, u64))
         return false;

@@ -1,9 +1,11 @@
 include ../../Makefile.include
-DEPS=../../Makefile.include Makefile
+DEPS =../../Makefile.include Makefile ../../download-files.include
 
 LIBNAME=libva
 VERSION=2.8.0
 ARCHIVE=$(LIBNAME)-$(VERSION).tar.bz2
+SHA512=329c5fc2262a6f4fddfcb13bd9644589248be6ae18fa1481cccc6b33874b91b60ad3f16a1777712f7a4817ba576db984834aa8735e6ad13d99b2f5aa13e9ddfa
+include ../../download-files.include
 
 MESON_BUILD_TYPE=release
 
@@ -14,7 +16,7 @@ endif
 # configuration settings
 CONFIGURE = $(NATIVEPREFIX)/bin/python3 $(NATIVEPREFIX)/bin/meson \
 	--prefix=$(PREFIX) \
-  --libdir=lib \
+	--libdir=lib \
 	--buildtype=$(MESON_BUILD_TYPE) \
 	-Ddisable_drm=false \
 	-Denable_docs=false \
@@ -30,17 +32,13 @@ else
 export CC CXX CFLAGS CXXFLAGS
 endif
 export PKG_CONFIG_LIBDIR=$(PREFIX)/lib/pkgconfig
+export PKG_CONFIG_PATH=$(PREFIX)/lib/pkgconfig
 
 LIBDYLIB=$(PLATFORM)/build/va/$(LIBNAME).so
 
 all: .installed-$(PLATFORM)
 
-download: $(TARBALLS_LOCATION)/$(ARCHIVE)
-
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); rm -rf build; mkdir -p build

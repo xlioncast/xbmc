@@ -30,22 +30,22 @@ public:
 
   void Create(CGUIWindowSlideShow *pCallback);
   void LoadPic(int iPic, int iSlideNumber, const std::string &strFileName, const int maxWidth, const int maxHeight);
-  bool IsLoading() { return m_isLoading;};
+  bool IsLoading() { return m_isLoading; }
   int SlideNumber() const { return m_iSlideNumber; }
   int Pic() const { return m_iPic; }
 
 private:
   void Process() override;
-  int m_iPic;
-  int m_iSlideNumber;
+  int m_iPic = 0;
+  int m_iSlideNumber = 0;
   std::string m_strFileName;
-  int m_maxWidth;
-  int m_maxHeight;
+  int m_maxWidth = 0;
+  int m_maxHeight = 0;
 
   CEvent m_loadPic;
-  bool m_isLoading;
+  bool m_isLoading = false;
 
-  CGUIWindowSlideShow *m_pCallback;
+  CGUIWindowSlideShow* m_pCallback = nullptr;
 };
 
 class CGUIWindowSlideShow : public CGUIDialog
@@ -85,7 +85,7 @@ public:
   void OnLoadPic(int iPic,
                  int iSlideNumber,
                  const std::string& strFileName,
-                 CTexture* pTexture,
+                 std::unique_ptr<CTexture> pTexture,
                  bool bFullSize);
   int NumSlides() const;
   int CurrentSlide() const;
@@ -143,7 +143,7 @@ private:
 
   std::vector<CFileItemPtr> m_slides;
 
-  CSlideShowPic m_Image[2];
+  std::unique_ptr<CSlideShowPic> m_Image[2];
 
   int m_iCurrentPic;
   // background loader

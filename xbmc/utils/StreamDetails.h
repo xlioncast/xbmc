@@ -9,6 +9,7 @@
 #pragma once
 
 #include "ISerializable.h"
+#include "cores/VideoPlayer/Interface/StreamInfo.h"
 #include "utils/IArchivable.h"
 
 #include <memory>
@@ -30,7 +31,7 @@ public:
     SUBTITLE
   };
 
-  explicit CStreamDetail(StreamType type) : m_eType(type), m_pParent(NULL) {};
+  explicit CStreamDetail(StreamType type) : m_eType(type), m_pParent(NULL) {}
   virtual ~CStreamDetail() = default;
   virtual bool IsWorseThan(const CStreamDetail &that) const = 0;
 
@@ -57,6 +58,7 @@ public:
   std::string m_strCodec;
   std::string m_strStereoMode;
   std::string m_strLanguage;
+  std::string m_strHdrType;
 };
 
 class CStreamDetailAudio final : public CStreamDetail
@@ -78,6 +80,7 @@ class CStreamDetailSubtitle final : public CStreamDetail
 public:
   CStreamDetailSubtitle();
   CStreamDetailSubtitle(const SubtitleStreamInfo &info);
+  CStreamDetailSubtitle(const CStreamDetailSubtitle&) = default;
   CStreamDetailSubtitle& operator=(const CStreamDetailSubtitle &that);
   void Archive(CArchive& ar) override;
   void Serialize(CVariant& value) const override;
@@ -89,7 +92,7 @@ public:
 class CStreamDetails final : public IArchivable, public ISerializable
 {
 public:
-  CStreamDetails() { Reset(); };
+  CStreamDetails() { Reset(); }
   CStreamDetails(const CStreamDetails &that);
   CStreamDetails& operator=(const CStreamDetails &that);
   bool operator ==(const CStreamDetails &that) const;
@@ -98,17 +101,19 @@ public:
   static std::string VideoDimsToResolutionDescription(int iWidth, int iHeight);
   static std::string VideoAspectToAspectDescription(float fAspect);
 
-  bool HasItems(void) const { return m_vecItems.size() > 0; };
+  bool HasItems(void) const { return m_vecItems.size() > 0; }
   int GetStreamCount(CStreamDetail::StreamType type) const;
   int GetVideoStreamCount(void) const;
   int GetAudioStreamCount(void) const;
   int GetSubtitleStreamCount(void) const;
+  static std::string HdrTypeToString(StreamHdrType hdrType);
   const CStreamDetail* GetNthStream(CStreamDetail::StreamType type, int idx) const;
 
   std::string GetVideoCodec(int idx = 0) const;
   float GetVideoAspect(int idx = 0) const;
   int GetVideoWidth(int idx = 0) const;
   int GetVideoHeight(int idx = 0) const;
+  std::string GetVideoHdrType (int idx = 0) const;
   int GetVideoDuration(int idx = 0) const;
   void SetVideoDuration(int idx, const int duration);
   std::string GetStereoMode(int idx = 0) const;

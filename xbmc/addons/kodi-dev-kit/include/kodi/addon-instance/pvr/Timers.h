@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "General.h"
 #include "../../AddonBase.h"
 #include "../../c-api/addon-instance/pvr.h"
+#include "General.h"
 
 //¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
 // "C++" Definitions group 6 - PVR timers
@@ -488,7 +488,7 @@ class PVRTimersResultSet
 public:
   /*! \cond PRIVATE */
   PVRTimersResultSet() = delete;
-  PVRTimersResultSet(const AddonInstance_PVR* instance, ADDON_HANDLE handle)
+  PVRTimersResultSet(const AddonInstance_PVR* instance, PVR_HANDLE handle)
     : m_instance(instance), m_handle(handle)
   {
   }
@@ -509,7 +509,7 @@ public:
 
 private:
   const AddonInstance_PVR* m_instance = nullptr;
-  const ADDON_HANDLE m_handle;
+  const PVR_HANDLE m_handle;
 };
 ///@}
 //------------------------------------------------------------------------------
@@ -735,9 +735,8 @@ public:
   /// --------------------------------------------------------------------------
   ///
   /// @copydetails cpp_kodi_addon_pvr_Defs_PVRTypeIntValue_Help
-  void SetPreventDuplicateEpisodes(
-      const std::vector<PVRTypeIntValue>& preventDuplicateEpisodes,
-      int preventDuplicateEpisodesDefault = -1)
+  void SetPreventDuplicateEpisodes(const std::vector<PVRTypeIntValue>& preventDuplicateEpisodes,
+                                   int preventDuplicateEpisodesDefault = -1)
   {
     m_cStructure->iPreventDuplicateEpisodesSize =
         static_cast<unsigned int>(preventDuplicateEpisodes.size());

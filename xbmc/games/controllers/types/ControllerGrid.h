@@ -19,6 +19,8 @@ namespace KODI
 namespace GAME
 {
 /*!
+ * \ingroup games
+ *
  * \brief Vertex in the grid of controllers
  */
 struct ControllerVertex
@@ -32,6 +34,8 @@ struct ControllerVertex
 };
 
 /*!
+ * \ingroup games
+ *
  * \brief Column of controllers in the grid
  */
 struct ControllerColumn
@@ -40,11 +44,15 @@ struct ControllerColumn
 };
 
 /*!
+ * \ingroup games
+ *
  * \brief Collection of controllers in a grid layout
  */
 using ControllerGrid = std::vector<ControllerColumn>;
 
 /*!
+ * \ingroup games
+ *
  * \brief Class to encapsulate grid operations
  */
 class CControllerGrid
@@ -62,7 +70,7 @@ public:
   /*!
    * \brief Get the width of the controller grid
    */
-  unsigned int Width() const { return static_cast<unsigned int>(m_grid.size()); }
+  unsigned int GetWidth() const { return static_cast<unsigned int>(m_grid.size()); }
 
   /*!
    * \brief Get the height (deepest controller) of the controller grid
@@ -70,12 +78,12 @@ public:
    * The height is cached when the controller grid is created to avoid
    * iterating the grid
    */
-  unsigned int Height() const { return m_height; }
+  unsigned int GetHeight() const { return m_height; }
 
   /*!
    * \brief Access the controller grid
    */
-  const ControllerGrid& Grid() const { return m_grid; }
+  const ControllerGrid& GetGrid() const { return m_grid; }
 
   /*!
    * \brief Get the controllers in use by the specified player
@@ -102,19 +110,19 @@ private:
    *
    * \return The height of the grid determined by the maximum column height
    */
-  static unsigned int AddPorts(const ControllerPortVec& ports, ControllerGrid& grid);
+  static unsigned int AddPorts(const PortVec& ports, ControllerGrid& grid);
 
   /*!
    * \brief Draw a controller to the column at the specified height
    *
    * \param port The controller's port node
-   * \param height The hight to draw the controller at
+   * \param height The height to draw the controller at
    * \param column[in/out] The column to draw to
    * \param grid[in/out] The grid to add additional columns to
    *
    * \return The height of the grid
    */
-  static unsigned int AddController(const CControllerPortNode& port,
+  static unsigned int AddController(const CPortNode& port,
                                     unsigned int height,
                                     std::vector<ControllerVertex>& column,
                                     ControllerGrid& grid);
@@ -130,7 +138,7 @@ private:
    *
    * \return The height of the grid
    */
-  static unsigned int AddHub(const ControllerPortVec& ports,
+  static unsigned int AddHub(const PortVec& ports,
                              unsigned int height,
                              bool bSkipFirst,
                              ControllerGrid& grid);

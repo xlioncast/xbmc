@@ -17,11 +17,12 @@ class TiXmlElement;
 class Tweener;
 class CGUIListItem;
 
-#include "utils/TransformMatrix.h"  // needed for the TransformMatrix member
-#include "utils/Geometry.h"         // for CPoint, CRect
-#include <memory>
 #include "interfaces/info/InfoBool.h"
+#include "utils/ColorUtils.h"
+#include "utils/Geometry.h" // for CPoint, CRect
+#include "utils/TransformMatrix.h" // needed for the TransformMatrix member
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -40,7 +41,17 @@ enum ANIMATION_TYPE
 class CAnimEffect
 {
 public:
-  enum EFFECT_TYPE { EFFECT_TYPE_NONE = 0, EFFECT_TYPE_FADE, EFFECT_TYPE_SLIDE, EFFECT_TYPE_ROTATE_X, EFFECT_TYPE_ROTATE_Y, EFFECT_TYPE_ROTATE_Z, EFFECT_TYPE_ZOOM };
+  enum EFFECT_TYPE
+  {
+    EFFECT_TYPE_NONE = 0,
+    EFFECT_TYPE_FADE,
+    EFFECT_TYPE_FADE_DIFFUSE,
+    EFFECT_TYPE_SLIDE,
+    EFFECT_TYPE_ROTATE_X,
+    EFFECT_TYPE_ROTATE_Y,
+    EFFECT_TYPE_ROTATE_Z,
+    EFFECT_TYPE_ZOOM
+  };
 
   CAnimEffect(const TiXmlElement *node, EFFECT_TYPE effect);
   CAnimEffect(unsigned int delay, unsigned int length, EFFECT_TYPE effect);
@@ -52,10 +63,10 @@ public:
   void Calculate(unsigned int time, const CPoint &center);
   void ApplyState(ANIMATION_STATE state, const CPoint &center);
 
-  unsigned int GetDelay() const { return m_delay; };
-  unsigned int GetLength() const { return m_delay + m_length; };
-  const TransformMatrix &GetTransform() const { return m_matrix; };
-  EFFECT_TYPE GetType() const { return m_effect; };
+  unsigned int GetDelay() const { return m_delay; }
+  unsigned int GetLength() const { return m_delay + m_length; }
+  const TransformMatrix& GetTransform() const { return m_matrix; }
+  EFFECT_TYPE GetType() const { return m_effect; }
 
   static std::shared_ptr<Tweener> GetTweener(const TiXmlElement *pAnimationNode);
 protected:
@@ -75,14 +86,20 @@ private:
 class CFadeEffect : public CAnimEffect
 {
 public:
-  CFadeEffect(const TiXmlElement *node, bool reverseDefaults);
+  CFadeEffect(const TiXmlElement* node, bool reverseDefaults, EFFECT_TYPE effect);
   CFadeEffect(float start, float end, unsigned int delay, unsigned int length);
+  CFadeEffect(UTILS::COLOR::Color start,
+              UTILS::COLOR::Color end,
+              unsigned int delay,
+              unsigned int length);
   ~CFadeEffect() override = default;
 private:
   void ApplyEffect(float offset, const CPoint &center) override;
 
   float m_startAlpha;
   float m_endAlpha;
+  UTILS::COLOR::ColorFloats m_startColor;
+  UTILS::COLOR::ColorFloats m_endColor;
 };
 
 class CSlideEffect : public CAnimEffect
@@ -155,11 +172,11 @@ public:
   void RenderAnimation(TransformMatrix &matrix, const CPoint &center);
   void QueueAnimation(ANIMATION_PROCESS process);
 
-  inline bool IsReversible() const { return m_reversible; };
-  inline ANIMATION_TYPE GetType() const { return m_type; };
-  inline ANIMATION_STATE GetState() const { return m_currentState; };
-  inline ANIMATION_PROCESS GetProcess() const { return m_currentProcess; };
-  inline ANIMATION_PROCESS GetQueuedProcess() const { return m_queuedProcess; };
+  inline bool IsReversible() const { return m_reversible; }
+  inline ANIMATION_TYPE GetType() const { return m_type; }
+  inline ANIMATION_STATE GetState() const { return m_currentState; }
+  inline ANIMATION_PROCESS GetProcess() const { return m_currentProcess; }
+  inline ANIMATION_PROCESS GetQueuedProcess() const { return m_queuedProcess; }
 
   bool CheckCondition();
   void UpdateCondition(const CGUIListItem *item = NULL);
@@ -218,7 +235,7 @@ public:
   /**
    * Immediately stop scrolling
    */
-  void Stop() { m_delta = 0; };
+  void Stop() { m_delta = 0; }
   /**
    * Update the scroller to where it would be at the given time point, calculating a new Value.
    * @param time time point
@@ -229,14 +246,15 @@ public:
   /**
    * Value of scroll
    */
-  float GetValue() const { return m_scrollValue; };
-  void SetValue(float scrollValue) { m_scrollValue = scrollValue; };
+  float GetValue() const { return m_scrollValue; }
+  void SetValue(float scrollValue) { m_scrollValue = scrollValue; }
 
-  bool IsScrolling() const { return m_delta != 0; };
-  bool IsScrollingUp() const { return m_delta < 0; };
-  bool IsScrollingDown() const { return m_delta > 0; };
+  bool IsScrolling() const { return m_delta != 0; }
+  bool IsScrollingUp() const { return m_delta < 0; }
+  bool IsScrollingDown() const { return m_delta > 0; }
 
-  unsigned int GetDuration() const { return m_duration; };
+  unsigned int GetDuration() const { return m_duration; }
+
 private:
   float Tween(float progress);
 

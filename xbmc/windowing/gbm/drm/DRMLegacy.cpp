@@ -71,15 +71,9 @@ bool CDRMLegacy::WaitingForFlip()
     0,
   };
 
-  drmEventContext drm_evctx =
-  {
-    DRM_EVENT_CONTEXT_VERSION,
-    nullptr,
-    PageFlipHandler,
-  #if DRM_EVENT_CONTEXT_VERSION > 2
-    nullptr,
-  #endif
-  };
+  drmEventContext drm_evctx{};
+  drm_evctx.version = DRM_EVENT_CONTEXT_VERSION;
+  drm_evctx.page_flip_handler = PageFlipHandler;
 
   while(flip_happening)
   {
@@ -114,7 +108,7 @@ bool CDRMLegacy::QueueFlip(struct gbm_bo *bo)
   return true;
 }
 
-void CDRMLegacy::FlipPage(struct gbm_bo *bo, bool rendered, bool videoLayer)
+void CDRMLegacy::FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async)
 {
   if (rendered || videoLayer)
   {
@@ -139,7 +133,7 @@ bool CDRMLegacy::SetActive(bool active)
 {
   if (!m_connector->SetProperty("DPMS", active ? DRM_MODE_DPMS_ON : DRM_MODE_DPMS_OFF))
   {
-    CLog::Log(LOGDEBUG, "CDRMLegacy::{} - failed to set DPMS property");
+    CLog::Log(LOGDEBUG, "CDRMLegacy::{} - failed to set DPMS property", __FUNCTION__);
     return false;
   }
 

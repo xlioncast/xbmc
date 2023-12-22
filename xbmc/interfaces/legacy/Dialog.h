@@ -12,8 +12,10 @@
 #include "AddonString.h"
 #include "Alternative.h"
 #include "ListItem.h"
+#include "dialogs/GUIDialogBoxBase.h"
 #include "dialogs/GUIDialogExtendedProgressBar.h"
 #include "dialogs/GUIDialogProgress.h"
+#include "swighelper.h"
 
 #include <string>
 #include <vector>
@@ -63,6 +65,13 @@ constexpr int ALPHANUM_HIDE_INPUT{2};
       /// @param nolabel        [opt] label to put on the no button.
       /// @param yeslabel       [opt] label to put on the yes button.
       /// @param autoclose      [opt] integer - milliseconds to autoclose dialog. (default=do not autoclose)
+      /// @param defaultbutton  [opt] integer - specifies the default focused button.
+      ///                       <em>(default=DLG_YESNO_NO_BTN)</em>
+      ///  |  Value:                       | Description:                                      |
+      ///  |------------------------------:|---------------------------------------------------|
+      ///  | xbmcgui.DLG_YESNO_NO_BTN     | Set the "No" button as default.
+      ///  | xbmcgui.DLG_YESNO_YES_BTN    | Set the "Yes" button as default.
+      ///  | xbmcgui.DLG_YESNO_CUSTOM_BTN | Set the "Custom" button as default.
       /// @return Returns True if 'Yes' was pressed, else False.
       ///
       ///
@@ -72,6 +81,7 @@ constexpr int ALPHANUM_HIDE_INPUT{2};
       /// @python_v19 Renamed option **line1** to **message**.
       /// @python_v19 Removed option **line2**.
       /// @python_v19 Removed option **line3**.
+      /// @python_v20 Added new option **defaultbutton**.
       ///
       /// **Example:**
       /// ~~~~~~~~~~~~~{.py}
@@ -83,10 +93,12 @@ constexpr int ALPHANUM_HIDE_INPUT{2};
       ///
       yesno(...);
 #else
-      bool yesno(const String& heading, const String& message,
+      bool yesno(const String& heading,
+                 const String& message,
                  const String& nolabel = emptyString,
                  const String& yeslabel = emptyString,
-                 int autoclose = 0);
+                 int autoclose = 0,
+                 int defaultbutton = CONTROL_NO_BUTTON);
 #endif
 
 #ifdef DOXYGEN_SHOULD_USE_THIS
@@ -105,12 +117,20 @@ constexpr int ALPHANUM_HIDE_INPUT{2};
       /// @param nolabel        [opt] label to put on the no button.
       /// @param yeslabel       [opt] label to put on the yes button.
       /// @param autoclose      [opt] integer - milliseconds to autoclose dialog. (default=do not autoclose)
+      /// @param defaultbutton  [opt] integer - specifies the default focused button.
+      ///                       <em>(default=DLG_YESNO_NO_BTN)</em>
+      ///  |  Value:                       | Description:                                      |
+      ///  |------------------------------:|---------------------------------------------------|
+      ///  | xbmcgui.DLG_YESNO_NO_BTN     | Set the "No" button as default.
+      ///  | xbmcgui.DLG_YESNO_YES_BTN    | Set the "Yes" button as default.
+      ///  | xbmcgui.DLG_YESNO_CUSTOM_BTN | Set the "Custom" button as default.
       /// @return Returns the integer value for the selected button (-1:cancelled, 0:no, 1:yes, 2:custom)
       ///
       ///
       ///
       ///------------------------------------------------------------------------
       /// @python_v19 New function added.
+      /// @python_v20 Added new option **defaultbutton**.
       ///
       /// **Example:**
       /// ~~~~~~~~~~~~~{.py}
@@ -127,7 +147,8 @@ constexpr int ALPHANUM_HIDE_INPUT{2};
                       const String& customlabel,
                       const String& nolabel = emptyString,
                       const String& yeslabel = emptyString,
-                      int autoclose = 0);
+                      int autoclose = 0,
+                      int defaultbutton = CONTROL_NO_BUTTON);
 #endif
 
 #ifdef DOXYGEN_SHOULD_USE_THIS
@@ -621,6 +642,60 @@ constexpr int ALPHANUM_HIDE_INPUT{2};
                    int autoclose = 0);
 #endif
 
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_Dialog
+      /// \python_func{ xbmcgui.Dialog().colorpicker(heading[, colorfile, colorlist, selectedcolor]) }
+      /// Show a color selection dialog.
+      ///
+      /// @param heading        string - dialog heading.
+      /// @param selectedcolor  [opt] string - hex value of the preselected color.
+      /// @param colorfile      [opt] string - xml file containing color definitions.\n
+      ///                       **XML content style:**
+      /// ~~~~~~xml
+      /// <colors>
+      ///   <color name="white">ffffffff</color>
+      ///   <color name="grey">7fffffff</color>
+      ///   <color name="green">ff00ff7f</color>
+      /// </colors>
+      /// ~~~~~~
+      /// @param colorlist      [opt] xbmcgui.ListItems - where label defines the color name and label2 is set to the hex value.
+      ///
+      /// @return Returns the hex value of the selected color as a string.
+      ///
+      ///
+      ///------------------------------------------------------------------------
+      /// @python_v20 New function added.
+      ///
+      /// **Example:**
+      /// ~~~~~~~~~~~~~{.py}
+      /// ..
+      /// # colorfile example
+      /// dialog = xbmcgui.Dialog()
+      /// value = dialog.colorpicker('Select color', 'ff00ff00', 'os.path.join(xbmcaddon.Addon().getAddonInfo("path"), "colors.xml")')
+      /// ..
+      /// # colorlist example
+      /// listitems = []
+      /// l1 = xbmcgui.ListItem("red", "FFFF0000")
+      /// l2 = xbmcgui.ListItem("green", "FF00FF00")
+      /// l3 = xbmcgui.ListItem("blue", "FF0000FF")
+      /// listitems.append(l1)
+      /// listitems.append(l2)
+      /// listitems.append(l3)
+      /// dialog = xbmcgui.Dialog()
+      /// value = dialog.colorpicker("Select color", "FF0000FF", colorlist=listitems)
+      /// ..
+      /// ~~~~~~~~~~~~~
+      ///
+      colorpicker(...);
+#else
+      String colorpicker(
+          const String& heading,
+          const String& selectedcolor = emptyString,
+          const String& colorfile = emptyString,
+          const std::vector<const ListItem*>& colorlist = std::vector<const ListItem*>());
+#endif
+
     private:
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
       // used by both yesno() and yesnocustom()
@@ -629,7 +704,8 @@ constexpr int ALPHANUM_HIDE_INPUT{2};
                               const String& nolabel,
                               const String& yeslabel,
                               const String& customlabel,
-                              int autoclose);
+                              int autoclose,
+                              int defaultbutton);
 #endif
     };
     //@}
@@ -880,6 +956,10 @@ constexpr int ALPHANUM_HIDE_INPUT{2};
 #endif
     };
     //@}
-
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
+    SWIG_CONSTANT2(int, DLG_YESNO_NO_BTN, CONTROL_NO_BUTTON);
+    SWIG_CONSTANT2(int, DLG_YESNO_YES_BTN, CONTROL_YES_BUTTON);
+    SWIG_CONSTANT2(int, DLG_YESNO_CUSTOM_BTN, CONTROL_CUSTOM_BUTTON);
+#endif
 } // namespace xbmcgui
 } // namespace XBMCAddon

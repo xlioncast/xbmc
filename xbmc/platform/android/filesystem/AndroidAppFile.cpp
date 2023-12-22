@@ -19,6 +19,7 @@
 #include <androidjni/Bitmap.h>
 #include <androidjni/BitmapDrawable.h>
 #include <androidjni/Build.h>
+#include <androidjni/Canvas.h>
 #include <androidjni/Context.h>
 #include <androidjni/DisplayMetrics.h>
 #include <androidjni/Drawable.h>
@@ -45,7 +46,7 @@ bool CFileAndroidApp::Open(const CURL& url)
   m_packageName =  URIUtils::GetFileName(url.Get());
   m_packageName = m_packageName.substr(0, m_packageName.size() - 4);
 
-  std::vector<androidPackage> applications = CXBMCApp::GetApplications();
+  const std::vector<androidPackage> applications = CXBMCApp::Get().GetApplications();
   for (const auto& i : applications)
   {
     if (i.packageName == m_packageName)
@@ -64,7 +65,7 @@ bool CFileAndroidApp::Exists(const CURL& url)
   std::string appname =  URIUtils::GetFileName(url.Get());
   appname = appname.substr(0, appname.size() - 4);
 
-  std::vector<androidPackage> applications = CXBMCApp::GetApplications();
+  const std::vector<androidPackage> applications = CXBMCApp::Get().GetApplications();
   for (const auto& i : applications)
   {
     if (i.packageName == appname)
@@ -74,6 +75,23 @@ bool CFileAndroidApp::Exists(const CURL& url)
   return false;
 }
 
+namespace
+{
+
+CJNIBitmap GetBitmapFromDrawable(CJNIDrawable& drawable)
+{
+  CJNIBitmap bmp = CJNIBitmap::createBitmap(drawable.getIntrinsicWidth(),
+                                            drawable.getIntrinsicHeight(), CJNIBitmap::ARGB_8888);
+  CJNICanvas canvas(bmp);
+
+  drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+  drawable.draw(canvas);
+
+  return bmp;
+}
+
+} // namespace
+
 unsigned int CFileAndroidApp::ReadIcon(unsigned char** lpBuf, unsigned int* width, unsigned int* height)
 {
   JNIEnv* env = xbmc_jnienv();
@@ -82,8 +100,11 @@ unsigned int CFileAndroidApp::ReadIcon(unsigned char** lpBuf, unsigned int* widt
 
   CJNIBitmap bmp;
   jclass cBmpDrw = env->FindClass("android/graphics/drawable/BitmapDrawable");
+  jclass cAidDrw = CJNIBase::GetSDKVersion() >= 26
+                       ? env->FindClass("android/graphics/drawable/AdaptiveIconDrawable")
+                       : nullptr;
 
-  if (CJNIBuild::SDK_INT >= 15 && m_icon)
+  if (m_icon)
   {
     CJNIResources res = CJNIContext::GetPackageManager().getResourcesForApplication(m_packageName);
     if (res)
@@ -91,7 +112,7 @@ unsigned int CFileAndroidApp::ReadIcon(unsigned char** lpBuf, unsigned int* widt
       for (int i=0; densities[i] != -1 && !bmp; ++i)
       {
         int density = densities[i];
-        CJNIDrawable drw = res.getDrawableForDensity(m_icon, density);
+        CJNIDrawable drw = res.getDrawableForDensity(m_icon, density, CJNIContext::getTheme());
         if (xbmc_jnienv()->ExceptionCheck())
           xbmc_jnienv()->ExceptionClear();
         else if (!drw);
@@ -102,6 +123,10 @@ unsigned int CFileAndroidApp::ReadIcon(unsigned char** lpBuf, unsigned int* widt
             CJNIBitmapDrawable resbmp = drw;
             if (resbmp)
               bmp = resbmp.getBitmap();
+          }
+          else if (cAidDrw && env->IsInstanceOf(drw.get_raw(), cAidDrw))
+          {
+            bmp = GetBitmapFromDrawable(drw);
           }
         }
       }
@@ -122,6 +147,10 @@ unsigned int CFileAndroidApp::ReadIcon(unsigned char** lpBuf, unsigned int* widt
         if (resbmp)
           bmp = resbmp.getBitmap();
       }
+      else if (cAidDrw && env->IsInstanceOf(drw.get_raw(), cAidDrw))
+      {
+        bmp = GetBitmapFromDrawable(drw);
+      }
     }
   }
   if (!bmp)
@@ -135,21 +164,21 @@ unsigned int CFileAndroidApp::ReadIcon(unsigned char** lpBuf, unsigned int* widt
 
   if (info.stride != info.width * 4)
   {
-    CLog::Log(LOGWARNING, "CFileAndroidApp::ReadIcon: Usupported icon format %d", info.format);
+    CLog::Log(LOGWARNING, "CFileAndroidApp::ReadIcon: Unsupported icon format {}", info.format);
     return 0;
   }
-
-  *width = info.width;
-  *height = info.height;
-
-  int imgsize = *width * *height * 4;
-  *lpBuf = new unsigned char[imgsize];
 
   AndroidBitmap_lockPixels(env, bmp.get_raw(), &bitmapBuf);
   if (bitmapBuf)
   {
+    const int imgsize = info.width * info.height * 4;
+    *lpBuf = new unsigned char[imgsize];
+    *width = info.width;
+    *height = info.height;
+
     memcpy(*lpBuf, bitmapBuf, imgsize);
     AndroidBitmap_unlockPixels(env, bmp.get_raw());
+
     return imgsize;
   }
   return 0;

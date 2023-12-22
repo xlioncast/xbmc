@@ -12,6 +12,7 @@
 #include "ModuleXbmcgui.h"
 #include "ServiceBroker.h"
 #include "WindowException.h"
+#include "dialogs/GUIDialogColorPicker.h"
 #include "dialogs/GUIDialogContextMenu.h"
 #include "dialogs/GUIDialogFileBrowser.h"
 #include "dialogs/GUIDialogKaiToast.h"
@@ -32,6 +33,8 @@
 #include "utils/log.h"
 #include "video/dialogs/GUIDialogVideoInfo.h"
 
+#include <memory>
+
  using namespace KODI::MESSAGING;
 
 #define ACTIVE_WINDOW CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow()
@@ -42,12 +45,15 @@ namespace XBMCAddon
   {
     Dialog::~Dialog() = default;
 
-    bool Dialog::yesno(const String& heading, const String& message,
+    bool Dialog::yesno(const String& heading,
+                       const String& message,
                        const String& nolabel,
                        const String& yeslabel,
-                       int autoclose)
+                       int autoclose,
+                       int defaultbutton)
     {
-      return yesNoCustomInternal(heading, message, nolabel, yeslabel, emptyString, autoclose) == 1;
+      return yesNoCustomInternal(heading, message, nolabel, yeslabel, emptyString, autoclose,
+                                 defaultbutton) == 1;
     }
 
     int Dialog::yesnocustom(const String& heading,
@@ -55,9 +61,11 @@ namespace XBMCAddon
                             const String& customlabel,
                             const String& nolabel,
                             const String& yeslabel,
-                            int autoclose)
+                            int autoclose,
+                            int defaultbutton)
     {
-      return yesNoCustomInternal(heading, message, nolabel, yeslabel, customlabel, autoclose);
+      return yesNoCustomInternal(heading, message, nolabel, yeslabel, customlabel, autoclose,
+                                 defaultbutton);
     }
 
     int Dialog::yesNoCustomInternal(const String& heading,
@@ -65,7 +73,8 @@ namespace XBMCAddon
                                     const String& nolabel,
                                     const String& yeslabel,
                                     const String& customlabel,
-                                    int autoclose)
+                                    int autoclose,
+                                    int defaultbutton)
     {
       DelayedCallGuard dcguard(languageHook);
       CGUIDialogYesNo* pDialog =
@@ -75,7 +84,8 @@ namespace XBMCAddon
         throw WindowException("Error: Window is null");
 
       return pDialog->ShowAndGetInput(CVariant{heading}, CVariant{message}, CVariant{nolabel},
-                                      CVariant{yeslabel}, CVariant{customlabel}, autoclose);
+                                      CVariant{yeslabel}, CVariant{customlabel}, autoclose,
+                                      defaultbutton);
     }
 
     bool Dialog::info(const ListItem* item)
@@ -163,7 +173,7 @@ namespace XBMCAddon
       pDialog->Open();
 
       if (pDialog->IsConfirmed())
-        return std::unique_ptr<std::vector<int>>(new std::vector<int>(pDialog->GetSelectedItems()));
+        return std::make_unique<std::vector<int>>(pDialog->GetSelectedItems());
       else
         return std::unique_ptr<std::vector<int>>();
     }
@@ -293,7 +303,8 @@ namespace XBMCAddon
             timedate.year = atoi(sDefault.substr(sDefault.size() - 4).c_str());
           }
           if (CGUIDialogNumeric::ShowAndGetDate(timedate, heading))
-            value = StringUtils::Format("%2d/%2d/%4d", timedate.day, timedate.month, timedate.year);
+            value =
+                StringUtils::Format("{:2}/{:2}/{:4}", timedate.day, timedate.month, timedate.year);
           else
             return emptyString;
         }
@@ -306,7 +317,7 @@ namespace XBMCAddon
             timedate.minute = atoi(sDefault.substr(3, 2).c_str());
           }
           if (CGUIDialogNumeric::ShowAndGetTime(timedate, heading))
-            value = StringUtils::Format("%2d:%02d", timedate.hour, timedate.minute);
+            value = StringUtils::Format("{:2}:{:02}", timedate.hour, timedate.minute);
           else
             return emptyString;
         }
@@ -386,8 +397,8 @@ namespace XBMCAddon
               timedate.year = atoi(sDefault.substr(sDefault.size() - 4).c_str());
             }
             if (CGUIDialogNumeric::ShowAndGetDate(timedate, heading))
-              value =
-                  StringUtils::Format("%2d/%2d/%4d", timedate.day, timedate.month, timedate.year);
+              value = StringUtils::Format("{:2}/{:2}/{:4}", timedate.day, timedate.month,
+                                          timedate.year);
             else
               value = emptyString;
           }
@@ -401,7 +412,7 @@ namespace XBMCAddon
               timedate.minute = atoi(sDefault.substr(3, 2).c_str());
             }
             if (CGUIDialogNumeric::ShowAndGetTime(timedate, heading))
-              value = StringUtils::Format("%2d:%02d", timedate.hour, timedate.minute);
+              value = StringUtils::Format("{:2}:{:02}", timedate.hour, timedate.minute);
             else
               value = emptyString;
           }
@@ -430,6 +441,47 @@ namespace XBMCAddon
           break;
       }
 
+      return value;
+    }
+
+    String Dialog::colorpicker(const String& heading,
+                               const String& selectedcolor,
+                               const String& colorfile,
+                               const std::vector<const ListItem*>& colorlist)
+    {
+      DelayedCallGuard dcguard(languageHook);
+      std::string value = emptyString;
+      CGUIDialogColorPicker* pDialog =
+          CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogColorPicker>(
+              WINDOW_DIALOG_COLOR_PICKER);
+      if (pDialog == nullptr)
+        throw WindowException("Error: Window is NULL, this is not possible :-)");
+
+      pDialog->Reset();
+      if (!heading.empty())
+        pDialog->SetHeading(CVariant{heading});
+
+      if (!colorlist.empty())
+      {
+        CFileItemList items;
+        for (const auto& coloritem : colorlist)
+        {
+          items.Add(coloritem->item);
+        }
+        pDialog->SetItems(items);
+      }
+      else if (!colorfile.empty())
+        pDialog->LoadColors(colorfile);
+      else
+        pDialog->LoadColors();
+
+      if (!selectedcolor.empty())
+        pDialog->SetSelectedColor(selectedcolor);
+
+      pDialog->Open();
+
+      if (pDialog->IsConfirmed())
+        value = pDialog->GetSelectedColor();
       return value;
     }
 

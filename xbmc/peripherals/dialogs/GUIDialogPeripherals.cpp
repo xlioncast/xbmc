@@ -18,8 +18,9 @@
 #include "messaging/helpers/DialogOKHelper.h"
 #include "peripherals/Peripherals.h"
 #include "peripherals/dialogs/GUIDialogPeripheralSettings.h"
-#include "threads/SingleLock.h"
 #include "utils/Variant.h"
+
+#include <mutex>
 
 using namespace KODI;
 using namespace PERIPHERALS;
@@ -57,7 +58,7 @@ CFileItemPtr CGUIDialogPeripherals::GetItem(unsigned int pos) const
 {
   CFileItemPtr item;
 
-  CSingleLock lock(m_peripheralsMutex);
+  std::unique_lock<CCriticalSection> lock(m_peripheralsMutex);
 
   if (static_cast<int>(pos) < m_peripherals.Size())
     item = m_peripherals[pos];
@@ -117,7 +118,9 @@ void CGUIDialogPeripherals::Show(CPeripherals& manager)
 
         // Open settings dialog
         pSettingsDialog->SetFileItem(pItem.get());
+        pSettingsDialog->RegisterPeripheralManager(manager);
         pSettingsDialog->Open();
+        pSettingsDialog->UnregisterPeripheralManager();
       }
     }
   } while (pDialog->IsConfirmed());
@@ -155,14 +158,14 @@ void CGUIDialogPeripherals::Notify(const Observable& obs, const ObservableMessag
 void CGUIDialogPeripherals::UpdatePeripheralsAsync()
 {
   CGUIMessage msg(GUI_MSG_REFRESH_LIST, GetID(), -1);
-  MESSAGING::CApplicationMessenger::GetInstance().SendGUIMessage(msg);
+  CServiceBroker::GetAppMessenger()->SendGUIMessage(msg);
 }
 
 void CGUIDialogPeripherals::UpdatePeripheralsSync()
 {
   int iPos = GetSelectedItem();
 
-  CSingleLock lock(m_peripheralsMutex);
+  std::unique_lock<CCriticalSection> lock(m_peripheralsMutex);
 
   CFileItemPtr selectedItem;
   if (iPos > 0)

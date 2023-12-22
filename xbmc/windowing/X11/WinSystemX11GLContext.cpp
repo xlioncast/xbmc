@@ -8,25 +8,28 @@
 
 #include "WinSystemX11GLContext.h"
 
-#include "Application.h"
 #include "GLContextEGL.h"
 #include "OptionalsReg.h"
+#include "ServiceBroker.h"
 #include "VideoSyncOML.h"
 #include "X11DPMSSupport.h"
+#include "application/AppParams.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationSkinHandling.h"
 #include "cores/RetroPlayer/process/X11/RPProcessInfoX11.h"
 #include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererOpenGL.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDFactoryCodec.h"
 #include "cores/VideoPlayer/Process/X11/ProcessInfoX11.h"
+#include "cores/VideoPlayer/VideoReferenceClock.h"
 #include "cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
 #include "guilib/DispResource.h"
 #include "rendering/gl/ScreenshotSurfaceGL.h"
-#include "threads/SingleLock.h"
-#include "utils/StringUtils.h"
-#include "utils/log.h"
 #include "windowing/GraphicContext.h"
 #include "windowing/WindowSystemFactory.h"
 
+#include <memory>
+#include <mutex>
 #include <vector>
 
 #include <X11/Xlib.h>
@@ -59,7 +62,7 @@ void CWinSystemX11GLContext::PresentRenderImpl(bool rendered)
   if (m_delayDispReset && m_dispResetTimer.IsTimePast())
   {
     m_delayDispReset = false;
-    CSingleLock lock(m_resourceSection);
+    std::unique_lock<CCriticalSection> lock(m_resourceSection);
     // tell any shared resources
     for (std::vector<IDispResource *>::iterator i = m_resources.begin(); i != m_resources.end(); ++i)
       (*i)->OnResetDisplay();
@@ -127,7 +130,7 @@ bool CWinSystemX11GLContext::SetWindow(int width, int height, bool fullscreen, c
 
     if (!m_delayDispReset)
     {
-      CSingleLock lock(m_resourceSection);
+      std::unique_lock<CCriticalSection> lock(m_resourceSection);
       // tell any shared resources
       for (std::vector<IDispResource *>::iterator i = m_resources.begin(); i != m_resources.end(); ++i)
         (*i)->OnResetDisplay();
@@ -152,7 +155,11 @@ bool CWinSystemX11GLContext::ResizeWindow(int newWidth, int newHeight, int newLe
   CRenderSystemGL::ResetRenderSystem(newWidth, newHeight);
 
   if (m_newGlContext)
-    g_application.ReloadSkin();
+  {
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appSkin = components.GetComponent<CApplicationSkinHandling>();
+    appSkin->ReloadSkin();
+  }
 
   return true;
 }
@@ -164,7 +171,11 @@ void CWinSystemX11GLContext::FinishWindowResize(int newWidth, int newHeight)
   CRenderSystemGL::ResetRenderSystem(newWidth, newHeight);
 
   if (m_newGlContext)
-    g_application.ReloadSkin();
+  {
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appSkin = components.GetComponent<CApplicationSkinHandling>();
+    appSkin->ReloadSkin();
+  }
 }
 
 bool CWinSystemX11GLContext::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays)
@@ -174,7 +185,11 @@ bool CWinSystemX11GLContext::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res
   CRenderSystemGL::ResetRenderSystem(res.iWidth, res.iHeight);
 
   if (m_newGlContext)
-    g_application.ReloadSkin();
+  {
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appSkin = components.GetComponent<CApplicationSkinHandling>();
+    appSkin->ReloadSkin();
+  }
 
   return true;
 }
@@ -221,12 +236,21 @@ bool CWinSystemX11GLContext::RefreshGLContext(bool force)
   bool success = false;
   if (m_pGLContext)
   {
+    if (force)
+    {
+      auto& components = CServiceBroker::GetAppComponents();
+      const auto appSkin = components.GetComponent<CApplicationSkinHandling>();
+      appSkin->UnloadSkin();
+      CRenderSystemGL::DestroyRenderSystem();
+    }
     success = m_pGLContext->Refresh(force, m_screen, m_glWindow, m_newGlContext);
     if (!success)
     {
       success = m_pGLContext->CreatePB();
       m_newGlContext = true;
     }
+    if (force)
+      CRenderSystemGL::InitRenderSystem();
     return success;
   }
 
@@ -247,9 +271,10 @@ bool CWinSystemX11GLContext::RefreshGLContext(bool force)
   std::transform(gpuvendor.begin(), gpuvendor.end(), gpuvendor.begin(), ::tolower);
   bool isNvidia = (gpuvendor.compare(0, 6, "nvidia") == 0);
   bool isIntel = (gpuvendor.compare(0, 5, "intel") == 0);
-  std::string gli = (getenv("KODI_GL_INTERFACE") != nullptr) ? getenv("KODI_GL_INTERFACE") : "";
 
-  if (gli != "GLX")
+  std::string_view gli = CServiceBroker::GetAppParams()->GetGlInterface();
+
+  if (gli != "glx")
   {
     m_pGLContext = new CGLContextEGL(m_dpy, EGL_OPENGL_API);
     success = m_pGLContext->Refresh(force, m_screen, m_glWindow, m_newGlContext);
@@ -262,17 +287,17 @@ bool CWinSystemX11GLContext::RefreshGLContext(bool force)
                               static_cast<CGLContextEGL*>(m_pGLContext)->m_eglDisplay);
         bool general = false;
         bool deepColor = false;
-        VAAPIRegisterRender(m_vaapiProxy.get(), general, deepColor);
+        VAAPIRegisterRenderGL(m_vaapiProxy.get(), general, deepColor);
         if (general)
         {
           VAAPIRegister(m_vaapiProxy.get(), deepColor);
           return true;
         }
-        if (isIntel || gli == "EGL")
+        if (isIntel || gli == "egl")
           return true;
       }
     }
-    else if (gli == "EGL_PB")
+    else if (gli == "egl-pb")
     {
       success = m_pGLContext->CreatePB();
       if (success)
@@ -293,13 +318,13 @@ bool CWinSystemX11GLContext::RefreshGLContext(bool force)
   return success;
 }
 
-std::unique_ptr<CVideoSync> CWinSystemX11GLContext::GetVideoSync(void *clock)
+std::unique_ptr<CVideoSync> CWinSystemX11GLContext::GetVideoSync(CVideoReferenceClock* clock)
 {
   std::unique_ptr<CVideoSync> pVSync;
 
   if (dynamic_cast<CGLContextEGL*>(m_pGLContext))
   {
-    pVSync.reset(new CVideoSyncOML(clock, *this));
+    pVSync = std::make_unique<CVideoSyncOML>(clock, *this);
   }
   else
   {
@@ -325,7 +350,7 @@ uint64_t CWinSystemX11GLContext::GetVblankTiming(uint64_t &msc, uint64_t &interv
   if (m_pGLContext)
   {
     float micros = m_pGLContext->GetVblankTiming(msc, interval);
-    return micros / 1000;
+    return micros;
   }
   msc = 0;
   interval = 0;

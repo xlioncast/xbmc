@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <string>
 #include <set>
 #include <vector>
@@ -111,7 +110,7 @@ public:
   static CZeroconfBrowser* GetInstance();
   // release the singleton; (save to call multiple times)
   static void ReleaseInstance();
-  // returns false if ReleaseInstance() was called befores
+  // returns false if ReleaseInstance() was called before
   static bool IsInstantiated() { return  smp_instance != 0; }
 
   virtual void ProcessResults() {}
@@ -153,8 +152,6 @@ private:
   tServices m_services;
   bool m_started = false;
 
-  //protects singleton creation/destruction
-  static std::atomic_flag sm_singleton_guard;
   static CZeroconfBrowser* smp_instance;
 };
 #include <iostream>

@@ -8,9 +8,11 @@
 
 #import "LibInputRemote.h"
 
-#include "Application.h"
 #include "ServiceBroker.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationPlayer.h"
 #include "input/actions/Action.h"
+#include "input/actions/ActionIDs.h"
 #include "messaging/ApplicationMessenger.h"
 #import "windowing/tvos/WinSystemTVOS.h"
 
@@ -23,46 +25,46 @@
 
 @implementation TVOSLibInputRemote
 
-@synthesize remoteIdleState = m_remoteIdleState;
+@synthesize siriRemoteIdleState = m_siriRemoteIdleState;
 
 // Default Timer values (seconds)
 NSTimeInterval REPEATED_KEYPRESS_DELAY_S = 0.50;
 NSTimeInterval REPEATED_KEYPRESS_PAUSE_S = 0.05;
 
-#pragma mark - remote idle timer
+#pragma mark - Siri remote idle timer
 
-- (void)startRemoteTimer
+- (void)startSiriRemoteIdleTimer
 {
-  m_remoteIdleState = false;
+  m_siriRemoteIdleState = false;
 
-  if (m_remoteIdleTimer != nil)
-    [self stopRemoteTimer];
-  if (g_xbmcController.inputHandler.inputSettings.remoteIdleEnabled)
+  if (m_siriRemoteIdleTimer != nil)
+    [self stopSiriRemoteIdleTimer];
+  if (g_xbmcController.inputHandler.inputSettings.siriRemoteIdleTimerEnabled)
   {
-    auto fireDate = [NSDate
-        dateWithTimeIntervalSinceNow:g_xbmcController.inputHandler.inputSettings.remoteIdleTimeout];
+    auto fireDate = [NSDate dateWithTimeIntervalSinceNow:g_xbmcController.inputHandler.inputSettings
+                                                             .siriRemoteIdleTime];
     auto timer = [[NSTimer alloc] initWithFireDate:fireDate
                                           interval:0.0
                                             target:self
-                                          selector:@selector(setRemoteIdleState)
+                                          selector:@selector(setSiriRemoteIdleState)
                                           userInfo:nil
                                            repeats:NO];
 
     [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
-    m_remoteIdleTimer = timer;
+    m_siriRemoteIdleTimer = timer;
   }
 }
 
-- (void)stopRemoteTimer
+- (void)stopSiriRemoteIdleTimer
 {
-  [m_remoteIdleTimer invalidate];
-  m_remoteIdleTimer = nil;
-  m_remoteIdleState = NO;
+  [m_siriRemoteIdleTimer invalidate];
+  m_siriRemoteIdleTimer = nil;
+  m_siriRemoteIdleState = false;
 }
 
-- (void)setRemoteIdleState
+- (void)setSiriRemoteIdleState
 {
-  m_remoteIdleState = YES;
+  m_siriRemoteIdleState = true;
 }
 
 #pragma mark - key press auto-repeat methods
@@ -117,7 +119,7 @@ NSTimeInterval REPEATED_KEYPRESS_PAUSE_S = 0.05;
   switch (receivedEvent.subtype)
   {
     case UIEventSubtypeRemoteControlTogglePlayPause:
-      KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(
+      CServiceBroker::GetAppMessenger()->PostMsg(
           TMSG_GUI_ACTION, WINDOW_INVALID, -1,
           static_cast<void*>(new CAction(ACTION_PLAYER_PLAYPAUSE)));
       break;
@@ -144,17 +146,21 @@ NSTimeInterval REPEATED_KEYPRESS_PAUSE_S = 0.05;
       break;
     case UIEventSubtypeRemoteControlEndSeekingForward:
     case UIEventSubtypeRemoteControlEndSeekingBackward:
+    {
+      const auto& components = CServiceBroker::GetAppComponents();
+      const auto appPlayer = components.GetComponent<CApplicationPlayer>();
       // restore to normal playback speed.
-      if (g_application.GetAppPlayer().IsPlaying() && !g_application.GetAppPlayer().IsPaused())
-        KODI::MESSAGING::CApplicationMessenger::GetInstance().PostMsg(
+      if (appPlayer->IsPlaying() && !appPlayer->IsPaused())
+        CServiceBroker::GetAppMessenger()->PostMsg(
             TMSG_GUI_ACTION, WINDOW_INVALID, -1,
             static_cast<void*>(new CAction(ACTION_PLAYER_PLAY)));
       break;
+    }
     default:
       break;
   }
   // start remote timeout
-  [self startRemoteTimer];
+  [self startSiriRemoteIdleTimer];
 }
 
 @end

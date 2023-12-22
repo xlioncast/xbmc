@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "addons/IAddon.h"
+#include "addons/addoninfo/AddonInfo.h"
 #include "guilib/GUIDialog.h"
 
 #include <memory>
@@ -16,19 +16,26 @@
 #include <utility>
 #include <vector>
 
-enum class Reactivate
+namespace ADDON
 {
-  YES,
-  NO,
+class IAddon;
+using AddonPtr = std::shared_ptr<IAddon>;
+
+} // namespace ADDON
+
+enum class Reactivate : bool
+{
+  CHOICE_YES = true,
+  CHOICE_NO = false,
 };
 
-enum class PerformButtonFocus
+enum class PerformButtonFocus : bool
 {
-  YES,
-  NO,
+  CHOICE_YES = true,
+  CHOICE_NO = false,
 };
 
-enum class EntryPoint
+enum class EntryPoint : int
 {
   INSTALL,
   UPDATE,
@@ -37,14 +44,22 @@ enum class EntryPoint
 
 struct CInstalledWithAvailable
 {
+  CInstalledWithAvailable(const ADDON::DependencyInfo& depInfo,
+                          const std::shared_ptr<ADDON::IAddon>& installed,
+                          const std::shared_ptr<ADDON::IAddon>& available)
+    : m_depInfo(depInfo), m_installed(installed), m_available(available)
+  {
+  }
+
+  /*!
+   * @brief Returns true if the currently installed dependency version is up to date
+   * or the dependency is not available from a repository
+   */
+  bool IsInstalledUpToDate() const;
+
   ADDON::DependencyInfo m_depInfo;
   std::shared_ptr<ADDON::IAddon> m_installed;
   std::shared_ptr<ADDON::IAddon> m_available;
-  bool m_isInstalledUpToDate() const
-  {
-    return ((m_installed && m_available) && (m_installed->Version() == m_available->Version())) ||
-           (m_installed && !m_available);
-  };
 };
 
 class CGUIDialogAddonInfo : public CGUIDialog
@@ -80,7 +95,7 @@ private:
   void OnSettings();
   void OnSelect();
   void OnToggleAutoUpdates();
-  int AskForVersion(std::vector<std::pair<ADDON::AddonVersion, std::string>>& versions);
+  int AskForVersion(std::vector<std::pair<ADDON::CAddonVersion, std::string>>& versions);
 
   /*!
    * @brief Returns true if current addon can be opened (i.e is a plugin)
@@ -97,6 +112,11 @@ private:
    * in use at a time and can be changed (e.g skins)
    */
   bool CanUse() const;
+
+  /*!
+   * @brief Returns true if current addon can be show list about supported parts
+   */
+  bool CanShowSupportList() const;
 
   /*!
    * @brief check if the add-on is a dependency of others, and if so prompt the user.
@@ -117,6 +137,11 @@ private:
   bool ShowDependencyList(Reactivate reactivate, EntryPoint entryPoint);
 
   /*!
+   * @brief Show a dialog with the addon's supported extensions and mimetypes.
+   */
+  void ShowSupportList();
+
+  /*!
    * @brief Used to build up the dependency list shown by @ref ShowDependencyList()
    */
   void BuildDependencyList();
@@ -131,7 +156,7 @@ private:
    */
   bool m_silentUninstall = false;
 
-  bool m_allDepsInstalled = true;
+  bool m_showDepDialogOnInstall = false;
   std::vector<ADDON::DependencyInfo> m_deps;
   std::vector<CInstalledWithAvailable> m_depsInstalledWithAvailable;
 };

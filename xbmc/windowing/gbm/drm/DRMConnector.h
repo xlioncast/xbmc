@@ -10,6 +10,8 @@
 
 #include "DRMObject.h"
 
+#include <string>
+
 namespace KODI
 {
 namespace WINDOWING
@@ -25,6 +27,10 @@ public:
   CDRMConnector& operator=(const CDRMConnector&) = delete;
   ~CDRMConnector() = default;
 
+  std::string GetType();
+  std::string GetStatus();
+  std::string GetName();
+
   uint32_t GetEncoderId() const { return m_connector->encoder_id; }
   uint32_t* GetConnectorId() const { return &m_connector->connector_id; }
   int GetModesCount() const { return m_connector->count_modes; }
@@ -32,6 +38,8 @@ public:
 
   bool IsConnected() { return m_connector->connection == DRM_MODE_CONNECTED; }
   bool CheckConnector();
+
+  std::vector<uint8_t> GetEDID() const;
 
 private:
   struct DrmModeConnectorDeleter

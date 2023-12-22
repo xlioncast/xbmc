@@ -24,7 +24,7 @@ typedef void (*char_callback_t) (CGUIKeyboard *ref, const std::string &typedStri
 class CGUIKeyboard : public ITimerCallback
 {
   public:
-    CGUIKeyboard():m_idleTimer(this){};
+    CGUIKeyboard() : m_idleTimer(this) {}
     ~CGUIKeyboard() override = default;
 
     // entrypoint
@@ -64,7 +64,7 @@ class CGUIKeyboard : public ITimerCallback
     void startAutoCloseTimer(unsigned int autoCloseMs)
     {
       if ( autoCloseMs > 0 )
-        m_idleTimer.Start(autoCloseMs, false);
+        m_idleTimer.Start(std::chrono::milliseconds(autoCloseMs), false);
     }
 
     void resetAutoCloseTimer()

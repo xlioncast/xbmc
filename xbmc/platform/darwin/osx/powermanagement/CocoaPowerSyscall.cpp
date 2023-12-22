@@ -9,19 +9,20 @@
 // defined in PlatformDefs.h but I don't want to include that here
 typedef unsigned char BYTE;
 
-#include "utils/log.h"
-#include "utils/SystemInfo.h"
-#include "Application.h"
-#include "powermanagement/PowerManager.h"
-#include "ServiceBroker.h"
 #include "CocoaPowerSyscall.h"
 
-  #include <IOKit/pwr_mgt/IOPMLib.h>
-  #include <IOKit/ps/IOPowerSources.h>
-  #include <IOKit/ps/IOPSKeys.h>
-  #include <ApplicationServices/ApplicationServices.h>
+#include "ServiceBroker.h"
+#include "application/Application.h"
+#include "powermanagement/PowerManager.h"
+#include "utils/SystemInfo.h"
+#include "utils/log.h"
 
 #include "platform/darwin/osx/CocoaInterface.h"
+
+#include <ApplicationServices/ApplicationServices.h>
+#include <IOKit/ps/IOPSKeys.h>
+#include <IOKit/ps/IOPowerSources.h>
+#include <IOKit/pwr_mgt/IOPMLib.h>
 
 IPowerSyscall* CCocoaPowerSyscall::CreateInstance()
 {
@@ -73,7 +74,6 @@ CCocoaPowerSyscall::CCocoaPowerSyscall()
   m_HasBattery = -1;
   m_BatteryPercent = 100;
   m_SentBatteryMessage = false;
-  m_power_source = NULL;
   CreateOSPowerCallBacks();
 }
 
@@ -244,7 +244,7 @@ void CCocoaPowerSyscall::CreateOSPowerCallBacks(void)
   }
   else
   {
-    CLog::Log(LOGERROR, "%s - IORegisterForSystemPower failed", __FUNCTION__);
+    CLog::Log(LOGERROR, "{} - IORegisterForSystemPower failed", __FUNCTION__);
   }
 
   // if we have a battery, we want power source change notifications (on AC, on Battery, etc)
@@ -254,7 +254,7 @@ void CCocoaPowerSyscall::CreateOSPowerCallBacks(void)
     if (m_power_source)
       CFRunLoopAddSource(CFRunLoopGetCurrent(), m_power_source, kCFRunLoopDefaultMode);
     else
-      CLog::Log(LOGERROR, "%s - IOPSNotificationCreateRunLoopSource failed", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - IOPSNotificationCreateRunLoopSource failed", __FUNCTION__);
   }
 }
 
@@ -295,8 +295,8 @@ void CCocoaPowerSyscall::OSPowerCallBack(void *refcon, io_service_t service, nat
       // if we don't respond, OS will sleep in 30 second.
       ctx->m_OnSuspend = true;
       IOAllowPowerChange(ctx->m_root_port, (long)msg_arg);
-      //CLog::Log(LOGDEBUG, "%s - kIOMessageCanSystemSleep", __FUNCTION__);
-    break;
+      //CLog::Log(LOGDEBUG, "{} - kIOMessageCanSystemSleep", __FUNCTION__);
+      break;
     case kIOMessageSystemWillSleep:
       // System demanded sleep from:
       //   1) selecting sleep from the Apple menu.
@@ -307,18 +307,18 @@ void CCocoaPowerSyscall::OSPowerCallBack(void *refcon, io_service_t service, nat
       // in main thread so we can do this.
       CServiceBroker::GetPowerManager().ProcessEvents();
       IOAllowPowerChange(ctx->m_root_port, (long)msg_arg);
-      //CLog::Log(LOGDEBUG, "%s - kIOMessageSystemWillSleep", __FUNCTION__);
+      //CLog::Log(LOGDEBUG, "{} - kIOMessageSystemWillSleep", __FUNCTION__);
       // let XBMC know system will sleep
       //! @todo implement
-    break;
+      break;
     case kIOMessageSystemHasPoweredOn:
       // System has awakened from sleep.
       // let XBMC know system has woke
       //! @todo implement
       ctx->m_OnResume = true;
-      //CLog::Log(LOGDEBUG, "%s - kIOMessageSystemHasPoweredOn", __FUNCTION__);
-    break;
-	}
+      //CLog::Log(LOGDEBUG, "{} - kIOMessageSystemHasPoweredOn", __FUNCTION__);
+      break;
+  }
 }
 
 static bool stringsAreEqual(CFStringRef a, CFStringRef b)

@@ -115,12 +115,12 @@ public:
     or ALBUMARTIST, e.g. COMPOSER or CONDUCTOR etc.
   \return a vector of all contributing artist names and their roles
   */
-  const VECMUSICROLES& GetContributors() const { return m_musicRoles; };
+  const VECMUSICROLES& GetContributors() const { return m_musicRoles; }
   //void AddArtistRole(const int &role, const std::string &artist);
   void AppendArtistRole(const CMusicRole& musicRole);
 
   /*! \brief Set album artist vector.
-   Album artist is held local to song until album created for inital processing only.
+   Album artist is held local to song until album created for initial processing only.
    Normalised album artist data belongs to album and is stored in album artist credits
   \param album artist names as a vector of strings
   */
@@ -194,6 +194,7 @@ public:
   int iChannels;
   std::string strRecordLabel; // Record label from tag for album processing by CMusicInfoScanner::FileItemsToAlbums
   std::string strAlbumType; // (Musicbrainz release type) album type from tag for album processing by CMusicInfoScanner::FileItemsToAlbums
+  std::string songVideoURL; // url to song video
 
   ReplayGain replayGain;
 private:
@@ -205,16 +206,16 @@ private:
 
 /*!
  \ingroup music
- \brief A map of CSong objects, used for CMusicDatabase
- */
-typedef std::map<std::string, CSong> MAPSONGS;
-
-/*!
- \ingroup music
  \brief A vector of CSong objects, used for CMusicDatabase
  \sa CMusicDatabase
  */
 typedef std::vector<CSong> VECSONGS;
+
+/*!
+ \ingroup music
+ \brief A map of a vector of CSong objects key by filename, used for CMusicDatabase
+ */
+typedef std::map<std::string, VECSONGS> MAPSONGS;
 
 /*!
  \ingroup music

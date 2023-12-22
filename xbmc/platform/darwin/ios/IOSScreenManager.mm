@@ -8,11 +8,11 @@
 
 #import "IOSScreenManager.h"
 
-#include "Application.h"
 #import "IOSEAGLView.h"
 #import "IOSExternalTouchController.h"
 #include "ServiceBroker.h"
 #import "XBMCController.h"
+#include "application/Application.h"
 #include "cores/AudioEngine/Interfaces/AE.h"
 #include "settings/DisplaySettings.h"
 #include "threads/Event.h"
@@ -25,6 +25,8 @@
 #import <Foundation/Foundation.h>
 #include <objc/runtime.h>
 #include <sys/resource.h>
+
+using namespace std::chrono_literals;
 
 const CGFloat timeSwitchingToExternalSecs = 6.0;
 const CGFloat timeSwitchingToInternalSecs = 2.0;
@@ -166,12 +168,13 @@ static CEvent screenChangeEvent;
                                                                   idx,  @"screenIdx", nil];
 
 
-  CLog::Log(LOGINFO, "Changing screen to %d with %f x %f",screenIdx,[mode size].width, [mode size].height);
+  CLog::Log(LOGINFO, "Changing screen to {} with {:f} x {:f}", screenIdx, [mode size].width,
+            [mode size].height);
   //ensure that the screen change is done in the mainthread
   if([NSThread currentThread] != [NSThread mainThread])
   {
     [self performSelectorOnMainThread:@selector(changeScreenSelector:) withObject:dict  waitUntilDone:YES];
-    screenChangeEvent.WaitMSec(30000);
+    screenChangeEvent.Wait(30000ms);
   }
   else
   {

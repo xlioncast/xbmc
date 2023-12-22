@@ -9,6 +9,7 @@
 #include "GUIDialogContentSettings.h"
 
 #include "ServiceBroker.h"
+#include "addons/AddonManager.h"
 #include "addons/AddonSystemSettings.h"
 #include "addons/gui/GUIDialogAddonSettings.h"
 #include "addons/gui/GUIWindowAddonBrowser.h"
@@ -238,7 +239,7 @@ void CGUIDialogContentSettings::OnSettingAction(const std::shared_ptr<const CSet
   }
   else if (settingId == SETTING_SCRAPER_LIST)
   {
-    ADDON::TYPE type = ADDON::ScraperTypeFromContent(m_content);
+    ADDON::AddonType type = ADDON::ScraperTypeFromContent(m_content);
     std::string currentScraperId;
     if (m_scraper != nullptr)
       currentScraperId = m_scraper->ID();
@@ -248,12 +249,18 @@ void CGUIDialogContentSettings::OnSettingAction(const std::shared_ptr<const CSet
         && selectedAddonId != currentScraperId)
     {
       AddonPtr scraperAddon;
-      CServiceBroker::GetAddonMgr().GetAddon(selectedAddonId, scraperAddon, ADDON::ADDON_UNKNOWN,
-                                             ADDON::OnlyEnabled::YES);
-      m_scraper = std::dynamic_pointer_cast<CScraper>(scraperAddon);
-
-      SetupView();
-      SetFocusToSetting(SETTING_SCRAPER_LIST);
+      if (CServiceBroker::GetAddonMgr().GetAddon(selectedAddonId, scraperAddon,
+                                                 ADDON::OnlyEnabled::CHOICE_YES))
+      {
+        m_scraper = std::dynamic_pointer_cast<CScraper>(scraperAddon);
+        SetupView();
+        SetFocusToSetting(SETTING_SCRAPER_LIST);
+      }
+      else
+      {
+        CLog::Log(LOGERROR, "{} - Could not get settings for addon: {}", __FUNCTION__,
+                  selectedAddonId);
+      }
     }
   }
   else if (settingId == SETTING_SCRAPER_SETTINGS)
@@ -360,16 +367,29 @@ void CGUIDialogContentSettings::InitializeSettings()
       // define an enable dependency with (m_useDirectoryNames && !m_containsSingleItem) || !m_useDirectoryNames
       CSettingDependency dependencyScanRecursive(SettingDependencyType::Enable, GetSettingsManager());
       dependencyScanRecursive.Or()
-        ->Add(CSettingDependencyConditionCombinationPtr((new CSettingDependencyConditionCombination(BooleanLogicOperationAnd, GetSettingsManager()))                                     // m_useDirectoryNames && !m_containsSingleItem
-          ->Add(CSettingDependencyConditionPtr(new CSettingDependencyCondition(SETTING_USE_DIRECTORY_NAMES, "true", SettingDependencyOperator::Equals, false, GetSettingsManager())))      // m_useDirectoryNames
-          ->Add(CSettingDependencyConditionPtr(new CSettingDependencyCondition(SETTING_CONTAINS_SINGLE_ITEM, "false", SettingDependencyOperator::Equals, false, GetSettingsManager())))))  // !m_containsSingleItem
-        ->Add(CSettingDependencyConditionPtr(new CSettingDependencyCondition(SETTING_USE_DIRECTORY_NAMES, "false", SettingDependencyOperator::Equals, false, GetSettingsManager())));      // !m_useDirectoryNames
+          ->Add(CSettingDependencyConditionCombinationPtr(
+              (new CSettingDependencyConditionCombination(
+                   BooleanLogicOperationAnd,
+                   GetSettingsManager())) // m_useDirectoryNames && !m_containsSingleItem
+                  ->Add(std::make_shared<CSettingDependencyCondition>(
+                      SETTING_USE_DIRECTORY_NAMES, "true", SettingDependencyOperator::Equals, false,
+                      GetSettingsManager())) // m_useDirectoryNames
+                  ->Add(std::make_shared<CSettingDependencyCondition>(
+                      SETTING_CONTAINS_SINGLE_ITEM, "false", SettingDependencyOperator::Equals,
+                      false, GetSettingsManager())))) // !m_containsSingleItem
+          ->Add(std::make_shared<CSettingDependencyCondition>(
+              SETTING_USE_DIRECTORY_NAMES, "false", SettingDependencyOperator::Equals, false,
+              GetSettingsManager())); // !m_useDirectoryNames
 
       // define an enable dependency with m_useDirectoryNames && !m_scanRecursive
       CSettingDependency dependencyContainsSingleItem(SettingDependencyType::Enable, GetSettingsManager());
       dependencyContainsSingleItem.And()
-        ->Add(CSettingDependencyConditionPtr(new CSettingDependencyCondition(SETTING_USE_DIRECTORY_NAMES, "true", SettingDependencyOperator::Equals, false, GetSettingsManager())))        // m_useDirectoryNames
-        ->Add(CSettingDependencyConditionPtr(new CSettingDependencyCondition(SETTING_SCAN_RECURSIVE, "false", SettingDependencyOperator::Equals, false, GetSettingsManager())));           // !m_scanRecursive
+          ->Add(std::make_shared<CSettingDependencyCondition>(
+              SETTING_USE_DIRECTORY_NAMES, "true", SettingDependencyOperator::Equals, false,
+              GetSettingsManager())) // m_useDirectoryNames
+          ->Add(std::make_shared<CSettingDependencyCondition>(
+              SETTING_SCAN_RECURSIVE, "false", SettingDependencyOperator::Equals, false,
+              GetSettingsManager())); // !m_scanRecursive
 
       SettingDependencies deps;
       deps.push_back(dependencyScanRecursive);

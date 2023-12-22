@@ -16,12 +16,16 @@
 #include "utils/MemUtils.h"
 #include "utils/log.h"
 
-CTexture* CTexture::CreateTexture(unsigned int width, unsigned int height, unsigned int format)
+#include <memory>
+
+std::unique_ptr<CTexture> CTexture::CreateTexture(unsigned int width,
+                                                  unsigned int height,
+                                                  XB_FMT format)
 {
-  return new CGLTexture(width, height, format);
+  return std::make_unique<CGLTexture>(width, height, format);
 }
 
-CGLTexture::CGLTexture(unsigned int width, unsigned int height, unsigned int format)
+CGLTexture::CGLTexture(unsigned int width, unsigned int height, XB_FMT format)
   : CTexture(width, height, format)
 {
   unsigned int major, minor;
@@ -90,12 +94,16 @@ void CGLTexture::LoadToGPU()
   unsigned int maxSize = CServiceBroker::GetRenderSystem()->GetMaxTextureSize();
   if (m_textureHeight > maxSize)
   {
-    CLog::Log(LOGERROR, "GL: Image height %d too big to fit into single texture unit, truncating to %u", m_textureHeight, maxSize);
+    CLog::Log(LOGERROR,
+              "GL: Image height {} too big to fit into single texture unit, truncating to {}",
+              m_textureHeight, maxSize);
     m_textureHeight = maxSize;
   }
   if (m_textureWidth > maxSize)
   {
-    CLog::Log(LOGERROR, "GL: Image width %d too big to fit into single texture unit, truncating to %u", m_textureWidth, maxSize);
+    CLog::Log(LOGERROR,
+              "GL: Image width {} too big to fit into single texture unit, truncating to {}",
+              m_textureWidth, maxSize);
 #ifndef HAS_GLES
     glPixelStorei(GL_UNPACK_ROW_LENGTH, m_textureWidth);
 #endif

@@ -124,7 +124,7 @@ bool GetDirectoryFromTxtRecords(const CZeroconfBrowser::ZeroconfService& zerocon
 
       //add slash at end of path since it has to be a folder
       URIUtils::AddSlashAtEnd(path);
-      //this is the full path includeing remote stuff (e.x. nfs://ip/path
+      //this is the full path including remote stuff (e.x. nfs://ip/path
       item->SetPath(urlStr + path);
       //remove the slash at the end of the path or GetFileName will not give the last dir
       URIUtils::RemoveSlashAtEnd(path);
@@ -188,7 +188,9 @@ bool CZeroconfDirectory::GetDirectory(const CURL& url, CFileItemList &items)
 
       if(!CZeroconfBrowser::GetInstance()->ResolveService(zeroconf_service))
       {
-        CLog::Log(LOGINFO, "CZeroconfDirectory::GetDirectory service ( %s ) could not be resolved in time", zeroconf_service.GetName().c_str());
+        CLog::Log(LOGINFO,
+                  "CZeroconfDirectory::GetDirectory service ( {} ) could not be resolved in time",
+                  zeroconf_service.GetName());
         return false;
       }
       else
@@ -202,7 +204,9 @@ bool CZeroconfDirectory::GetDirectory(const CURL& url, CFileItemList &items)
         std::string protocol;
         if(!GetXBMCProtocol(zeroconf_service.GetType(), protocol))
         {
-          CLog::Log(LOGERROR, "CZeroconfDirectory::GetDirectory Unknown service type (%s), skipping; ", zeroconf_service.GetType().c_str());
+          CLog::Log(LOGERROR,
+                    "CZeroconfDirectory::GetDirectory Unknown service type ({}), skipping; ",
+                    zeroconf_service.GetType());
           return false;
         }
 
@@ -219,7 +223,9 @@ bool CZeroconfDirectory::GetDirectory(const CURL& url, CFileItemList &items)
         }
       }
     } catch (std::runtime_error& e) {
-      CLog::Log(LOGERROR, "CZeroconfDirectory::GetDirectory failed getting directory: '%s'. Error: '%s'", decoded.c_str(), e.what());
+      CLog::Log(LOGERROR,
+                "CZeroconfDirectory::GetDirectory failed getting directory: '{}'. Error: '{}'",
+                decoded, e.what());
       return false;
     }
   }

@@ -10,9 +10,10 @@
 
 #include "FileItem.h"
 #include "URL.h"
-#include "threads/SingleLock.h"
 #include "threads/Thread.h"
 #include "utils/log.h"
+
+#include <mutex>
 
 CBackgroundInfoLoader::CBackgroundInfoLoader() : m_thread (NULL)
 {
@@ -39,7 +40,7 @@ void CBackgroundInfoLoader::Run()
       // Stage 1: All "fast" stuff we have already cached
       for (std::vector<CFileItemPtr>::const_iterator iter = m_vecItems.begin(); iter != m_vecItems.end(); ++iter)
       {
-        CFileItemPtr pItem = *iter;
+        const CFileItemPtr& pItem = *iter;
 
         // Ask the callback if we should abort
         if ((m_pProgressCallback && m_pProgressCallback->Abort()) || m_bStop)
@@ -52,14 +53,16 @@ void CBackgroundInfoLoader::Run()
         }
         catch (...)
         {
-          CLog::Log(LOGERROR, "CBackgroundInfoLoader::LoadItemCached - Unhandled exception for item %s", CURL::GetRedacted(pItem->GetPath()).c_str());
+          CLog::Log(LOGERROR,
+                    "CBackgroundInfoLoader::LoadItemCached - Unhandled exception for item {}",
+                    CURL::GetRedacted(pItem->GetPath()));
         }
       }
 
       // Stage 2: All "slow" stuff that we need to lookup
       for (std::vector<CFileItemPtr>::const_iterator iter = m_vecItems.begin(); iter != m_vecItems.end(); ++iter)
       {
-        CFileItemPtr pItem = *iter;
+        const CFileItemPtr& pItem = *iter;
 
         // Ask the callback if we should abort
         if ((m_pProgressCallback && m_pProgressCallback->Abort()) || m_bStop)
@@ -72,7 +75,9 @@ void CBackgroundInfoLoader::Run()
         }
         catch (...)
         {
-          CLog::Log(LOGERROR, "CBackgroundInfoLoader::LoadItemLookup - Unhandled exception for item %s", CURL::GetRedacted(pItem->GetPath()).c_str());
+          CLog::Log(LOGERROR,
+                    "CBackgroundInfoLoader::LoadItemLookup - Unhandled exception for item {}",
+                    CURL::GetRedacted(pItem->GetPath()));
         }
       }
     }
@@ -83,7 +88,7 @@ void CBackgroundInfoLoader::Run()
   catch (...)
   {
     m_bIsLoading = false;
-    CLog::Log(LOGERROR, "%s - Unhandled exception", __FUNCTION__);
+    CLog::Log(LOGERROR, "{} - Unhandled exception", __FUNCTION__);
   }
 }
 
@@ -94,7 +99,7 @@ void CBackgroundInfoLoader::Load(CFileItemList& items)
   if (items.IsEmpty())
     return;
 
-  CSingleLock lock(m_lock);
+  std::unique_lock<CCriticalSection> lock(m_lock);
 
   for (int nItem=0; nItem < items.Size(); nItem++)
     m_vecItems.push_back(items[nItem]);
@@ -105,7 +110,7 @@ void CBackgroundInfoLoader::Load(CFileItemList& items)
 
   m_thread = new CThread(this, "BackgroundLoader");
   m_thread->Create();
-  m_thread->SetPriority(THREAD_PRIORITY_BELOW_NORMAL);
+  m_thread->SetPriority(ThreadPriority::BELOW_NORMAL);
 }
 
 void CBackgroundInfoLoader::StopAsync()

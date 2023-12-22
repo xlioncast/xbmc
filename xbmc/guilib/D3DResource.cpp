@@ -201,7 +201,7 @@ bool CD3DTexture::Create(UINT width, UINT height, UINT mipLevels, D3D11_USAGE us
 
   if (!DX::Windowing()->IsFormatSupport(format, D3D11_FORMAT_SUPPORT_TEXTURE2D))
   {
-    CLog::LogF(LOGERROR, "unsupported texture format %d", format);
+    CLog::LogF(LOGERROR, "unsupported texture format {}", DX::DXGIFormatToString(format));
     return false;
   }
 
@@ -259,7 +259,7 @@ bool CD3DTexture::CreateInternal(const void* pixels /* nullptr */, unsigned int 
     m_mipLevels = 1;
 
   CD3D11_TEXTURE2D_DESC textureDesc(m_format, m_width, m_height, 1, m_mipLevels, m_bindFlags, m_usage, m_cpuFlags, 1, 0, miscFlags);
-  D3D11_SUBRESOURCE_DATA initData = { 0 };
+  D3D11_SUBRESOURCE_DATA initData = {};
   initData.pSysMem = pixels;
   initData.SysMemPitch = srcPitch ? srcPitch : CD3DHelper::BitsPerPixel(m_format) * m_width / 8;
   initData.SysMemSlicePitch = 0;
@@ -493,7 +493,11 @@ void CD3DTexture::GenerateMipmaps()
 }
 
 // static methods
-void CD3DTexture::DrawQuad(const CPoint points[4], UTILS::Color color, CD3DTexture *texture, const CRect *texCoords, SHADER_METHOD options)
+void CD3DTexture::DrawQuad(const CPoint points[4],
+                           UTILS::COLOR::Color color,
+                           CD3DTexture* texture,
+                           const CRect* texCoords,
+                           SHADER_METHOD options)
 {
   unsigned numViews = 0;
   ID3D11ShaderResourceView* views = nullptr;
@@ -507,7 +511,11 @@ void CD3DTexture::DrawQuad(const CPoint points[4], UTILS::Color color, CD3DTextu
   DrawQuad(points, color, numViews, &views, texCoords, options);
 }
 
-void CD3DTexture::DrawQuad(const CRect &rect, UTILS::Color color, CD3DTexture *texture, const CRect *texCoords, SHADER_METHOD options)
+void CD3DTexture::DrawQuad(const CRect& rect,
+                           UTILS::COLOR::Color color,
+                           CD3DTexture* texture,
+                           const CRect* texCoords,
+                           SHADER_METHOD options)
 {
   CPoint points[] =
   {
@@ -519,7 +527,12 @@ void CD3DTexture::DrawQuad(const CRect &rect, UTILS::Color color, CD3DTexture *t
   DrawQuad(points, color, texture, texCoords, options);
 }
 
-void CD3DTexture::DrawQuad(const CPoint points[4], UTILS::Color color, unsigned numViews, ID3D11ShaderResourceView **view, const CRect *texCoords, SHADER_METHOD options)
+void CD3DTexture::DrawQuad(const CPoint points[4],
+                           UTILS::COLOR::Color color,
+                           unsigned numViews,
+                           ID3D11ShaderResourceView** view,
+                           const CRect* texCoords,
+                           SHADER_METHOD options)
 {
   XMFLOAT4 xcolor;
   CD3DHelper::XMStoreColor(&xcolor, color);
@@ -540,7 +553,12 @@ void CD3DTexture::DrawQuad(const CPoint points[4], UTILS::Color color, unsigned 
   pGUIShader->DrawQuad(verts[0], verts[1], verts[2], verts[3]);
 }
 
-void CD3DTexture::DrawQuad(const CRect &rect, UTILS::Color color, unsigned numViews, ID3D11ShaderResourceView **view, const CRect *texCoords, SHADER_METHOD options)
+void CD3DTexture::DrawQuad(const CRect& rect,
+                           UTILS::COLOR::Color color,
+                           unsigned numViews,
+                           ID3D11ShaderResourceView** view,
+                           const CRect* texCoords,
+                           SHADER_METHOD options)
 {
   CPoint points[] =
   {
@@ -606,7 +624,7 @@ HRESULT CD3DEffect::Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID
 
   if (!includeFile.Open(fileName))
   {
-    CLog::LogF(LOGERROR, "Could not open 3DLUT file: %s", fileName);
+    CLog::LogF(LOGERROR, "Could not open 3DLUT file: {}", fileName);
     return E_FAIL;
   }
 
@@ -791,10 +809,11 @@ bool CD3DEffect::CreateEffect()
   {
     std::string error;
     error.assign((const char*)pError->GetBufferPointer(), pError->GetBufferSize());
-    CLog::Log(LOGERROR, "CD3DEffect::CreateEffect(): %s", error.c_str());
+    CLog::Log(LOGERROR, "CD3DEffect::CreateEffect(): {}", error);
   }
   else
-    CLog::Log(LOGERROR, "CD3DEffect::CreateEffect(): call to D3DXCreateEffect() failed with %" PRId32, hr);
+    CLog::Log(LOGERROR, "CD3DEffect::CreateEffect(): call to D3DXCreateEffect() failed with {}",
+              hr);
   return false;
 }
 

@@ -8,18 +8,21 @@
 
 #include "VideoSyncGLX.h"
 
-#include "threads/SingleLock.h"
+#include "cores/VideoPlayer/VideoReferenceClock.h"
 #include "utils/TimeUtils.h"
 #include "utils/XTimeUtils.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 #include "windowing/X11/WinSystemX11GLContext.h"
 
+#include <mutex>
 #include <sstream>
 
 #include <X11/extensions/Xrandr.h>
 
 using namespace KODI::WINDOWING::X11;
+
+using namespace std::chrono_literals;
 
 Display* CVideoSyncGLX::m_Dpy = NULL;
 
@@ -37,16 +40,15 @@ void CVideoSyncGLX::OnResetDisplay()
   m_displayReset = true;
 }
 
-bool CVideoSyncGLX::Setup(PUPDATECLOCK func)
+bool CVideoSyncGLX::Setup()
 {
-  CSingleLock lock(m_winSystem.GetGfxContext());
+  std::unique_lock<CCriticalSection> lock(m_winSystem.GetGfxContext());
 
   m_glXWaitVideoSyncSGI = NULL;
   m_glXGetVideoSyncSGI = NULL;
   m_vInfo = NULL;
   m_Window = 0;
   m_Context = NULL;
-  UpdateClock = func;
 
   int singleBufferAttributes[] = {
     GLX_RGBA,
@@ -133,7 +135,7 @@ bool CVideoSyncGLX::Setup(PUPDATECLOCK func)
   ReturnV = glXMakeCurrent(m_Dpy, m_Window, m_Context);
   if (ReturnV != True)
   {
-    CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXMakeCurrent returned %i", ReturnV);
+    CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXMakeCurrent returned {}", ReturnV);
     return false;
   }
 
@@ -147,7 +149,7 @@ bool CVideoSyncGLX::Setup(PUPDATECLOCK func)
   ReturnV = m_glXWaitVideoSyncSGI(2, 0, &GlxTest);
   if (ReturnV)
   {
-    CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXWaitVideoSyncSGI returned %i", ReturnV);
+    CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXWaitVideoSyncSGI returned {}", ReturnV);
     return false;
   }
 
@@ -161,7 +163,7 @@ bool CVideoSyncGLX::Setup(PUPDATECLOCK func)
   ReturnV = m_glXGetVideoSyncSGI(&GlxTest);
   if (ReturnV)
   {
-    CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXGetVideoSyncSGI returned %i", ReturnV);
+    CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXGetVideoSyncSGI returned {}", ReturnV);
     return false;
   }
 
@@ -189,13 +191,13 @@ void CVideoSyncGLX::Run(CEvent& stopEvent)
 
     if(ReturnV)
     {
-      CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXWaitVideoSyncSGI returned %i", ReturnV);
+      CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXWaitVideoSyncSGI returned {}", ReturnV);
       return;
     }
 
     if (VblankCount > PrevVblankCount)
     {
-      UpdateClock((int)(VblankCount - PrevVblankCount), Now, m_refClock);
+      m_refClock->UpdateClock((int)(VblankCount - PrevVblankCount), Now);
       IsReset = false;
     }
     else
@@ -211,18 +213,18 @@ void CVideoSyncGLX::Run(CEvent& stopEvent)
       ReturnV = glXMakeCurrent(m_Dpy, None, NULL);
       if (ReturnV != True)
       {
-        CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXMakeCurrent returned %i", ReturnV);
+        CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXMakeCurrent returned {}", ReturnV);
         return;
       }
 
       //sleep here so we don't busy spin when this constantly happens, for example when the display went to sleep
-      KODI::TIME::Sleep(1000);
+      KODI::TIME::Sleep(1s);
 
       CLog::Log(LOGDEBUG, "CVideoReferenceClock: Attaching glX context");
       ReturnV = glXMakeCurrent(m_Dpy, m_Window, m_Context);
       if (ReturnV != True)
       {
-        CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXMakeCurrent returned %i", ReturnV);
+        CLog::Log(LOGDEBUG, "CVideoReferenceClock: glXMakeCurrent returned {}", ReturnV);
         return;
       }
 
@@ -235,7 +237,7 @@ void CVideoSyncGLX::Run(CEvent& stopEvent)
   m_lostEvent.Set();
   while(!stopEvent.Signaled() && m_displayLost && !m_displayReset)
   {
-    KODI::TIME::Sleep(10);
+    KODI::TIME::Sleep(10ms);
   }
 }
 
@@ -244,7 +246,7 @@ void CVideoSyncGLX::Cleanup()
   CLog::Log(LOGDEBUG, "CVideoReferenceClock: Cleaning up GLX");
 
   {
-    CSingleLock lock(m_winSystem.GetGfxContext());
+    std::unique_lock<CCriticalSection> lock(m_winSystem.GetGfxContext());
 
     if (m_vInfo)
     {

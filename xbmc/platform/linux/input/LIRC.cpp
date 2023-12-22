@@ -8,18 +8,26 @@
 
 #include "LIRC.h"
 
-#include "AppInboundProtocol.h"
 #include "ServiceBroker.h"
+#include "application/AppInboundProtocol.h"
 #include "profiles/ProfileManager.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
+#include "threads/SingleLock.h"
 #include "utils/log.h"
+
+#include <mutex>
 
 #include <fcntl.h>
 #include <lirc/lirc_client.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <unistd.h>
+
+#include "PlatformDefs.h"
+
+using namespace std::chrono_literals;
 
 CLirc::CLirc() : CThread("Lirc")
 {
@@ -28,7 +36,7 @@ CLirc::CLirc() : CThread("Lirc")
 CLirc::~CLirc()
 {
   {
-    CSingleLock lock(m_critSection);
+    std::unique_lock<CCriticalSection> lock(m_critSection);
     if (m_fd > 0)
       shutdown(m_fd, SHUT_RDWR);
   }
@@ -38,7 +46,7 @@ CLirc::~CLirc()
 void CLirc::Start()
 {
   Create();
-  SetPriority(GetMinPriority());
+  SetPriority(ThreadPriority::LOWEST);
 }
 
 void CLirc::Process()
@@ -52,7 +60,7 @@ void CLirc::Process()
     throw std::runtime_error("CSettings needs to exist before starting CLirc");
 
   while (!settings->IsLoaded())
-    CThread::Sleep(1000);
+    CThread::Sleep(1000ms);
 
   m_profileId = settingsComponent->GetProfileManager()->GetCurrentProfileId();
   m_irTranslator.Load("Lircmap.xml");
@@ -65,14 +73,14 @@ void CLirc::Process()
   while (!m_bStop)
   {
     {
-      CSingleLock lock(m_critSection);
+      std::unique_lock<CCriticalSection> lock(m_critSection);
 
       // lirc_client is buggy because it does not close socket, if connect fails
       // work around by checking if daemon is running before calling lirc_init
       if (!CheckDaemon())
       {
         CSingleExit lock(m_critSection);
-        CThread::Sleep(1000);
+        CThread::Sleep(1000ms);
         continue;
       }
 
@@ -80,7 +88,7 @@ void CLirc::Process()
       if (m_fd <= 0)
       {
         CSingleExit lock(m_critSection);
-        CThread::Sleep(1000);
+        CThread::Sleep(1000ms);
         continue;
       }
     }
@@ -92,7 +100,7 @@ void CLirc::Process()
       if (ret < 0)
       {
         lirc_deinit();
-        CThread::Sleep(1000);
+        CThread::Sleep(1000ms);
         break;
       }
       if (code != nullptr)
@@ -138,14 +146,15 @@ void CLirc::ProcessCode(char *buf)
   char *end = nullptr;
   long repeat = strtol(repeatStr, &end, 16);
   if (!end || *end != 0)
-    CLog::Log(LOGERROR, "LIRC: invalid non-numeric character in expression %s", repeatStr);
+    CLog::Log(LOGERROR, "LIRC: invalid non-numeric character in expression {}", repeatStr);
 
   if (repeat == 0)
   {
-    CLog::Log(LOGDEBUG, "LIRC: - NEW %s %s %s %s (%s)", &scanCode[0], &repeatStr[0], &buttonName[0], &deviceName[0], buttonName);
-    m_firstClickTime = XbmcThreads::SystemClockMillis();
+    CLog::Log(LOGDEBUG, "LIRC: - NEW {} {} {} {} ({})", &scanCode[0], &repeatStr[0], &buttonName[0],
+              &deviceName[0], buttonName);
+    m_firstClickTime = std::chrono::steady_clock::now();
 
-    XBMC_Event newEvent;
+    XBMC_Event newEvent = {};
     newEvent.type = XBMC_BUTTON;
     newEvent.keybutton.button = button;
     newEvent.keybutton.holdtime = 0;
@@ -156,10 +165,14 @@ void CLirc::ProcessCode(char *buf)
   }
   else if (repeat > CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_remoteDelay)
   {
-    XBMC_Event newEvent;
+    XBMC_Event newEvent = {};
     newEvent.type = XBMC_BUTTON;
     newEvent.keybutton.button = button;
-    newEvent.keybutton.holdtime = XbmcThreads::SystemClockMillis() - m_firstClickTime;
+
+    auto now = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_firstClickTime);
+
+    newEvent.keybutton.holdtime = duration.count();
     std::shared_ptr<CAppInboundProtocol> appPort = CServiceBroker::GetAppPort();
     if (appPort)
       appPort->OnEvent(newEvent);

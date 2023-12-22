@@ -8,16 +8,20 @@
 
 #include "GameClientProperties.h"
 
+#include "FileItem.h"
 #include "GameClient.h"
 #include "ServiceBroker.h"
 #include "addons/AddonManager.h"
 #include "addons/GameResource.h"
 #include "addons/IAddon.h"
+#include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "dialogs/GUIDialogYesNo.h"
 #include "filesystem/Directory.h"
 #include "filesystem/SpecialProtocol.h"
 #include "guilib/LocalizeStrings.h"
 #include "messaging/helpers/DialogOKHelper.h"
+#include "utils/StringUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
 
@@ -112,8 +116,8 @@ const char** CGameClientProperties::GetResourceDirectories(void)
     {
       const std::string& strAddonId = it->id;
       AddonPtr addon;
-      if (CServiceBroker::GetAddonMgr().GetAddon(strAddonId, addon, ADDON_RESOURCE_GAMES,
-                                                 OnlyEnabled::YES))
+      if (CServiceBroker::GetAddonMgr().GetAddon(strAddonId, addon, AddonType::RESOURCE_GAMES,
+                                                 OnlyEnabled::CHOICE_YES))
       {
         std::shared_ptr<CGameResource> resource = std::static_pointer_cast<CGameResource>(addon);
 
@@ -135,7 +139,7 @@ const char** CGameClientProperties::GetResourceDirectories(void)
 
     if (!CDirectory::Exists(addonProfile))
     {
-      CLog::Log(LOGDEBUG, "Creating resource directory: %s", addonProfile.c_str());
+      CLog::Log(LOGDEBUG, "Creating resource directory: {}", addonProfile);
       CDirectory::Create(addonProfile);
     }
 
@@ -203,8 +207,7 @@ bool CGameClientProperties::GetProxyAddons(ADDON::VECADDONS& addons)
   for (const auto& dependency : m_parent.GetDependencies())
   {
     AddonPtr addon;
-    if (CServiceBroker::GetAddonMgr().GetAddon(dependency.id, addon, ADDON_UNKNOWN,
-                                               OnlyEnabled::NO))
+    if (CServiceBroker::GetAddonMgr().GetAddon(dependency.id, addon, OnlyEnabled::CHOICE_NO))
     {
       // If add-on is disabled, ask the user to enable it
       if (CServiceBroker::GetAddonMgr().IsAddonDisabled(dependency.id))
@@ -215,31 +218,31 @@ bool CGameClientProperties::GetProxyAddons(ADDON::VECADDONS& addons)
         {
           if (!CServiceBroker::GetAddonMgr().EnableAddon(dependency.id))
           {
-            CLog::Log(LOGERROR, "Failed to enable add-on %s", dependency.id.c_str());
+            CLog::Log(LOGERROR, "Failed to enable add-on {}", dependency.id);
             missingDependencies.emplace_back(addon->Name());
             addon.reset();
           }
         }
         else
         {
-          CLog::Log(LOGERROR, "User chose to not enable add-on %s", dependency.id.c_str());
+          CLog::Log(LOGERROR, "User chose to not enable add-on {}", dependency.id);
           missingDependencies.emplace_back(addon->Name());
           addon.reset();
         }
       }
 
-      if (addon && addon->Type() == ADDON_GAMEDLL)
+      if (addon && addon->Type() == AddonType::GAMEDLL)
         ret.emplace_back(std::move(addon));
     }
     else
     {
       if (dependency.optional)
       {
-        CLog::Log(LOGDEBUG, "Missing optional dependency %s", dependency.id.c_str());
+        CLog::Log(LOGDEBUG, "Missing optional dependency {}", dependency.id);
       }
       else
       {
-        CLog::Log(LOGERROR, "Missing mandatory dependency %s", dependency.id.c_str());
+        CLog::Log(LOGERROR, "Missing mandatory dependency {}", dependency.id);
         missingDependencies.emplace_back(dependency.id);
       }
     }

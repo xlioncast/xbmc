@@ -161,7 +161,7 @@ const std::string &CMusicInfoTag::GetType() const
 }
 
 int CMusicInfoTag::GetYear() const
-{  
+{
   return atoi(GetYearString().c_str());
 }
 
@@ -169,7 +169,7 @@ std::string CMusicInfoTag::GetYearString() const
 {
   /* Get year as YYYY from release or original dates depending on setting
      This is how GUI and by year sorting swiches to using original year.
-     For ripper and non-library items (libray entries have both values):
+     For ripper and non-library items (library entries have both values):
      when release date missing try to fallback to original date
      when original date missing use release date
   */
@@ -323,6 +323,11 @@ const std::string& CMusicInfoTag::GetStationArt() const
   return m_stationArt;
 }
 
+const std::string& CMusicInfoTag::GetSongVideoURL() const
+{
+  return m_songVideoURL;
+}
+
 void CMusicInfoTag::SetURL(const std::string& strURL)
 {
   m_strURL = strURL;
@@ -433,11 +438,11 @@ void CMusicInfoTag::SetYear(int year)
   // Parse integer year value into YYYY ISO8601 format (partial) date string
   // Add century for to 2 digit numbers, 41 -> 1941, 40 -> 2040
   if (year > 99)
-    SetReleaseDate(StringUtils::Format("%04i", year));
+    SetReleaseDate(StringUtils::Format("{:04}", year));
   else if (year > 40)
-    SetReleaseDate(StringUtils::Format("%04i", 19 + year));
+    SetReleaseDate(StringUtils::Format("{:04}", 19 + year));
   else  if (year > 0)
-    SetReleaseDate(StringUtils::Format("%04i", 20 + year));
+    SetReleaseDate(StringUtils::Format("{:04}", 20 + year));
   else
     m_strReleaseDate.clear();
 }
@@ -495,9 +500,8 @@ void CMusicInfoTag::AddReleaseDate(const std::string& strDateYear, bool isMonth 
     std::string strYYYY = GetReleaseYear();
     if (strYYYY.empty())
       strYYYY = "0000"; // Fake year when TYER not read yet
-    m_strReleaseDate =
-      StringUtils::Format("%s-%s-%s", strYYYY, StringUtils::Left(strDateYear, 2),
-        StringUtils::Right(strDateYear, 2));
+    m_strReleaseDate = StringUtils::Format("{}-{}-{}", strYYYY, StringUtils::Left(strDateYear, 2),
+                                           StringUtils::Right(strDateYear, 2));
   }
   // Given YYYY only (from YEAR tag) and already have YYYY-MM or YYYY-MM-DD (from DATE tag)
   else if (strDateYear.size() == 4 && (m_strReleaseDate.size() > 4))
@@ -775,6 +779,11 @@ void CMusicInfoTag::SetStationArt(const std::string& strStationArt)
   m_stationArt = strStationArt;
 }
 
+void CMusicInfoTag::SetSongVideoURL(const std::string& songVideoURL)
+{
+  m_songVideoURL = songVideoURL;
+}
+
 void CMusicInfoTag::SetArtist(const CArtist& artist)
 {
   SetArtist(artist.strArtist);
@@ -796,7 +805,7 @@ void CMusicInfoTag::SetArtist(const CArtist& artist)
 void CMusicInfoTag::SetAlbum(const CAlbum& album)
 {
   Clear();
-  //Set all artist infomation from album artist credits and artist description
+  //Set all artist information from album artist credits and artist description
   SetArtistDesc(album.GetAlbumArtistString());
   SetArtist(album.GetAlbumArtist());
   SetArtistSort(album.GetAlbumArtistSort());
@@ -840,7 +849,7 @@ void CMusicInfoTag::SetSong(const CSong& song)
   Clear();
   SetTitle(song.strTitle);
   SetGenre(song.genre);
-  /* Set all artist infomation from song artist credits and artist description.
+  /* Set all artist information from song artist credits and artist description.
      During processing e.g. Cue Sheets, song may only have artist description string
      rather than a fully populated artist credits vector.
   */
@@ -883,6 +892,7 @@ void CMusicInfoTag::SetSong(const CSong& song)
   SetBitRate(song.iBitRate);
   SetSampleRate(song.iSampleRate);
   SetNoOfChannels(song.iChannels);
+  SetSongVideoURL(song.songVideoURL);
 
   if (song.replayGain.Get(ReplayGain::TRACK).Valid())
     m_replayGain.Set(ReplayGain::TRACK, song.replayGain.Get(ReplayGain::TRACK));
@@ -971,6 +981,7 @@ void CMusicInfoTag::Serialize(CVariant& value) const
   value["bitrate"] = m_bitrate;
   value["samplerate"] = m_samplerate;
   value["channels"] = m_channels;
+  value["songvideourl"] = m_songVideoURL;
 }
 
 void CMusicInfoTag::ToSortable(SortItem& sortable, Field field) const
@@ -1072,6 +1083,7 @@ void CMusicInfoTag::Archive(CArchive& ar)
     ar << m_samplerate;
     ar << m_bitrate;
     ar << m_channels;
+    ar << m_songVideoURL;
   }
   else
   {
@@ -1139,6 +1151,7 @@ void CMusicInfoTag::Archive(CArchive& ar)
     ar >> m_samplerate;
     ar >> m_bitrate;
     ar >> m_channels;
+    ar >> m_songVideoURL;
   }
 }
 
@@ -1194,6 +1207,7 @@ void CMusicInfoTag::Clear()
   m_channels = 0;
   m_stationName.clear();
   m_stationArt.clear();
+  m_songVideoURL.clear();
 }
 
 void CMusicInfoTag::AppendArtist(const std::string &artist)
@@ -1269,7 +1283,7 @@ const std::string CMusicInfoTag::GetContributorsText() const
   std::string strLabel;
   for (const auto& credit : m_musicRoles)
   {
-    strLabel += StringUtils::Format("%s\n", credit.GetArtist().c_str());
+    strLabel += StringUtils::Format("{}\n", credit.GetArtist());
   }
   return StringUtils::TrimRight(strLabel, "\n");
 }
@@ -1279,8 +1293,7 @@ const std::string CMusicInfoTag::GetContributorsAndRolesText() const
   std::string strLabel;
   for (const auto& credit : m_musicRoles)
   {
-    strLabel +=
-        StringUtils::Format("%s - %s\n", credit.GetRoleDesc().c_str(), credit.GetArtist().c_str());
+    strLabel += StringUtils::Format("{} - {}\n", credit.GetRoleDesc(), credit.GetArtist());
   }
   return StringUtils::TrimRight(strLabel, "\n");
 }

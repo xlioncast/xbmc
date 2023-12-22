@@ -9,7 +9,7 @@
 #pragma once
 
 #include "AudioDecoder.h"
-#include "FileItem.h"
+#include "cores/AudioEngine/Interfaces/AE.h"
 #include "cores/AudioEngine/Interfaces/IAudioCallback.h"
 #include "cores/IPlayer.h"
 #include "threads/CriticalSection.h"
@@ -39,7 +39,7 @@ public:
   void Pause() override;
   bool HasVideo() const override { return false; }
   bool HasAudio() const override { return true; }
-  bool CanSeek() override;
+  bool CanSeek() const override;
   void Seek(bool bPlus = true, bool bLargeStep = false, bool bChapterOverride = false) override;
   void SeekPercentage(float fPercent = 0.0f) override;
   void SetVolume(float volume) override;
@@ -47,15 +47,13 @@ public:
   void SetSpeed(float speed = 0) override;
   int GetCacheLevel() const override;
   void SetTotalTime(int64_t time) override;
-  void GetAudioStreamInfo(int index, AudioStreamInfo &info) override;
+  void GetAudioStreamInfo(int index, AudioStreamInfo& info) const override;
   void SetTime(int64_t time) override;
   void SeekTime(int64_t iTime = 0) override;
-  void GetAudioCapabilities(std::vector<int> &audioCaps) override {}
+  void GetAudioCapabilities(std::vector<int>& audioCaps) const override {}
 
-  int GetAudioStreamCount() override { return 1; }
+  int GetAudioStreamCount() const override { return 1; }
   int GetAudioStream() override { return 0; }
-
-  static bool HandlesType(const std::string &type);
 
   // implementation of IJobCallback
   void OnJobComplete(unsigned int jobID, bool success, CJob *job) override;
@@ -83,7 +81,7 @@ protected:
 private:
   struct StreamInfo
   {
-    CFileItem m_fileItem;
+    std::unique_ptr<CFileItem> m_fileItem;
     std::unique_ptr<CFileItem> m_nextFileItem;
     CAudioDecoder m_decoder;             /* the stream decoder */
     int64_t m_startOffset;               /* the stream start offset */
@@ -104,7 +102,7 @@ private:
     int m_seekNextAtFrame;               /* the FF/RR sample to seek at */
     int m_seekFrame;                     /* the exact position to seek too, -1 for none */
 
-    IAEStream* m_stream;                 /* the playback stream */
+    IAE::StreamPtr m_stream; /* the playback stream */
     float m_volume;                      /* the initial volume level to set the stream to on creation */
 
     bool m_isSlaved;                     /* true if the stream has been slaved to another */
@@ -113,15 +111,15 @@ private:
 
   typedef std::list<StreamInfo*> StreamList;
 
-  bool                m_signalSpeedChange;   /* true if OnPlaybackSpeedChange needs to be called */
+  bool m_signalSpeedChange = false; /* true if OnPlaybackSpeedChange needs to be called */
   bool m_signalStarted = true;
   std::atomic_int m_playbackSpeed;           /* the playback speed (1 = normal) */
-  bool                m_isPlaying;
-  bool                m_isPaused;
-  bool                m_isFinished;          /* if there are no more songs in the queue */
+  bool m_isPlaying = false;
+  bool m_isPaused = false;
+  bool m_isFinished = false; /* if there are no more songs in the queue */
   bool m_fullScreen;
-  unsigned int        m_defaultCrossfadeMS;  /* how long the default crossfade is in ms */
-  unsigned int        m_upcomingCrossfadeMS; /* how long the upcoming crossfade is in ms */
+  unsigned int m_defaultCrossfadeMS = 0; /* how long the default crossfade is in ms */
+  unsigned int m_upcomingCrossfadeMS = 0; /* how long the upcoming crossfade is in ms */
   CEvent              m_startEvent;          /* event for playback start */
   StreamInfo* m_currentStream = nullptr;
   IAudioCallback*     m_audioCallback;       /* the viz audio callback */
@@ -129,10 +127,10 @@ private:
   CCriticalSection    m_streamsLock;         /* lock for the stream list */
   StreamList          m_streams;             /* playing streams */
   StreamList          m_finishing;           /* finishing streams */
-  int                 m_jobCounter;
+  int m_jobCounter = 0;
   CEvent              m_jobEvent;
-  int64_t             m_newForcedPlayerTime;
-  int64_t             m_newForcedTotalTime;
+  int64_t m_newForcedPlayerTime = -1;
+  int64_t m_newForcedTotalTime = -1;
   std::unique_ptr<CProcessInfo> m_processInfo;
 
   bool QueueNextFileEx(const CFileItem &file, bool fadeIn);

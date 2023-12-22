@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Thai (Thailand) (http://www.transifex.com/projects/p/kodi-main/language/th_TH/)\n"
+"PO-Revision-Date: 2022-07-01 08:26+0000\n"
+"Last-Translator: Christian Gade <gade@kodi.tv>\n"
+"Language-Team: Thai <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/th_th/>\n"
+"Language: th_th\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: th_TH\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Weblate 4.13\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "หน้าตาสำหรับอุปกรณ์สัมผัส"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "หน้าตาที่ออกแบบมาเพื่อใช้งานบนอุปกรณ์หน้าจอสัมผัส เช่น แท็บเล็ตและสมาร์ทโฟน"
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -56,26 +65,35 @@ msgctxt "#31014"
 msgid "Episodes"
 msgstr "ตอน"
 
+msgctxt "#31015"
+msgid "Player info"
+msgstr ""
+
 msgctxt "#31016"
 msgid "Albums"
 msgstr "อัลบั้ม"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "ข้อมูล PVR"
+msgid "PVR"
+msgstr ""
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "ข้อมูลการดำเนินการของตัวเล่น"
+msgid "Player"
+msgstr "ตัวเล่น"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "ตัวถอดรหัสวิดีโอ"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "รูปแบบพิกเซล"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
 msgstr "หน่วยความจำของระบบที่ใช้"
@@ -86,7 +104,7 @@ msgstr "หน้า"
 
 msgctxt "#31030"
 msgid "Info List"
-msgstr "ข้อมูล รายชื่อ "
+msgstr "ข้อมูล รายชื่อ"
 
 msgctxt "#31038"
 msgid "Login"
@@ -95,6 +113,18 @@ msgstr "ลงชื่อเข้าใช้"
 msgctxt "#31039"
 msgid "Updated:"
 msgstr "อัพเดต:"
+
+msgctxt "#31040"
+msgid "Select + X"
+msgstr ""
+
+msgctxt "#31041"
+msgid "Select + B"
+msgstr ""
+
+msgctxt "#31042"
+msgid "Select + Start"
+msgstr ""
 
 msgctxt "#31043"
 msgid "PAUSED"
@@ -118,11 +148,11 @@ msgstr "เวลาสิ้นสุด"
 
 msgctxt "#31050"
 msgid "Sort: Ascending"
-msgstr "เรียง: น้อยไปมาก"
+msgstr "เรียง: มากไปน้อย"
 
 msgctxt "#31051"
 msgid "Sort: Descending"
-msgstr "เรียง: มากไปน้อย"
+msgstr "เรียง: น้อยไปมาก"
 
 msgctxt "#31055"
 msgid "Open playlist"
@@ -209,7 +239,7 @@ msgid "Configure & manage media sharing services · Configure & manage the weath
 msgstr "การกำหนดค่า & จัดการบริการแบ่งปันสื่อ · การกำหนดค่า & จัดการบริการสภาพอากาศ"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+msgid "Configure display · Configure audio · Configure internet access · Configure power saving · Configure logging"
 msgstr "การกำหนดค่าการแสดงผล · การกำหนดค่าเสียง · กำหนดค่าการเข้าถึงอินเทอร์เน็ต · กำหนดค่าการประหยัดพลังงาน · กำหนดค่าการเข้าสู่ระบบ"
 
 msgctxt "#31407"
@@ -312,6 +342,67 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "แสดงที่ลบไป"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "ตัวแปลงสัญญาณวิดีโอ"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "ความละเอียดภาพยนต์"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "ลักษณะวิดีโอ"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr ""
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "ตัวแปลงสัญญาณเสียง"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "ช่องเสียง"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr ""
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "ความละเอียดหน้าจอ"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr ""
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "การใช้งานซีพียูของระบบ"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "สื่อ"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "ระบบ"
+
 msgctxt "#31900"
 msgid "First Run"
 msgstr "เล่นครั้งแรก"
@@ -331,3 +422,15 @@ msgstr "เมื่อคุณทำการเล่นเสียงหร
 msgctxt "#31904"
 msgid "Now Playing Title..."
 msgstr "ชื่อเรื่องที่กำลังเล่น..."
+
+#~ msgctxt "#31406"
+#~ msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+#~ msgstr "การกำหนดค่าการแสดงผล · การกำหนดค่าเสียง · กำหนดค่าการเข้าถึงอินเทอร์เน็ต · กำหนดค่าการประหยัดพลังงาน · กำหนดค่าการเข้าสู่ระบบ"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "ข้อมูล PVR"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "ข้อมูลการดำเนินการของตัวเล่น"

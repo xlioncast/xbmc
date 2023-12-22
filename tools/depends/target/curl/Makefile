@@ -1,25 +1,40 @@
-include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile
+include ../../Makefile.include CURL-VERSION ../../download-files.include
+DEPS = ../../Makefile.include Makefile CURL-VERSION ../../download-files.include
 
-# lib name, version
-LIBNAME=curl
-VERSION=7.68.0
-SOURCE=$(LIBNAME)-$(VERSION)
-ARCHIVE=$(SOURCE).tar.bz2
 # configuration settings
 CONFIGURE=cp -f $(CONFIG_SUB) $(CONFIG_GUESS) .; \
-          ./configure --prefix=$(PREFIX) --disable-shared --disable-ldap \
-          --without-libssh2 --disable-ntlm-wb --enable-ipv6 --without-librtmp \
-          --without-libidn2 --with-ca-fallback --with-ssl=$(PREFIX) --with-nghttp2=$(PREFIX)
+          ./configure --prefix=$(PREFIX) \
+                      --disable-shared \
+                      --disable-ldap \
+                      --without-libssh2 \
+                      --disable-ntlm-wb \
+                      --enable-ipv6 \
+                      --without-librtmp \
+                      --without-libidn2 \
+                      --with-ca-fallback \
+                      --with-ssl=$(PREFIX) \
+                      --with-nghttp2=$(PREFIX) \
+                      --with-zlib \
+                      --without-libpsl \
+                      --without-zstd \
+                      --without-brotli \
+                      --without-gssapi \
+                      --without-gsasl \
+                      --without-hyper \
+                      --without-ngtcp2 \
+                      --without-nghttp3 \
+                      --without-quiche \
+                      --without-msh3 \
+                      --without-gnutls \
+                      --without-nss \
+                      --without-mbedtls \
+                      --without-wolfssl
 
-LIBDYLIB=$(PLATFORM)/lib/.libs/lib$(LIBNAME).a
+LIBDYLIB=$(PLATFORM)/lib/.libs/$(BYPRODUCT)
 
 all: .installed-$(PLATFORM)
 
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); $(AUTORECONF) -vif

@@ -20,17 +20,14 @@
 
 #include "VideoPlayerRadioRDS.h"
 
-#include "Application.h"
-#include "DVDCodecs/DVDCodecs.h"
-#include "DVDCodecs/Video/DVDVideoCodecFFmpeg.h"
-#include "DVDDemuxers/DVDDemuxUtils.h"
-#include "DVDDemuxers/DVDFactoryDemuxer.h"
-#include "DVDInputStreams/DVDInputStream.h"
 #include "DVDStreamInfo.h"
 #include "GUIInfoManager.h"
 #include "GUIUserMessages.h"
+#include "Interface/DemuxPacket.h"
 #include "ServiceBroker.h"
-#include "cores/FFmpeg.h"
+#include "application/Application.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationVolumeHandling.h"
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "guilib/GUIComponent.h"
@@ -38,19 +35,21 @@
 #include "guilib/LocalizeStrings.h"
 #include "interfaces/AnnouncementManager.h"
 #include "music/tags/MusicInfoTag.h"
-#include "pictures/Picture.h"
 #include "pvr/channels/PVRChannel.h"
 #include "pvr/channels/PVRRadioRDSInfoTag.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SingleLock.h"
 #include "utils/CharsetConverter.h"
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 
+#include <mutex>
+
 using namespace XFILE;
 using namespace PVR;
 using namespace KODI::MESSAGING;
+
+using namespace std::chrono_literals;
 
 /**
  * Universal Encoder Communication Protocol (UECP)
@@ -501,18 +500,18 @@ CDVDRadioRDSData::CDVDRadioRDSData(CProcessInfo &processInfo)
   , m_speed(DVD_PLAYSPEED_NORMAL)
   , m_messageQueue("rds")
 {
-  CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - new %s", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - new {}", __FUNCTION__);
 
   m_messageQueue.SetMaxDataSize(40 * 256 * 1024);
 }
 
 CDVDRadioRDSData::~CDVDRadioRDSData()
 {
-  CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - delete %s", __FUNCTION__);
+  CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - delete {}", __FUNCTION__);
   StopThread();
 }
 
-bool CDVDRadioRDSData::CheckStream(CDVDStreamInfo &hints)
+bool CDVDRadioRDSData::CheckStream(const CDVDStreamInfo& hints)
 {
   if (hints.type == STREAM_RADIO_RDS)
     return true;
@@ -553,7 +552,7 @@ void CDVDRadioRDSData::CloseStream(bool bWaitForBuffers)
 
 void CDVDRadioRDSData::ResetRDSCache()
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   m_currentFileUpdate = false;
 
@@ -571,14 +570,6 @@ void CDVDRadioRDSData::ResetRDSCache()
 
   m_EPP_TM_INFO_ExtendedCountryCode = 0;
 
-  m_PS_Present = false;
-  m_PS_Index = 0;
-  for (auto& text : m_PS_Text)
-  {
-    memset(text, 0x20, 8);
-    text[8] = 0;
-  }
-
   m_DI_IsStereo = true;
   m_DI_ArtificialHead = false;
   m_DI_Compressed = false;
@@ -594,16 +585,9 @@ void CDVDRadioRDSData::ResetRDSCache()
   m_PTYN[8] = 0;
   m_PTYN_Present = false;
 
-  m_RT_Present = false;
-  m_RT_MaxSize = 4;
   m_RT_NewItem = false;
-  m_RT_Index = 0;
-  for (int i = 0; i < 5; ++i)
-    memset(m_RT_Text[i], 0, RT_MEL);
-  m_RT.clear();
 
   m_RTPlus_TToggle = false;
-  m_RTPlus_Present = false;
   m_RTPlus_Show = false;
   m_RTPlus_iToggle = 0;
   m_RTPlus_ItemToggle = 1;
@@ -628,9 +612,9 @@ void CDVDRadioRDSData::Process()
 
   while (!m_bStop)
   {
-    CDVDMsg* pMsg;
+    std::shared_ptr<CDVDMsg> pMsg;
     int iPriority = (m_speed == DVD_PLAYSPEED_PAUSE) ? 1 : 0;
-    MsgQueueReturnCode ret = m_messageQueue.Get(&pMsg, 2000, iPriority);
+    MsgQueueReturnCode ret = m_messageQueue.Get(pMsg, 2s, iPriority);
 
     if (ret == MSGQ_TIMEOUT)
     {
@@ -640,28 +624,29 @@ void CDVDRadioRDSData::Process()
 
     if (MSGQ_IS_ERROR(ret))
     {
-      CLog::Log(LOGERROR, "Got MSGQ_ABORT or MSGO_IS_ERROR return true (%i)", ret);
+      if (!m_messageQueue.ReceivedAbortRequest())
+        CLog::Log(LOGERROR, "MSGQ_IS_ERROR returned true ({})", ret);
+
       break;
     }
 
     if (pMsg->IsType(CDVDMsg::DEMUXER_PACKET))
     {
-      CSingleLock lock(m_critSection);
+      std::unique_lock<CCriticalSection> lock(m_critSection);
 
-      DemuxPacket* pPacket = static_cast<CDVDMsgDemuxerPacket*>(pMsg)->GetPacket();
+      DemuxPacket* pPacket = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg)->GetPacket();
 
       ProcessUECP(pPacket->pData, pPacket->iSize);
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_SETSPEED))
     {
-      m_speed = static_cast<CDVDMsgInt*>(pMsg)->m_value;
+      m_speed = std::static_pointer_cast<CDVDMsgInt>(pMsg)->m_value;
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH)
           || pMsg->IsType(CDVDMsg::GENERAL_RESET))
     {
       ResetRDSCache();
     }
-    pMsg->Release();
   }
 }
 
@@ -673,54 +658,12 @@ void CDVDRadioRDSData::Flush()
   /* and any demux packet that has been taken out of queue need to */
   /* be disposed of before we flush */
   m_messageQueue.Flush();
-  m_messageQueue.Put(new CDVDMsg(CDVDMsg::GENERAL_FLUSH));
+  m_messageQueue.Put(std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH));
 }
 
 void CDVDRadioRDSData::OnExit()
 {
   CLog::Log(LOGINFO, "Radio UECP (RDS) Processor - thread end");
-}
-
-std::string CDVDRadioRDSData::GetRadioText(unsigned int line)
-{
-  std::string str = "";
-
-  if (m_RT_Present)
-  {
-    if (line > MAX_RADIOTEXT_LISTSIZE)
-      return "";
-
-    if ((int)line+1 > m_RT_MaxSize)
-    {
-      m_RT_MaxSize = line+1;
-      return "";
-    }
-    if (m_RT.size() <= line)
-      return "";
-
-    return m_RT[line];
-  }
-  else if (m_PS_Present)
-  {
-    std::string temp = "";
-    int ind = (m_PS_Index == 0) ? 11 : m_PS_Index - 1;
-    for (int i = ind+1; i < PS_TEXT_ENTRIES; ++i)
-    {
-      temp += m_PS_Text[i];
-      temp += ' ';
-    }
-    for (int i = 0; i <= ind; ++i)
-    {
-      temp += m_PS_Text[i];
-      temp += ' ';
-    }
-
-    if (line == 0)
-      str.insert(0, temp, 6*9, 6*9);
-    else if (line == 1)
-      str.insert(0, temp.c_str(), 6*9);
-  }
-  return str;
 }
 
 void CDVDRadioRDSData::SetRadioStyle(const std::string& genre)
@@ -729,7 +672,8 @@ void CDVDRadioRDSData::SetRadioStyle(const std::string& genre)
   m_currentInfoTag->SetProgStyle(genre);
   m_currentFileUpdate = true;
 
-  CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - %s - Stream genre set to %s", __FUNCTION__, genre.c_str());
+  CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - {} - Stream genre set to {}", __FUNCTION__,
+            genre);
 }
 
 void CDVDRadioRDSData::ProcessUECP(const unsigned char *data, unsigned int len)
@@ -786,8 +730,10 @@ void CDVDRadioRDSData::ProcessUECP(const unsigned char *data, unsigned int len)
         unsigned short crc16 = crc16_ccitt(m_UECPData, m_UECPDataIndex-3, true);
         if (crc16 != (m_UECPData[m_UECPDataIndex-2]<<8) + m_UECPData[m_UECPDataIndex-1])
         {
-          CLog::Log(LOGERROR, "Radio UECP (RDS) Processor - Error(TS): wrong CRC # calc = %04x <> transmit = %02x%02x",
-                            crc16, m_UECPData[m_UECPDataIndex-2], m_UECPData[m_UECPDataIndex-1]);
+          CLog::Log(LOGERROR,
+                    "Radio UECP (RDS) Processor - Error(TS): wrong CRC # calc = {:04x} <> transmit "
+                    "= {:02x}{:02x}",
+                    crc16, m_UECPData[m_UECPDataIndex - 2], m_UECPData[m_UECPDataIndex - 1]);
         }
         else
         {
@@ -851,7 +797,7 @@ void CDVDRadioRDSData::ProcessUECP(const unsigned char *data, unsigned int len)
   }
 }
 
-unsigned int CDVDRadioRDSData::DecodePI(uint8_t *msgElement)
+unsigned int CDVDRadioRDSData::DecodePI(const uint8_t* msgElement)
 {
   uint16_t PICode = (msgElement[3] << 8) | msgElement[4];
   if (m_PI_Current != PICode)
@@ -862,7 +808,10 @@ unsigned int CDVDRadioRDSData::DecodePI(uint8_t *msgElement)
     m_PI_ProgramType             = (m_PI_Current>>8) & 0x0F;
     m_PI_ProgramReferenceNumber  = m_PI_Current & 0xFF;
 
-    CLog::Log(LOGINFO, "Radio UECP (RDS) Processor - PI code changed to Country %X, Type %X and reference no. %i", m_PI_CountryCode, m_PI_ProgramType, m_PI_ProgramReferenceNumber);
+    CLog::Log(LOGINFO,
+              "Radio UECP (RDS) Processor - PI code changed to Country {:X}, Type {:X} and "
+              "reference no. {}",
+              m_PI_CountryCode, m_PI_ProgramType, m_PI_ProgramReferenceNumber);
   }
 
   return 5;
@@ -872,56 +821,62 @@ unsigned int CDVDRadioRDSData::DecodePS(uint8_t *msgElement)
 {
   uint8_t *text = msgElement+3;
 
+  char decodedText[9] = {};
   for (int i = 0; i < 8; ++i)
   {
     if (text[i] <= 0xfe)
-      m_PS_Text[m_PS_Index][i] = (text[i] >= 0x80) ? sRDSAddChar[text[i]-0x80] : text[i]; //!< additional rds-character, see RBDS-Standard, Annex E
+      decodedText[i] = (text[i] >= 0x80)
+                           ? sRDSAddChar[text[i] - 0x80]
+                           : text[i]; //!< additional rds-character, see RBDS-Standard, Annex E
   }
 
-  ++m_PS_Index;
-  if (m_PS_Index >= PS_TEXT_ENTRIES)
-    m_PS_Index = 0;
+  m_currentInfoTag->SetProgramServiceText(decodedText);
 
-  m_PS_Present = true;
   return 11;
 }
 
-unsigned int CDVDRadioRDSData::DecodeDI(uint8_t *msgElement)
+unsigned int CDVDRadioRDSData::DecodeDI(const uint8_t* msgElement)
 {
   bool value;
 
   value = (msgElement[3] & 1) != 0;
   if (m_DI_IsStereo != value)
   {
-    CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - %s - Stream changed over to %s", __FUNCTION__, value ? "Stereo" : "Mono");
+    CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - {} - Stream changed over to {}", __FUNCTION__,
+              value ? "Stereo" : "Mono");
     m_DI_IsStereo = value;
   }
 
   value = (msgElement[3] & 2) != 0;
   if (m_DI_ArtificialHead != value)
   {
-    CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - %s - Stream changed over to %sArtificial Head", __FUNCTION__, value ? "" : "Not ");
+    CLog::Log(LOGDEBUG,
+              "Radio UECP (RDS) Processor - {} - Stream changed over to {}Artificial Head",
+              __FUNCTION__, value ? "" : "Not ");
     m_DI_ArtificialHead = value;
   }
 
   value = (msgElement[3] & 4) != 0;
   if (m_DI_ArtificialHead != value)
   {
-    CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - %s - Stream changed over to %sCompressed Head", __FUNCTION__, value ? "" : "Not ");
+    CLog::Log(LOGDEBUG,
+              "Radio UECP (RDS) Processor - {} - Stream changed over to {}Compressed Head",
+              __FUNCTION__, value ? "" : "Not ");
     m_DI_ArtificialHead = value;
   }
 
   value = (msgElement[3] & 8) != 0;
   if (m_DI_DynamicPTY != value)
   {
-    CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - %s - Stream changed over to %s PTY", __FUNCTION__, value ? "dynamic" : "static");
+    CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - {} - Stream changed over to {} PTY",
+              __FUNCTION__, value ? "dynamic" : "static");
     m_DI_DynamicPTY = value;
   }
 
   return 4;
 }
 
-unsigned int CDVDRadioRDSData::DecodeTA_TP(uint8_t *msgElement)
+unsigned int CDVDRadioRDSData::DecodeTA_TP(const uint8_t* msgElement)
 {
   uint8_t dsn = msgElement[1];
   bool traffic_announcement = (msgElement[3] & 1) != 0;
@@ -931,10 +886,12 @@ unsigned int CDVDRadioRDSData::DecodeTA_TP(uint8_t *msgElement)
   {
     CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Warning, g_localizeStrings.Get(19021), g_localizeStrings.Get(29930));
     m_TA_TP_TrafficAdvisory = true;
-    m_TA_TP_TrafficVolume = g_application.GetVolumePercent();
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
+    m_TA_TP_TrafficVolume = appVolume->GetVolumePercent();
     float trafAdvVol = (float)CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt("pvrplayback.trafficadvisoryvolume");
     if (trafAdvVol)
-      g_application.SetVolume(m_TA_TP_TrafficVolume+trafAdvVol);
+      appVolume->SetVolume(m_TA_TP_TrafficVolume + trafAdvVol);
 
     CVariant data(CVariant::VariantTypeObject);
     data["on"] = true;
@@ -944,7 +901,9 @@ unsigned int CDVDRadioRDSData::DecodeTA_TP(uint8_t *msgElement)
   if (!traffic_announcement && m_TA_TP_TrafficAdvisory && CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool("pvrplayback.trafficadvisory"))
   {
     m_TA_TP_TrafficAdvisory = false;
-    g_application.SetVolume(m_TA_TP_TrafficVolume);
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
+    appVolume->SetVolume(m_TA_TP_TrafficVolume);
 
     CVariant data(CVariant::VariantTypeObject);
     data["on"] = false;
@@ -954,13 +913,14 @@ unsigned int CDVDRadioRDSData::DecodeTA_TP(uint8_t *msgElement)
   return 4;
 }
 
-unsigned int CDVDRadioRDSData::DecodeMS(uint8_t *msgElement)
+unsigned int CDVDRadioRDSData::DecodeMS(const uint8_t* msgElement)
 {
   bool speechActive = msgElement[3] == 0;
   if (m_MS_SpeechActive != speechActive)
   {
     m_currentInfoTag->SetSpeechActive(m_MS_SpeechActive);
-    CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - %s - Stream changed over to %s", __FUNCTION__, speechActive ? "Speech" : "Music");
+    CLog::Log(LOGDEBUG, "Radio UECP (RDS) Processor - {} - Stream changed over to {}", __FUNCTION__,
+              speechActive ? "Speech" : "Music");
     m_MS_SpeechActive = speechActive;
   }
 
@@ -1009,7 +969,7 @@ pty_skin_info pty_skin_info_table[32][2] =
   { { "alarm-alarm",    29971 }, { "alarm-alarm",     29971 } }
 };
 
-unsigned int CDVDRadioRDSData::DecodePTY(uint8_t *msgElement)
+unsigned int CDVDRadioRDSData::DecodePTY(const uint8_t* msgElement)
 {
   int pty = msgElement[3];
   if (pty >= 0 && pty < 32 && m_PTY != pty)
@@ -1048,7 +1008,8 @@ unsigned int CDVDRadioRDSData::DecodePTYN(uint8_t *msgElement)
 
   if (!m_RTPlus_GenrePresent)
   {
-    std::string progTypeName = StringUtils::Format("%s: %s", g_localizeStrings.Get(pty_skin_info_table[m_PTY][m_RDS_IsRBDS].name).c_str(), m_PTYN);
+    std::string progTypeName = StringUtils::Format(
+        "{}: {}", g_localizeStrings.Get(pty_skin_info_table[m_PTY][m_RDS_IsRBDS].name), m_PTYN);
     SetRadioStyle(progTypeName);
   }
 
@@ -1068,28 +1029,21 @@ inline void rtrim_str(std::string &text)
 
 unsigned int CDVDRadioRDSData::DecodeRT(uint8_t *msgElement, unsigned int len)
 {
-  if (!m_RT_Present)
-  {
-    m_currentInfoTag->SetPlayingRadiotext(true);
-    m_RT_Present = true;
-  }
+  m_currentInfoTag->SetPlayingRadioText(true);
 
   int bufConf = (msgElement[UECP_ME_DATA] >> 5) & 0x03;
   unsigned int msgLength = msgElement[UECP_ME_MEL];
   if (msgLength > len-2)
   {
     CLog::Log(LOGERROR,
-              "Radio UECP (RDS) - %s - RT-Error: Length=0 or not correct (MFL= %d, MEL= %d)",
+              "Radio UECP (RDS) - {} - RT-Error: Length=0 or not correct (MFL= {}, MEL= {})",
               __FUNCTION__, len, msgLength);
     m_UECPDataDeadBreak = true;
     return 0;
   }
   else if (msgLength == 0 || (msgLength == 1 && bufConf == 0))
   {
-    m_RT.clear();
-    m_RT_Index = 0;
-    for (int i = 0; i < 5; ++i)
-      memset(m_RT_Text[i], 0, RT_MEL);
+    return msgLength + 4;
   }
   else
   {
@@ -1105,32 +1059,12 @@ unsigned int CDVDRadioRDSData::DecodeRT(uint8_t *msgElement, unsigned int len)
       if (msgElement[UECP_ME_DATA+i] <= 0xfe) // additional rds-character, see RBDS-Standard, Annex E
         temptext[ii++] = (msgElement[UECP_ME_DATA+i] >= 0x80) ? sRDSAddChar[msgElement[UECP_ME_DATA+i]-0x80] : msgElement[UECP_ME_DATA+i];
     }
+
     memcpy(m_RTPlus_WorkText, temptext, RT_MEL);
     rds_entitychar(temptext);
 
-    // check repeats
-    bool repeat = false;
-    for (int ind = 0; ind < m_RT_MaxSize; ++ind)
-    {
-      if (memcmp(m_RT_Text[ind], temptext, RT_MEL) == 0)
-        repeat = true;
-    }
-    if (!repeat)
-    {
-      memcpy(m_RT_Text[m_RT_Index], temptext, RT_MEL);
+    m_currentInfoTag->SetRadioText(temptext);
 
-      std::string rdsline = m_RT_Text[m_RT_Index];
-      rtrim_str(rdsline);
-      g_charsetConverter.unknownToUTF8(rdsline);
-      m_RT.push_front(StringUtils::Trim(rdsline));
-
-      if ((int)m_RT.size() > m_RT_MaxSize)
-        m_RT.pop_back();
-
-      ++m_RT_Index;
-      if (m_RT_Index >= m_RT_MaxSize)
-        m_RT_Index = 0;
-    }
     m_RTPlus_iToggle = 0x03;     // Bit 0/1 = Title/Artist
   }
   return msgLength+4;
@@ -1166,10 +1100,14 @@ unsigned int CDVDRadioRDSData::DecodeRTC(uint8_t *msgElement)
   m_RTC_DateTime.SetDateTime(msgElement[UECP_CLOCK_YEAR], msgElement[UECP_CLOCK_MONTH], msgElement[UECP_CLOCK_DAY],
                             hours, minutes, msgElement[UECP_CLOCK_SECONDS]);
 
-  CLog::Log(LOGDEBUG, "Radio UECP (RDS) - %s - Current RDS Data Time: %02i.%02i.%02i - UTC: %02i:%02i:%02i,0.%is - Local: %c%i min",
-                        __FUNCTION__, msgElement[UECP_CLOCK_DAY],   msgElement[UECP_CLOCK_MONTH],   msgElement[UECP_CLOCK_YEAR],
-                                      msgElement[UECP_CLOCK_HOURS], msgElement[UECP_CLOCK_MINUTES], msgElement[UECP_CLOCK_SECONDS],
-                                      msgElement[UECP_CLOCK_CENTSEC], minus ? '-' : '+', msgElement[UECP_CLOCK_LOCALOFFSET]*30);
+  CLog::Log(LOGDEBUG,
+            "Radio UECP (RDS) - {} - Current RDS Data Time: {:02}.{:02}.{:02} - UTC: "
+            "{:02}:{:02}:{:02},0.{}s - Local: {}{} min",
+            __FUNCTION__, msgElement[UECP_CLOCK_DAY], msgElement[UECP_CLOCK_MONTH],
+            msgElement[UECP_CLOCK_YEAR], msgElement[UECP_CLOCK_HOURS],
+            msgElement[UECP_CLOCK_MINUTES], msgElement[UECP_CLOCK_SECONDS],
+            msgElement[UECP_CLOCK_CENTSEC], minus ? '-' : '+',
+            msgElement[UECP_CLOCK_LOCALOFFSET] * 30);
 
   CVariant data(CVariant::VariantTypeObject);
   data["dateTime"] = (m_RTC_DateTime.IsValid()) ? m_RTC_DateTime.GetAsRFC1123DateTime() : "";
@@ -1212,15 +1150,12 @@ unsigned int CDVDRadioRDSData::DecodeRTPlus(uint8_t *msgElement, unsigned int le
   if (m_RTPlus_iToggle == 0)    // RTplus tags V2.1, only if RT
     return 10;
 
-  if (!m_RTPlus_Present)
-  {
-    m_currentInfoTag->SetPlayingRadiotextPlus(true);
-    m_RTPlus_Present = true;
-  }
+  m_currentInfoTag->SetPlayingRadioTextPlus(true);
 
   if (msgElement[1] > len-2 || msgElement[1] != 8)  // byte 6 = MEL, only 8 byte for 2 tags
   {
-    CLog::Log(LOGERROR, "Radio UECP (RDS) - %s - RTp-Error: Length not correct (MEL= %d)", __FUNCTION__, msgElement[1]);
+    CLog::Log(LOGERROR, "Radio UECP (RDS) - {} - RTp-Error: Length not correct (MEL= {})",
+              __FUNCTION__, msgElement[1]);
     m_UECPDataDeadBreak = true;
     return 0;
   }
@@ -1249,7 +1184,10 @@ unsigned int CDVDRadioRDSData::DecodeRTPlus(uint8_t *msgElement, unsigned int le
   {
     if (rtp_start[i]+rtp_len[i]+1 >= RT_MEL)  // length-error
     {
-      CLog::Log(LOGERROR, "Radio UECP (RDS) - %s - (tag#%d = Typ/Start/Len): %d/%d/%d (Start+Length > 'RT-MEL' !)", __FUNCTION__, i+1, rtp_typ[i], rtp_start[i], rtp_len[i]);
+      CLog::Log(
+          LOGERROR,
+          "Radio UECP (RDS) - {} - (tag#{} = Typ/Start/Len): {}/{}/{} (Start+Length > 'RT-MEL' !)",
+          __FUNCTION__, i + 1, rtp_typ[i], rtp_start[i], rtp_len[i]);
     }
     else
     {
@@ -1430,7 +1368,7 @@ unsigned int CDVDRadioRDSData::DecodeRTPlus(uint8_t *msgElement, unsigned int le
           printf("  RTp-Unkn. : %02i - %s\n", rtp_typ[i], m_RTPlus_Temptext);
           break;
 #endif // RDS_IMPROVE_CHECK
-        /// Unused and not needed data informations
+        /// Unused and not needed data information
         case RTPLUS_STATIONNAME_SHORT:  //!< Must be rechecked under DAB
         case RTPLUS_INFO_DATE_TIME:
           break;
@@ -1523,7 +1461,7 @@ unsigned int CDVDRadioRDSData::DecodeTMC(uint8_t *msgElement, unsigned int len)
   return msgElementLength + 2;
 }
 
-unsigned int CDVDRadioRDSData::DecodeEPPTransmitterInfo(uint8_t *msgElement)
+unsigned int CDVDRadioRDSData::DecodeEPPTransmitterInfo(const uint8_t* msgElement)
 {
   if (!m_RDS_SlowLabelingCodesPresent && m_PI_CountryCode != 0)
   {
@@ -1531,7 +1469,8 @@ unsigned int CDVDRadioRDSData::DecodeEPPTransmitterInfo(uint8_t *msgElement)
     int codeLow  = msgElement[2]&0x0F;
     if (codeLow > 7)
     {
-      CLog::Log(LOGERROR, "Radio RDS - %s - invalid country code 0x%02X%02X", __FUNCTION__, codeHigh, codeLow);
+      CLog::Log(LOGERROR, "Radio RDS - {} - invalid country code {:#02X}{:02X}", __FUNCTION__,
+                codeHigh, codeLow);
       return 7;
     }
 
@@ -1551,11 +1490,13 @@ unsigned int CDVDRadioRDSData::DecodeEPPTransmitterInfo(uint8_t *msgElement)
         countryName = piCountryCodes_F[m_PI_CountryCode-1][codeLow];
         break;
       default:
-        CLog::Log(LOGERROR, "Radio RDS - %s - invalid extended country region code:%02X%02X", __FUNCTION__, codeHigh, codeLow);
+        CLog::Log(LOGERROR, "Radio RDS - {} - invalid extended country region code:{:02X}{:02X}",
+                  __FUNCTION__, codeHigh, codeLow);
         return 7;
     }
 
-    m_RDS_IsRBDS = countryName == "US" ? true : false;
+    // The United States, Canada, and Mexico use the RBDS standard
+    m_RDS_IsRBDS = (countryName == "US" || countryName == "CA" || countryName == "MX");
 
     m_currentInfoTag->SetCountry(countryName);
   }
@@ -1574,7 +1515,7 @@ unsigned int CDVDRadioRDSData::DecodeEPPTransmitterInfo(uint8_t *msgElement)
 #define VARCODE_LANGUAGE_CODES          3
 #define VARCODE_OWN_BROADCASTER         6
 #define VARCODE_EWS_CHANNEL_IDENT       7
-unsigned int CDVDRadioRDSData::DecodeSlowLabelingCodes(uint8_t *msgElement)
+unsigned int CDVDRadioRDSData::DecodeSlowLabelingCodes(const uint8_t* msgElement)
 {
   uint16_t slowLabellingCode = (msgElement[2]<<8 | msgElement[3]) & 0xfff;
   int      VariantCode       = (msgElement[2]>>4) & 0x7;
@@ -1591,7 +1532,8 @@ unsigned int CDVDRadioRDSData::DecodeSlowLabelingCodes(uint8_t *msgElement)
         int codeLow     = slowLabellingCode&0x0F;
         if (codeLow > 5)
         {
-          CLog::Log(LOGERROR, "Radio RDS - %s - invalid country code 0x%02X%02X", __FUNCTION__, codeHigh, codeLow);
+          CLog::Log(LOGERROR, "Radio RDS - {} - invalid country code {:#02X}{:02X}", __FUNCTION__,
+                    codeHigh, codeLow);
           return 4;
         }
 
@@ -1611,7 +1553,9 @@ unsigned int CDVDRadioRDSData::DecodeSlowLabelingCodes(uint8_t *msgElement)
             countryName = piCountryCodes_F[m_PI_CountryCode-1][codeLow];
             break;
           default:
-            CLog::Log(LOGERROR, "Radio RDS - %s - invalid extended country region code:%02X%02X", __FUNCTION__, codeHigh, codeLow);
+            CLog::Log(LOGERROR,
+                      "Radio RDS - {} - invalid extended country region code:{:02X}{:02X}",
+                      __FUNCTION__, codeHigh, codeLow);
             return 4;
         }
 
@@ -1623,7 +1567,8 @@ unsigned int CDVDRadioRDSData::DecodeSlowLabelingCodes(uint8_t *msgElement)
       if (slowLabellingCode > 1 && slowLabellingCode < 0x80)
         m_currentInfoTag->SetLanguage(piRDSLanguageCodes[slowLabellingCode]);
       else
-        CLog::Log(LOGERROR, "Radio RDS - %s - invalid language code %i", __FUNCTION__, slowLabellingCode);
+        CLog::Log(LOGERROR, "Radio RDS - {} - invalid language code {}", __FUNCTION__,
+                  slowLabellingCode);
       break;
 
     case VARCODE_TMC_IDENT:           // TMC identification
@@ -1641,7 +1586,7 @@ unsigned int CDVDRadioRDSData::DecodeSlowLabelingCodes(uint8_t *msgElement)
 /*!
  * currently unused need to be checked on DAB, processed here to have length of it
  */
-unsigned int CDVDRadioRDSData::DecodeDABDynLabelCmd(uint8_t *msgElement, unsigned int len)
+unsigned int CDVDRadioRDSData::DecodeDABDynLabelCmd(const uint8_t* msgElement, unsigned int len)
 {
   unsigned int msgElementLength = msgElement[1];
   if (msgElementLength < 1 || msgElementLength + 2 > len)
@@ -1656,7 +1601,7 @@ unsigned int CDVDRadioRDSData::DecodeDABDynLabelCmd(uint8_t *msgElement, unsigne
 /*!
  * currently unused need to be checked on DAB, processed here to have length of it
  */
-unsigned int CDVDRadioRDSData::DecodeDABDynLabelMsg(uint8_t *msgElement, unsigned int len)
+unsigned int CDVDRadioRDSData::DecodeDABDynLabelMsg(const uint8_t* msgElement, unsigned int len)
 {
   unsigned int msgElementLength = msgElement[1];
   if (msgElementLength < 2 || msgElementLength + 2 > len)

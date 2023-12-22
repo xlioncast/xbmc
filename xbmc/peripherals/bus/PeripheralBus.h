@@ -12,6 +12,7 @@
 #include "threads/Thread.h"
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 class CFileItemList;
@@ -47,7 +48,7 @@ public:
    */
   bool NeedsPolling(void) const
   {
-    CSingleLock lock(m_critSection);
+    std::unique_lock<CCriticalSection> lock(m_critSection);
     return m_bNeedsPolling;
   }
 
@@ -190,8 +191,9 @@ protected:
   virtual bool PerformDeviceScan(PeripheralScanResults& results) = 0;
 
   PeripheralVector m_peripherals;
-  int m_iRescanTime;
-  bool m_bNeedsPolling; /*!< true when this bus needs to be polled for new devices, false when it
+  std::chrono::milliseconds m_iRescanTime;
+  bool m_bNeedsPolling =
+      true; /*!< true when this bus needs to be polled for new devices, false when it
                            uses callbacks to notify this bus of changed */
   CPeripherals& m_manager;
   const PeripheralBusType m_type;

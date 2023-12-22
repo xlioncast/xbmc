@@ -54,7 +54,7 @@ bool CWinSystemWaylandEGLContextGLES::InitWindowSystem()
   m_vaapiProxy.reset(WAYLAND::VaapiProxyCreate());
   WAYLAND::VaapiProxyConfig(m_vaapiProxy.get(), GetConnection()->GetDisplay(),
                             m_eglContext.GetEGLDisplay());
-  WAYLAND::VAAPIRegisterRender(m_vaapiProxy.get(), general, deepColor);
+  WAYLAND::VAAPIRegisterRenderGLES(m_vaapiProxy.get(), general, deepColor);
   if (general)
   {
     WAYLAND::VAAPIRegister(m_vaapiProxy.get(), deepColor);
@@ -93,7 +93,7 @@ void CWinSystemWaylandEGLContextGLES::SetContextSize(CSizeInt size)
   // Propagate changed dimensions to render system if necessary
   if (CRenderSystemGLES::m_width != size.Width() || CRenderSystemGLES::m_height != size.Height())
   {
-    CLog::LogF(LOGDEBUG, "Resetting render system to %dx%d", size.Width(), size.Height());
+    CLog::LogF(LOGDEBUG, "Resetting render system to {}x{}", size.Width(), size.Height());
     CRenderSystemGLES::ResetRenderSystem(size.Width(), size.Height());
   }
 }

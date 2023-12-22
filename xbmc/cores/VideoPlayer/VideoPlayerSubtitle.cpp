@@ -15,19 +15,14 @@
 #include "DVDSubtitles/DVDSubtitleParser.h"
 #include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 
-#include "system.h"
+#include <mutex>
 
 CVideoPlayerSubtitle::CVideoPlayerSubtitle(CDVDOverlayContainer* pOverlayContainer, CProcessInfo &processInfo)
 : IDVDStreamPlayer(processInfo)
 {
   m_pOverlayContainer = pOverlayContainer;
-
-  m_pSubtitleFileParser = NULL;
-  m_pSubtitleStream = NULL;
-  m_pOverlayCodec = NULL;
   m_lastPts = DVD_NOPTS_VALUE;
 }
 
@@ -39,48 +34,47 @@ CVideoPlayerSubtitle::~CVideoPlayerSubtitle()
 
 void CVideoPlayerSubtitle::Flush()
 {
-  SendMessage(new CDVDMsg(CDVDMsg::GENERAL_FLUSH), 0);
+  SendMessage(std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH), 0);
 }
 
-void CVideoPlayerSubtitle::SendMessage(CDVDMsg* pMsg, int priority)
+void CVideoPlayerSubtitle::SendMessage(std::shared_ptr<CDVDMsg> pMsg, int priority)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   if (pMsg->IsType(CDVDMsg::DEMUXER_PACKET))
   {
-    CDVDMsgDemuxerPacket* pMsgDemuxerPacket = static_cast<CDVDMsgDemuxerPacket*>(pMsg);
+    auto pMsgDemuxerPacket = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg);
     DemuxPacket* pPacket = pMsgDemuxerPacket->GetPacket();
 
     if (m_pOverlayCodec)
     {
-      int result = m_pOverlayCodec->Decode(pPacket);
+      OverlayMessage result = m_pOverlayCodec->Decode(pPacket);
 
-      if(result == OC_OVERLAY)
+      if (result == OverlayMessage::OC_OVERLAY)
       {
-        CDVDOverlay* overlay;
+        std::shared_ptr<CDVDOverlay> overlay;
 
-        while((overlay = m_pOverlayCodec->GetOverlay()) != NULL)
+        while ((overlay = m_pOverlayCodec->GetOverlay()))
         {
           m_pOverlayContainer->ProcessAndAddOverlayIfValid(overlay);
-          overlay->Release();
         }
       }
     }
     else if (m_streaminfo.codec == AV_CODEC_ID_DVD_SUBTITLE)
     {
-      CDVDOverlaySpu* pSPUInfo = m_dvdspus.AddData(pPacket->pData, pPacket->iSize, pPacket->pts);
+      std::shared_ptr<CDVDOverlaySpu> pSPUInfo =
+          m_dvdspus.AddData(pPacket->pData, pPacket->iSize, pPacket->pts);
       if (pSPUInfo)
       {
         CLog::Log(LOGDEBUG, "CVideoPlayer::ProcessSubData: Got complete SPU packet");
         m_pOverlayContainer->ProcessAndAddOverlayIfValid(pSPUInfo);
-        pSPUInfo->Release();
       }
     }
 
   }
   else if( pMsg->IsType(CDVDMsg::SUBTITLE_CLUTCHANGE) )
   {
-    CDVDMsgSubtitleClutChange* pData = static_cast<CDVDMsgSubtitleClutChange*>(pMsg);
+    auto pData = std::static_pointer_cast<CDVDMsgSubtitleClutChange>(pMsg);
     for (int i = 0; i < 16; i++)
     {
       uint8_t* color = m_dvdspus.m_clut[i];
@@ -112,36 +106,36 @@ void CVideoPlayerSubtitle::SendMessage(CDVDMsg* pMsg, int priority)
 
     /* We must flush active overlays on flush or if we have a file
      * parser since it will re-populate active items.  */
-    if(pMsg->IsType(CDVDMsg::GENERAL_FLUSH) || m_pSubtitleFileParser)
-      m_pOverlayContainer->Clear();
+    if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH) || m_pSubtitleFileParser)
+      m_pOverlayContainer->Flush();
 
     m_lastPts = DVD_NOPTS_VALUE;
   }
-
-  pMsg->Release();
 }
 
 bool CVideoPlayerSubtitle::OpenStream(CDVDStreamInfo &hints, std::string &filename)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
-  CloseStream(true);
+  CloseStream(false);
   m_streaminfo = hints;
 
   // okey check if this is a filesubtitle
   if(filename.size() && filename != "dvd" )
   {
-    m_pSubtitleFileParser = CDVDFactorySubtitle::CreateParser(filename);
+    m_pSubtitleFileParser.reset(CDVDFactorySubtitle::CreateParser(filename));
     if (!m_pSubtitleFileParser)
     {
-      CLog::Log(LOGERROR, "%s - Unable to create subtitle parser", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - Unable to create subtitle parser", __FUNCTION__);
       CloseStream(true);
       return false;
     }
 
+    CLog::Log(LOGDEBUG, "Created subtitles parser: {}", m_pSubtitleFileParser->GetName());
+
     if (!m_pSubtitleFileParser->Open(hints))
     {
-      CLog::Log(LOGERROR, "%s - Unable to init subtitle parser", __FUNCTION__);
+      CLog::Log(LOGERROR, "{} - Unable to init subtitle parser", __FUNCTION__);
       CloseStream(true);
       return false;
     }
@@ -154,23 +148,22 @@ bool CVideoPlayerSubtitle::OpenStream(CDVDStreamInfo &hints, std::string &filena
     return true;
 
   m_pOverlayCodec = CDVDFactoryCodec::CreateOverlayCodec(hints);
-  if(m_pOverlayCodec)
+  if (m_pOverlayCodec)
+  {
+    CLog::Log(LOGDEBUG, "Created subtitles overlay codec: {}", m_pOverlayCodec->GetName());
     return true;
+  }
 
-  CLog::Log(LOGERROR, "%s - Unable to init overlay codec", __FUNCTION__);
+  CLog::Log(LOGERROR, "{} - Unable to init overlay codec", __FUNCTION__);
   return false;
 }
 
 void CVideoPlayerSubtitle::CloseStream(bool bWaitForBuffers)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
-  if(m_pSubtitleStream)
-    SAFE_DELETE(m_pSubtitleStream);
-  if(m_pSubtitleFileParser)
-    SAFE_DELETE(m_pSubtitleFileParser);
-  if(m_pOverlayCodec)
-    SAFE_DELETE(m_pOverlayCodec);
+  m_pSubtitleFileParser.reset();
+  m_pOverlayCodec.reset();
 
   m_dvdspus.FlushCurrentPacket();
 
@@ -180,7 +173,7 @@ void CVideoPlayerSubtitle::CloseStream(bool bWaitForBuffers)
 
 void CVideoPlayerSubtitle::Process(double pts, double offset)
 {
-  CSingleLock lock(m_section);
+  std::unique_lock<CCriticalSection> lock(m_section);
 
   if (m_pSubtitleFileParser)
   {
@@ -196,7 +189,7 @@ void CVideoPlayerSubtitle::Process(double pts, double offset)
     if(m_pOverlayContainer->GetSize() >= 5)
       return;
 
-    CDVDOverlay* pOverlay = m_pSubtitleFileParser->Parse(pts);
+    std::shared_ptr<CDVDOverlay> pOverlay = m_pSubtitleFileParser->Parse(pts);
     // add all overlays which fit the pts
     while(pOverlay)
     {
@@ -205,7 +198,6 @@ void CVideoPlayerSubtitle::Process(double pts, double offset)
         pOverlay->iPTSStopTime -= offset;
 
       m_pOverlayContainer->ProcessAndAddOverlayIfValid(pOverlay);
-      pOverlay->Release();
       pOverlay = m_pSubtitleFileParser->Parse(pts);
     }
 

@@ -12,29 +12,60 @@
 #include "AEStreamInfo.h"
 #include "utils/log.h"
 
+#include <array>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
-#define BURST_HEADER_SIZE       8
-#define TRUEHD_FRAME_OFFSET     2560
-#define MAT_MIDDLE_CODE_OFFSET -4
-#define MAT_FRAME_SIZE          61424
-#define EAC3_MAX_BURST_PAYLOAD_SIZE (24576 - BURST_HEADER_SIZE)
+extern "C"
+{
+#include <libavutil/intreadwrite.h>
+}
 
-CAEBitstreamPacker::CAEBitstreamPacker() :
-  m_trueHD   (NULL),
-  m_dtsHD    (NULL),
-  m_eac3     (NULL)
+namespace
+{
+constexpr auto BURST_HEADER_SIZE = 8;
+constexpr auto EAC3_MAX_BURST_PAYLOAD_SIZE = 24576 - BURST_HEADER_SIZE;
+
+constexpr auto MAT_PKT_OFFSET = 61440;
+constexpr auto MAT_FRAME_SIZE = 61424;
+
+/* magic MAT format values, meaning is unknown at this point */
+constexpr std::array<uint8_t, 20> mat_start_code = {
+    0x07, 0x9E, 0x00, 0x03, 0x84, 0x01, 0x01, 0x01, 0x80, 0x00,
+    0x56, 0xA5, 0x3B, 0xF4, 0x81, 0x83, 0x49, 0x80, 0x77, 0xE0,
+};
+
+constexpr std::array<uint8_t, 12> mat_middle_code = {
+    0xC3, 0xC1, 0x42, 0x49, 0x3B, 0xFA, 0x82, 0x83, 0x49, 0x80, 0x77, 0xE0,
+};
+
+constexpr std::array<uint8_t, 16> mat_end_code = {
+    0xC3, 0xC2, 0xC0, 0xC4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x97, 0x11,
+};
+
+struct MatCode
+{
+  int pos;
+  const uint8_t* code;
+  unsigned int len;
+};
+
+std::array<MatCode, 3> MatCodes = {{
+    {0, mat_start_code.data(), mat_start_code.size()},
+    {30708, mat_middle_code.data(), mat_middle_code.size()},
+    {MAT_FRAME_SIZE - mat_end_code.size(), mat_end_code.data(), mat_end_code.size()},
+}};
+
+} // unnamed namespace
+
+CAEBitstreamPacker::CAEBitstreamPacker()
 {
   Reset();
 }
 
 CAEBitstreamPacker::~CAEBitstreamPacker()
 {
-  delete[] m_trueHD;
-  delete[] m_dtsHD;
-  delete[] m_eac3;
 }
 
 void CAEBitstreamPacker::Pack(CAEStreamInfo &info, uint8_t* data, int size)
@@ -127,7 +158,6 @@ uint8_t* CAEBitstreamPacker::GetBuffer()
 void CAEBitstreamPacker::Reset()
 {
   m_dataSize = 0;
-  m_trueHDPos = 0;
   m_pauseDuration = 0;
   m_packedBuffer[0] = 0;
 }
@@ -135,60 +165,146 @@ void CAEBitstreamPacker::Reset()
 /* we need to pack 24 TrueHD audio units into the unknown MAT format before packing into IEC61937 */
 void CAEBitstreamPacker::PackTrueHD(CAEStreamInfo &info, uint8_t* data, int size)
 {
-  /* magic MAT format values, meaning is unknown at this point */
-  static const uint8_t mat_start_code [20] = { 0x07, 0x9E, 0x00, 0x03, 0x84, 0x01, 0x01, 0x01, 0x80, 0x00, 0x56, 0xA5, 0x3B, 0xF4, 0x81, 0x83, 0x49, 0x80, 0x77, 0xE0 };
-  static const uint8_t mat_middle_code[12] = { 0xC3, 0xC1, 0x42, 0x49, 0x3B, 0xFA, 0x82, 0x83, 0x49, 0x80, 0x77, 0xE0 };
-  static const uint8_t mat_end_code   [16] = { 0xC3, 0xC2, 0xC0, 0xC4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x97, 0x11 };
-
   /* create the buffer if it doesn't already exist */
-  if (!m_trueHD)
+  if (m_trueHD[0].empty())
   {
-    m_trueHD    = new uint8_t[MAT_FRAME_SIZE];
-    m_trueHDPos = 0;
+    m_trueHD[0].resize(MAT_FRAME_SIZE);
+    m_trueHD[1].resize(MAT_FRAME_SIZE);
+    m_thd = {};
   }
 
-  /* setup the frame for the data */
-  if (m_trueHDPos == 0)
+  if (size < 10)
+    return;
+
+  uint8_t* pBuf = m_trueHD[m_thd.bufferIndex].data();
+  const uint8_t* pData = data;
+
+  int totalFrameSize = size;
+  int dataRem = size;
+  int paddingRem = 0;
+  int ratebits = 0;
+  int nextCodeIdx = 0;
+  uint16_t inputTiming = 0;
+  bool havePacket = false;
+
+  if (AV_RB24(data + 4) == 0xf8726f)
   {
-    memset(m_trueHD, 0, MAT_FRAME_SIZE);
-    memcpy(m_trueHD, mat_start_code, sizeof(mat_start_code));
-    memcpy(m_trueHD + (12 * TRUEHD_FRAME_OFFSET) - BURST_HEADER_SIZE + MAT_MIDDLE_CODE_OFFSET, mat_middle_code, sizeof(mat_middle_code));
-    memcpy(m_trueHD + MAT_FRAME_SIZE - sizeof(mat_end_code), mat_end_code, sizeof(mat_end_code));
+    /* major sync unit, fetch sample rate */
+    if (data[7] == 0xba)
+      ratebits = data[8] >> 4;
+    else if (data[7] == 0xbb)
+      ratebits = data[9] >> 4;
+    else
+      return;
+
+    m_thd.samplesPerFrame = 40 << (ratebits & 3);
   }
 
-  size_t offset;
-  if (m_trueHDPos == 0 )
-    offset = (m_trueHDPos * TRUEHD_FRAME_OFFSET) + sizeof(mat_start_code);
-  else if (m_trueHDPos == 12)
-    offset = (m_trueHDPos * TRUEHD_FRAME_OFFSET) + sizeof(mat_middle_code) - BURST_HEADER_SIZE + MAT_MIDDLE_CODE_OFFSET;
-  else
-    offset = (m_trueHDPos * TRUEHD_FRAME_OFFSET) - BURST_HEADER_SIZE;
+  if (!m_thd.samplesPerFrame)
+    return;
 
-  int maxSize = TRUEHD_FRAME_OFFSET;
-  if (m_trueHDPos == 0)
-    maxSize -= static_cast<int>(sizeof(mat_start_code)) + BURST_HEADER_SIZE;
-  else if (m_trueHDPos == 11)
-    maxSize -= -MAT_MIDDLE_CODE_OFFSET;
-  else if (m_trueHDPos == 12)
-    maxSize -= static_cast<int>(sizeof(mat_middle_code)) + MAT_MIDDLE_CODE_OFFSET;
-  else if (m_trueHDPos == 23)
-    maxSize -= static_cast<int>(sizeof(mat_end_code)) + (24 * TRUEHD_FRAME_OFFSET - MAT_FRAME_SIZE);
+  inputTiming = AV_RB16(data + 2);
 
-  if (size > maxSize)
+  if (m_thd.prevFrameSize)
   {
-    CLog::Log(LOGERROR, "CAEBitstreamPacker::PackTrueHD - truncating TrueHD frame of %d bytes",
-              size);
-    size = maxSize;
+    uint16_t deltaSamples = inputTiming - m_thd.prevFrameTime;
+    /*
+     * One multiple-of-48kHz frame is 1/1200 sec and the IEC 61937 rate
+     * is 768kHz = 768000*4 bytes/sec.
+     * The nominal space per frame is therefore
+     * (768000*4 bytes/sec) * (1/1200 sec) = 2560 bytes.
+     * For multiple-of-44.1kHz frames: 1/1102.5 sec, 705.6kHz, 2560 bytes.
+     *
+     * 2560 is divisible by samplesPerFrame.
+     */
+    int deltaBytes = deltaSamples * 2560 / m_thd.samplesPerFrame;
+
+    /* padding needed before this frame */
+    paddingRem = deltaBytes - m_thd.prevFrameSize;
+
+    // detects stream discontinuities
+    if (paddingRem < 0 || paddingRem >= MAT_FRAME_SIZE * 2)
+    {
+      m_thd = {}; // recovering after seek
+      return;
+    }
   }
 
-  memcpy(m_trueHD + offset, data, size);
+  for (nextCodeIdx = 0; nextCodeIdx < static_cast<int>(MatCodes.size()); nextCodeIdx++)
+    if (m_thd.bufferFilled <= MatCodes[nextCodeIdx].pos)
+      break;
 
-  /* if we have a full frame */
-  if (++m_trueHDPos == 24)
+  if (nextCodeIdx >= static_cast<int>(MatCodes.size()))
+    return;
+
+  while (paddingRem || dataRem || MatCodes[nextCodeIdx].pos == m_thd.bufferFilled)
   {
-    m_trueHDPos = 0;
-    m_dataSize  = CAEPackIEC61937::PackTrueHD(m_trueHD, MAT_FRAME_SIZE, m_packedBuffer);
+    if (MatCodes[nextCodeIdx].pos == m_thd.bufferFilled)
+    {
+      /* time to insert MAT code */
+      int codeLen = MatCodes[nextCodeIdx].len;
+      int codeLenRemaining = codeLen;
+      memcpy(pBuf + MatCodes[nextCodeIdx].pos, MatCodes[nextCodeIdx].code, codeLen);
+      m_thd.bufferFilled += codeLen;
+
+      nextCodeIdx++;
+      if (nextCodeIdx == static_cast<int>(MatCodes.size()))
+      {
+        nextCodeIdx = 0;
+
+        /* this was the last code, move to the next MAT frame */
+        havePacket = true;
+        m_thd.outputBuffer = pBuf;
+        m_thd.bufferIndex ^= 1;
+        pBuf = m_trueHD[m_thd.bufferIndex].data();
+        m_thd.bufferFilled = 0;
+
+        /* inter-frame gap has to be counted as well, add it */
+        codeLenRemaining += MAT_PKT_OFFSET - MAT_FRAME_SIZE;
+      }
+
+      if (paddingRem)
+      {
+        /* consider the MAT code as padding */
+        const int countedAsPadding = std::min(paddingRem, codeLenRemaining);
+        paddingRem -= countedAsPadding;
+        codeLenRemaining -= countedAsPadding;
+      }
+      /* count the remainder of the code as part of frame size */
+      if (codeLenRemaining)
+        totalFrameSize += codeLenRemaining;
+    }
+
+    if (paddingRem)
+    {
+      const int paddingLen = std::min(MatCodes[nextCodeIdx].pos - m_thd.bufferFilled, paddingRem);
+
+      memset(pBuf + m_thd.bufferFilled, 0, paddingLen);
+      m_thd.bufferFilled += paddingLen;
+      paddingRem -= paddingLen;
+
+      if (paddingRem)
+        continue; /* time to insert MAT code */
+    }
+
+    if (dataRem)
+    {
+      const int dataLen = std::min(MatCodes[nextCodeIdx].pos - m_thd.bufferFilled, dataRem);
+
+      memcpy(pBuf + m_thd.bufferFilled, pData, dataLen);
+      m_thd.bufferFilled += dataLen;
+      pData += dataLen;
+      dataRem -= dataLen;
+    }
   }
+
+  m_thd.prevFrameSize = totalFrameSize;
+  m_thd.prevFrameTime = inputTiming;
+
+  if (!havePacket)
+    return;
+
+  m_dataSize = CAEPackIEC61937::PackTrueHD(m_thd.outputBuffer, MAT_FRAME_SIZE, m_packedBuffer);
 }
 
 void CAEBitstreamPacker::PackDTSHD(CAEStreamInfo &info, uint8_t* data, int size)
@@ -198,17 +314,17 @@ void CAEBitstreamPacker::PackDTSHD(CAEStreamInfo &info, uint8_t* data, int size)
 
   if (dataSize > m_dtsHDSize)
   {
-    delete[] m_dtsHD;
     m_dtsHDSize = dataSize;
-    m_dtsHD     = new uint8_t[dataSize];
-    memcpy(m_dtsHD, dtshd_start_code, sizeof(dtshd_start_code));
+    m_dtsHD.resize(dataSize);
+    memcpy(m_dtsHD.data(), dtshd_start_code, sizeof(dtshd_start_code));
   }
 
   m_dtsHD[sizeof(dtshd_start_code) + 0] = ((uint16_t)size & 0xFF00) >> 8;
   m_dtsHD[sizeof(dtshd_start_code) + 1] = ((uint16_t)size & 0x00FF);
-  memcpy(m_dtsHD + sizeof(dtshd_start_code) + 2, data, size);
+  memcpy(m_dtsHD.data() + sizeof(dtshd_start_code) + 2, data, size);
 
-  m_dataSize = CAEPackIEC61937::PackDTSHD(m_dtsHD, dataSize, m_packedBuffer, info.m_dtsPeriod);
+  m_dataSize =
+      CAEPackIEC61937::PackDTSHD(m_dtsHD.data(), dataSize, m_packedBuffer, info.m_dtsPeriod);
 }
 
 void CAEBitstreamPacker::PackEAC3(CAEStreamInfo &info, uint8_t* data, int size)
@@ -231,29 +347,29 @@ void CAEBitstreamPacker::PackEAC3(CAEStreamInfo &info, uint8_t* data, int size)
   {
     /* multiple frames needed to achieve 6 blocks as required by IEC 61937-3:2007 */
 
-    if (m_eac3 == NULL)
-      m_eac3 = new uint8_t[EAC3_MAX_BURST_PAYLOAD_SIZE];
+    if (m_eac3.size() == 0)
+      m_eac3.resize(EAC3_MAX_BURST_PAYLOAD_SIZE);
 
     unsigned int newsize = m_eac3Size + size;
     bool overrun = newsize > EAC3_MAX_BURST_PAYLOAD_SIZE;
 
     if (!overrun)
     {
-      memcpy(m_eac3 + m_eac3Size, data, size);
+      memcpy(m_eac3.data() + m_eac3Size, data, size);
       m_eac3Size = newsize;
       m_eac3FramesCount++;
     }
 
     if (m_eac3FramesCount >= m_eac3FramesPerBurst || overrun)
     {
-      m_dataSize = CAEPackIEC61937::PackEAC3(m_eac3, m_eac3Size, m_packedBuffer);
+      m_dataSize = CAEPackIEC61937::PackEAC3(m_eac3.data(), m_eac3Size, m_packedBuffer);
       m_eac3Size = 0;
       m_eac3FramesCount = 0;
     }
   }
 }
 
-unsigned int CAEBitstreamPacker::GetOutputRate(CAEStreamInfo &info)
+unsigned int CAEBitstreamPacker::GetOutputRate(const CAEStreamInfo& info)
 {
   unsigned int rate;
   switch (info.m_type)
@@ -289,7 +405,7 @@ unsigned int CAEBitstreamPacker::GetOutputRate(CAEStreamInfo &info)
   return rate;
 }
 
-CAEChannelInfo CAEBitstreamPacker::GetOutputChannelMap(CAEStreamInfo &info)
+CAEChannelInfo CAEBitstreamPacker::GetOutputChannelMap(const CAEStreamInfo& info)
 {
   int channels = 2;
   switch (info.m_type)

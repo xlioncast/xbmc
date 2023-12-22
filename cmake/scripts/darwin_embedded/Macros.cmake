@@ -1,10 +1,15 @@
 function(core_link_library lib wraplib)
-  if(CMAKE_GENERATOR MATCHES "Unix Makefiles" OR CMAKE_GENERATOR STREQUAL Ninja)
-    set(wrapper_obj cores/dll-loader/exports/CMakeFiles/wrapper.dir/wrapper.c.o)
-  elseif(CMAKE_GENERATOR MATCHES "Xcode")
-    set(wrapper_obj cores/dll-loader/exports/kodi.build/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/wrapper.build/Objects-$(CURRENT_VARIANT)/$(CURRENT_ARCH)/wrapper.o)
+
+  # Somewhere after cmake 3.21 the xcode generation moves this into its out intermediate folder
+  # ideally we want to use $<TARGET_OBJECTS:wrapper> instead of all this wrapper_obj stuff
+  # however as at 3.26.4, even with the XCODE_EMIT_EFFECTIVE_PLATFORM_NAME property
+  # the intermediate config dirs are the same as $(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)
+  # but the generator expression only uses $(CONFIGURATION) in the paths returned.
+  # Somewhat similar to https://gitlab.kitware.com/cmake/cmake/-/issues/24024
+  if(CMAKE_XCODE_BUILD_SYSTEM STREQUAL 12)
+    set(wrapper_obj wrapper.build/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Objects-$CURRENT_VARIANT/${CPU}/wrapper.o)
   else()
-    message(FATAL_ERROR "Unsupported generator in core_link_library")
+    set(wrapper_obj wrapper.build/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Objects-$(CURRENT_VARIANT)/${CPU}/wrapper.o)
   endif()
 
   set(export -bundle -undefined dynamic_lookup
@@ -18,12 +23,6 @@ function(core_link_library lib wraplib)
     set(check_arg ${ARGV2})
     set(data_arg  ${ARGV3})
 
-    # iOS: EFFECTIVE_PLATFORM_NAME is not resolved
-    # http://public.kitware.com/pipermail/cmake/2016-March/063049.html
-    if(CORE_SYSTEM_NAME STREQUAL darwin_embedded)
-      get_target_property(dir ${lib} BINARY_DIR)
-      set(link_lib ${dir}/${CORE_BUILD_CONFIG}/${CMAKE_STATIC_LIBRARY_PREFIX}${lib}${CMAKE_STATIC_LIBRARY_SUFFIX})
-    endif()
   else()
     set(target ${ARGV2})
     set(link_lib ${lib})
@@ -52,8 +51,7 @@ function(core_link_library lib wraplib)
                      COMMAND ${CMAKE_C_COMPILER}
                      ARGS    ${CUSTOM_COMMAND_ARGS_LDFLAGS} ${export} -Wl,-force_load ${link_lib} ${extra_libs}
                              -o ${CMAKE_BINARY_DIR}/${wraplib}-${ARCH}${extension}
-                     DEPENDS ${target} wrapper.def wrapper
-                     VERBATIM)
+                     DEPENDS ${target} wrapper.def wrapper)
 
   get_filename_component(libname ${wraplib} NAME_WE)
   add_custom_target(wrap_${libname} ALL DEPENDS ${wraplib}-${ARCH}${extension})

@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Ukrainian (Ukraine) (http://www.transifex.com/projects/p/kodi-main/language/uk_UA/)\n"
+"PO-Revision-Date: 2022-07-01 08:26+0000\n"
+"Last-Translator: Christian Gade <gade@kodi.tv>\n"
+"Language-Team: Ukrainian <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/uk_ua/>\n"
+"Language: uk_ua\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: uk_UA\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=4; plural=(n % 1 == 0 && n % 10 == 1 && n % 100 != 11 ? 0 : n % 1 == 0 && n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 1 : n % 1 == 0 && (n % 10 ==0 || (n % 10 >=5 && n % 10 <=9) || (n % 100 >=11 && n % 100 <=14 )) ? 2: 3);\n"
+"X-Generator: Weblate 4.13\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "Скін для сенсорних пристроїв"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "Ця обкладинка призначена для пристроїв із сенсорним екраном, наприклад планшетів чи смартфонів"
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -56,26 +65,35 @@ msgctxt "#31014"
 msgid "Episodes"
 msgstr "Серії"
 
+msgctxt "#31015"
+msgid "Player info"
+msgstr "Інформація про гравця"
+
 msgctxt "#31016"
 msgid "Albums"
 msgstr "Альбоми"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "Відомості PVR"
+msgid "PVR"
+msgstr "PVR"
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "Відомості про програвач"
+msgid "Player"
+msgstr "Програвач"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "Декодер відео"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "Формат пікселів"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
 msgstr "Використання пам'яті"
@@ -95,6 +113,18 @@ msgstr "Вхід"
 msgctxt "#31039"
 msgid "Updated:"
 msgstr "Оновлено:"
+
+msgctxt "#31040"
+msgid "Select + X"
+msgstr "Select + X"
+
+msgctxt "#31041"
+msgid "Select + B"
+msgstr "Select + B"
+
+msgctxt "#31042"
+msgid "Select + Start"
+msgstr "Select + Start"
 
 msgctxt "#31043"
 msgid "PAUSED"
@@ -206,15 +236,35 @@ msgstr "Вибір обкладинки · Зміна мови та регіон
 
 msgctxt "#31405"
 msgid "Configure & manage media sharing services · Configure & manage the weather service"
-msgstr "Налаштування служб обміну мультимедіа і керування ними · Налаштування служби погоди і керування нею."
+msgstr "Налаштування служб обміну мультимедіа і керування ними · Налаштування служби погоди і керування нею"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+msgid "Configure display · Configure audio · Configure internet access · Configure power saving · Configure logging"
 msgstr "Налаштування дисплею · Налаштування звуку · Налаштування доступу до Інтернету · Налаштування енергозбереження · Налаштування ведення журналу"
 
 msgctxt "#31407"
 msgid "Manage your installed add-ons · Browse for and install add-ons from kodi.tv · Modify add-on settings"
 msgstr "Керування встановленими надбудовами • Встановлення надбудов з kodi.tv . Зміна налаштувань надбудов"
+
+msgctxt "#31408"
+msgid "Configure actions that can be used during playback · Configure how media content is played"
+msgstr "Налаштувати дії, які можуть бути використані під час відтворення · Налаштувати як медіа-вміст відтворюватиметься"
+
+msgctxt "#31409"
+msgid "Configure library sources · Show the media lists display content · Configure how library lists are navigated"
+msgstr "Налаштувати джерела бібліотеки · Показувати вміст списків медіа · Налаштувати навігації по бібліотеці"
+
+msgctxt "#31410"
+msgid "Configure skin · Configure region · Configure control · Configure screensaver · Configure master lock"
+msgstr "Налаштувати зовнішній вигляд · Налаштувати область · Налаштувати керування · Налаштувати заставку · Налаштувати блокування"
+
+msgctxt "#31411"
+msgid "Configure your profiles · Set locking options · Enable login screen"
+msgstr "Налаштувати ваших облік. записів · Налаштувати опції блокування · Увімкнути екран входу"
+
+msgctxt "#31412"
+msgid "Display system information · Hardware statistics · Check storage availability · View network configuration"
+msgstr "Показ системної інформації · Статистика обладнання · Перевірка доступності сховища · Перегляд конфігурації мережі"
 
 msgctxt "#31421"
 msgid "Select your Kodi user Profile[CR]to login and continue"
@@ -223,6 +273,10 @@ msgstr "Виберіть профіль користувача Kodi,[CR]щоб �
 msgctxt "#31548"
 msgid "Home menu"
 msgstr "Домашнє меню"
+
+msgctxt "#31549"
+msgid "Home Add-ons"
+msgstr "Домашні надбудови"
 
 msgctxt "#31550"
 msgid "Backgrounds"
@@ -236,13 +290,29 @@ msgctxt "#31552"
 msgid "SYNC"
 msgstr "SYNC"
 
+msgctxt "#31553"
+msgid "Use Custom Background"
+msgstr "Використати власне тло"
+
 msgctxt "#31554"
 msgid "Background:"
 msgstr "Тло:"
 
+msgctxt "#31555"
+msgid "Configure TV settings · Change full screen info · Manage EPG data settings"
+msgstr "Налаштувати параметри ТВ · Змінити повноекранної інформації · Керувати налаштуваннями програми телепередач"
+
 msgctxt "#31556"
 msgid "Live TV"
 msgstr "ТБ"
+
+msgctxt "#31557"
+msgid "Hide video background"
+msgstr "Приховати тло відео"
+
+msgctxt "#31558"
+msgid "Hide visualization background"
+msgstr "Приховати тло візуалізації"
 
 msgctxt "#31559"
 msgid "Channel settings"
@@ -272,6 +342,96 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "Відображати видаленні"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Кодування відео"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Роздільна здатність відео"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Співвідношення сторін відео"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr "Бітрейт відео"
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Кодування аудіо"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Каналів аудіо"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr "Бітрейт аудіо"
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Роздільна здатність"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr "Швидкість візуалізації системи"
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Завантаження CPU"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Медіафайли"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Система"
+
+# empty strings from id 31566 to 31899
+msgctxt "#31900"
+msgid "First Run"
+msgstr "Перший запуск"
+
+msgctxt "#31901"
+msgid "There are two things to know about navigating Estouchy"
+msgstr "Є дві речі, які потрібно знати про навігацію Estouchy"
+
+msgctxt "#31902"
+msgid "The Kodi logo functions as a 'HOME' button. Whenever you touch it, you will be taken back to the home screen."
+msgstr "Логотип Kodi функціонує як кнопка «Додому». Кожен раз, коли ви його торкаєтесь, ви будете повернені до головного екрану."
+
+msgctxt "#31903"
+msgid "When you are playing audio or video, the item title will appear at the top of the screen. Touching it will take you to the fullscreen visualization or video window."
+msgstr "Коли ви відтворюєте аудіо чи відео, заголовок елементу з'явиться зверху екрану. Дотик до нього відправить вас до повноекранного відтворювання чи візуалізації."
+
 msgctxt "#31904"
 msgid "Now Playing Title..."
 msgstr "Зараз відтворюється ..."
+
+#~ msgctxt "#31406"
+#~ msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+#~ msgstr "Налаштування дисплею · Налаштування звуку · Налаштування доступу до Інтернету · Налаштування енергозбереження · Налаштування ведення журналу"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "Відомості PVR"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "Відомості про програвач"

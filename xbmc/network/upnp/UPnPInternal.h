@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "FileItem.h"
-
+#include <memory>
 #include <string>
 
 #include <Neptune/Source/Core/NptReferences.h>
@@ -114,10 +113,26 @@ namespace UPNP
                                CUPnPServer*                   upnp_server = NULL,
                                UPnPService                    upnp_service = UPnPServiceNone);
 
-  CFileItemPtr     BuildObject(PLT_MediaObject* entry,
-                               UPnPService      upnp_service = UPnPServiceNone);
+  std::shared_ptr<CFileItem> BuildObject(PLT_MediaObject* entry,
+                                         UPnPService upnp_service = UPnPServiceNone);
 
   bool             GetResource(const PLT_MediaObject* entry, CFileItem& item);
-  CFileItemPtr     GetFileItem(const NPT_String& uri, const NPT_String& meta);
+  std::shared_ptr<CFileItem> GetFileItem(const NPT_String& uri, const NPT_String& meta);
+
+  /*!
+   * @brief Provided a given object id, encode it into a safe format to provide to UPnP clients
+   * @Note base64 is currently used as the safe format
+   * @param id the object it to encode
+   * @return the encoded object id
+  */
+  NPT_String EncodeObjectId(const std::string& id);
+
+  /*!
+   * @brief Provided a given encoded object id, decode it into a format known by the application
+   * @Note base64 is currently used as the expected input format
+   * @param id the object it to decode
+   * @return the decoded object id
+  */
+  NPT_String DecodeObjectId(const std::string& id);
 }
 

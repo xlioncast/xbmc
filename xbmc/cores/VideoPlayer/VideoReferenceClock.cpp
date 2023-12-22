@@ -10,13 +10,14 @@
 #include "ServiceBroker.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SingleLock.h"
 #include "utils/MathUtils.h"
 #include "utils/TimeUtils.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 #include "windowing/VideoSync.h"
 #include "windowing/WinSystem.h"
+
+#include <mutex>
 
 CVideoReferenceClock::CVideoReferenceClock() : CThread("RefClock")
 {
@@ -49,14 +50,12 @@ void CVideoReferenceClock::Start()
     Create();
 }
 
-void CVideoReferenceClock::CBUpdateClock(int NrVBlanks, uint64_t time, void *clock)
+void CVideoReferenceClock::UpdateClock(int NrVBlanks, uint64_t time)
 {
-  {
-    CVideoReferenceClock *refClock = static_cast<CVideoReferenceClock*>(clock);
-    CSingleLock lock(refClock->m_CritSection);
-    refClock->m_VblankTime = time;
-    refClock->UpdateClock(NrVBlanks, true);
-  }
+  std::unique_lock<CCriticalSection> lock(m_CritSection);
+
+  m_VblankTime = time;
+  UpdateClockInternal(NrVBlanks, true);
 }
 
 void CVideoReferenceClock::Process()
@@ -70,11 +69,11 @@ void CVideoReferenceClock::Process()
 
     if (m_pVideoSync)
     {
-      SetupSuccess = m_pVideoSync->Setup(CBUpdateClock);
+      SetupSuccess = m_pVideoSync->Setup();
       UpdateRefreshrate();
     }
 
-    CSingleLock SingleLock(m_CritSection);
+    std::unique_lock<CCriticalSection> SingleLock(m_CritSection);
     Now = CurrentHostCounter();
     m_CurrTime = Now;
     m_LastIntTime = m_CurrTime;
@@ -87,7 +86,7 @@ void CVideoReferenceClock::Process()
     {
       m_UseVblank = true;          //tell other threads we're using vblank as clock
       m_VblankTime = Now;          //initialize the timestamp of the last vblank
-      SingleLock.Leave();
+      SingleLock.unlock();
 
       // we might got signalled while we did not wait
       if (!m_vsyncStopEvent.Signaled())
@@ -99,13 +98,13 @@ void CVideoReferenceClock::Process()
     }
     else
     {
-      SingleLock.Leave();
+      SingleLock.unlock();
       CLog::Log(LOGDEBUG, "CVideoReferenceClock: Setup failed, falling back to CurrentHostCounter()");
     }
 
-    SingleLock.Enter();
+    SingleLock.lock();
     m_UseVblank = false;                       //we're back to using the systemclock
-    SingleLock.Leave();
+    SingleLock.unlock();
 
     //clean up the vblank clock
     if (m_pVideoSync)
@@ -120,13 +119,15 @@ void CVideoReferenceClock::Process()
 }
 
 //this is called from the vblank run function and from CVideoReferenceClock::Wait in case of a late update
-void CVideoReferenceClock::UpdateClock(int NrVBlanks, bool CheckMissed)
+void CVideoReferenceClock::UpdateClockInternal(int NrVBlanks, bool CheckMissed)
 {
   if (CheckMissed) //set to true from the vblank run function, set to false from Wait and GetTime
   {
     if (NrVBlanks < m_MissedVblanks) //if this is true the vblank detection in the run function is wrong
-      CLog::Log(LOGDEBUG, "CVideoReferenceClock: detected %i vblanks, missed %i, refreshrate might have changed",
-                NrVBlanks, m_MissedVblanks);
+      CLog::Log(
+          LOGDEBUG,
+          "CVideoReferenceClock: detected {} vblanks, missed {}, refreshrate might have changed",
+          NrVBlanks, m_MissedVblanks);
 
     NrVBlanks -= m_MissedVblanks; //subtract the vblanks we missed
     m_MissedVblanks = 0;
@@ -160,7 +161,7 @@ double CVideoReferenceClock::UpdateInterval() const
 //called from dvdclock to get the time
 int64_t CVideoReferenceClock::GetTime(bool interpolated /* = true*/)
 {
-  CSingleLock SingleLock(m_CritSection);
+  std::unique_lock<CCriticalSection> SingleLock(m_CritSection);
 
   //when using vblank, get the time from that, otherwise use the systemclock
   if (m_UseVblank)
@@ -173,7 +174,7 @@ int64_t CVideoReferenceClock::GetTime(bool interpolated /* = true*/)
 
     while(Now >= NextVblank)  //keep looping until the next vblank is in the future
     {
-      UpdateClock(1, false);           //update clock when next vblank should have happened already
+      UpdateClockInternal(1, false); //update clock when next vblank should have happened already
       NextVblank = TimeOfNextVblank(); //get time when the next vblank should happen
     }
 
@@ -204,21 +205,21 @@ int64_t CVideoReferenceClock::GetTime(bool interpolated /* = true*/)
 
 void CVideoReferenceClock::SetSpeed(double Speed)
 {
-  CSingleLock SingleLock(m_CritSection);
+  std::unique_lock<CCriticalSection> SingleLock(m_CritSection);
   //VideoPlayer can change the speed to fit the rereshrate
   if (m_UseVblank)
   {
     if (Speed != m_ClockSpeed)
     {
       m_ClockSpeed = Speed;
-      CLog::Log(LOGDEBUG, "CVideoReferenceClock: Clock speed %0.2f %%", m_ClockSpeed * 100.0);
+      CLog::Log(LOGDEBUG, "CVideoReferenceClock: Clock speed {:0.2f} %", m_ClockSpeed * 100.0);
     }
   }
 }
 
 double CVideoReferenceClock::GetSpeed()
 {
-  CSingleLock SingleLock(m_CritSection);
+  std::unique_lock<CCriticalSection> SingleLock(m_CritSection);
 
   //VideoPlayer needs to know the speed for the resampler
   if (m_UseVblank)
@@ -229,17 +230,17 @@ double CVideoReferenceClock::GetSpeed()
 
 void CVideoReferenceClock::UpdateRefreshrate()
 {
-  CSingleLock SingleLock(m_CritSection);
-  m_RefreshRate = m_pVideoSync->GetFps();
+  std::unique_lock<CCriticalSection> SingleLock(m_CritSection);
+  m_RefreshRate = static_cast<double>(m_pVideoSync->GetFps());
   m_ClockSpeed = 1.0;
 
-  CLog::Log(LOGDEBUG, "CVideoReferenceClock: Detected refreshrate: %.3f hertz", m_RefreshRate);
+  CLog::Log(LOGDEBUG, "CVideoReferenceClock: Detected refreshrate: {:.3f} hertz", m_RefreshRate);
 }
 
 //VideoPlayer needs to know the refreshrate for matching the fps of the video playing to it
 double CVideoReferenceClock::GetRefreshRate(double* interval /*= NULL*/)
 {
-  CSingleLock SingleLock(m_CritSection);
+  std::unique_lock<CCriticalSection> SingleLock(m_CritSection);
 
   if (m_UseVblank)
   {
@@ -264,7 +265,7 @@ int64_t CVideoReferenceClock::TimeOfNextVblank() const
 //for the codec information screen
 bool CVideoReferenceClock::GetClockInfo(int& MissedVblanks, double& ClockSpeed, double& RefreshRate) const
 {
-  CSingleLock SingleLock(m_CritSection);
+  std::unique_lock<CCriticalSection> SingleLock(m_CritSection);
 
   if (m_UseVblank)
   {

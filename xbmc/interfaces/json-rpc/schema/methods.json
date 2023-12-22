@@ -271,6 +271,61 @@
     ],
     "returns": "string"
   },
+  "Player.GetAudioDelay": {
+    "type": "method",
+    "description": "Get the audio delay for the current playback",
+    "transport": "Response",
+    "permission": "ReadData",
+    "params": [],
+    "returns": {
+      "type": "object",
+      "properties": {
+        "offset": {
+          "type": "number",
+          "description": "The offset value used in the current playback.",
+          "required": true
+        }
+      }
+    }
+  },
+  "Player.SetAudioDelay": {
+    "type": "method",
+    "description": "Set the audio delay for the current playback",
+    "transport": "Response",
+    "permission": "ControlPlayback",
+    "params": [
+      {
+        "name": "playerid",
+        "$ref": "Player.Id",
+        "required": true
+      },
+      {
+        "name": "offset",
+        "type": [
+          {
+            "type": "number",
+            "description": "The value should be a multiple of 0.025 in a range of +/-10 (the default range can be overriden by advancedsettings.xml).",
+            "required": true
+          },
+          {
+            "$ref": "Global.IncrementDecrement",
+            "required": true
+          }
+        ],
+        "required": true
+      }
+    ],
+    "returns": {
+      "type": "object",
+      "properties": {
+        "offset": {
+          "type": "number",
+          "description": "The offset value used in the current playback.",
+          "required": true
+        }
+      }
+    }
+  },
   "Player.SetSpeed": {
     "type": "method",
     "description": "Set the speed of the current playback",
@@ -1165,7 +1220,8 @@
       { "name": "disctitle", "$ref": "Optional.String" },
       { "name": "releasedate", "$ref": "Optional.String" },
       { "name": "originaldate", "$ref": "Optional.String" },
-      { "name": "bpm", "$ref": "Optional.Integer" }
+      { "name": "bpm", "$ref": "Optional.Integer" },
+      { "name": "songvideourl", "$ref": "Optional.String" }
     ],
     "returns": "string"
   },
@@ -1818,7 +1874,8 @@
       { "name": "rating", "$ref": "Optional.Number" },
       { "name": "userrating", "$ref": "Optional.Integer" },
       { "name": "dateadded", "$ref": "Optional.String" },
-      { "name": "premiered", "$ref": "Optional.String", "description": "linked with year. Overrides year" }
+      { "name": "premiered", "$ref": "Optional.String", "description": "linked with year. Overrides year" },
+      { "name": "uniqueid", "type": [ "null", { "$ref": "Media.UniqueID.Set", "required": true } ], "default": null }
     ],
     "returns": "string"
   },
@@ -2240,7 +2297,7 @@
     "transport": "Response",
     "permission": "ReadData",
     "params": [
-      { "name": "broadcastid", "$ref": "Library.Id", "required": true, "description": "the id of the broadcast to to check for playability" }
+      { "name": "broadcastid", "$ref": "Library.Id", "required": true, "description": "the id of the broadcast to check for playability" }
     ],
     "returns":  "boolean"
   },
@@ -2834,5 +2891,52 @@
       { "name": "setting", "type": "string", "required": true, "minLength": 1 }
     ],
     "returns": "string"
+  },
+  "Settings.GetSkinSettingValue": {
+    "type": "method",
+    "description": "Retrieves the value of the specified skin setting",
+    "transport": "Response",
+    "permission": "ReadData",
+    "params": [
+      { "name": "setting", "type": "string", "required": true, "minLength": 1 }
+    ],
+    "returns": {
+      "type": "object",
+      "properties": {
+        "value": { "type": [ "boolean", "string" ], "required": true }
+      }
+    }
+  },
+  "Settings.SetSkinSettingValue": {
+    "type": "method",
+    "description": "Changes the value of the specified skin setting",
+    "transport": "Response",
+    "permission": "WriteSetting",
+    "params": [
+      { "name": "setting", "type": "string", "required": true, "minLength": 1 },
+      { "name": "value", "type": [ "boolean", "string" ], "required": true }
+    ],
+    "returns": "boolean"
+  },
+  "Settings.GetSkinSettings": {
+    "type": "method",
+    "description": "Retrieves all skin settings of the currently used skin",
+    "transport": "Response",
+    "permission": "ReadData",
+    "returns": {
+      "type": "object",
+      "properties": {
+        "skin": { "type": "string", "required": true, "minLength": 1 },
+        "settings": { "type": "array",
+          "items": { "type": "object",
+            "properties": {
+              "id": { "type": "string", "required": true, "minLength": 1 },
+              "type": { "type": "string", "enum": [ "boolean", "string" ], "required": true },
+              "value": { "type": [ "boolean", "string" ], "required": true }
+            }
+          }
+        }
+      }
+    }
   }
 }

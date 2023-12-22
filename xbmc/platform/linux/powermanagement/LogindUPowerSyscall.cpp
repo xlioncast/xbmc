@@ -9,6 +9,7 @@
 
 #include "LogindUPowerSyscall.h"
 
+#include "utils/StringUtils.h"
 #include "utils/log.h"
 
 #include <string.h>
@@ -160,7 +161,7 @@ bool CLogindUPowerSyscall::LogindSetPowerState(const char *state)
 {
   CDBusMessage message(LOGIND_DEST, LOGIND_PATH, LOGIND_IFACE, state);
   // The user_interaction boolean parameters can be used to control
-  // wether PolicyKit should interactively ask the user for authentication
+  // whether PolicyKit should interactively ask the user for authentication
   // credentials if it needs to.
   message.AppendArgument(false);
   return message.SendSystem() != NULL;
@@ -242,7 +243,7 @@ bool CLogindUPowerSyscall::PumpPowerEvents(IPowerEventsCallback *callback)
         dbus_bool_t arg;
         // the boolean argument defines whether we are going to sleep (true) or just woke up (false)
         dbus_message_get_args(msg.get(), NULL, DBUS_TYPE_BOOLEAN, &arg, DBUS_TYPE_INVALID);
-        CLog::Log(LOGDEBUG, "LogindUPowerSyscall: Received PrepareForSleep with arg %i", (int)arg);
+        CLog::Log(LOGDEBUG, "LogindUPowerSyscall: Received PrepareForSleep with arg {}", (int)arg);
         if (arg)
         {
           callback->OnSleep();
@@ -266,7 +267,8 @@ bool CLogindUPowerSyscall::PumpPowerEvents(IPowerEventsCallback *callback)
         result = true;
       }
       else
-        CLog::Log(LOGDEBUG, "LogindUPowerSyscall - Received unknown signal %s", dbus_message_get_member(msg.get()));
+        CLog::Log(LOGDEBUG, "LogindUPowerSyscall - Received unknown signal {}",
+                  dbus_message_get_member(msg.get()));
     }
   }
 
@@ -299,7 +301,7 @@ int CLogindUPowerSyscall::InhibitDelayLock(const char *what)
 
   if (!reply)
   {
-    CLog::Log(LOGWARNING, "LogindUPowerSyscall - failed to inhibit %s delay lock", what);
+    CLog::Log(LOGWARNING, "LogindUPowerSyscall - failed to inhibit {} delay lock", what);
     return -1;
   }
 
@@ -310,7 +312,7 @@ int CLogindUPowerSyscall::InhibitDelayLock(const char *what)
     return -1;
   }
 
-  CLog::Log(LOGDEBUG, "LogindUPowerSyscall - inhibit lock taken, fd %i", delayLockFd);
+  CLog::Log(LOGDEBUG, "LogindUPowerSyscall - inhibit lock taken, fd {}", delayLockFd);
   return delayLockFd;
 #else
   CLog::Log(LOGWARNING, "LogindUPowerSyscall - inhibit lock support not compiled in");
@@ -335,6 +337,6 @@ void CLogindUPowerSyscall::ReleaseDelayLock(int lockFd, const char *what)
   if (lockFd != -1)
   {
     close(lockFd);
-    CLog::Log(LOGDEBUG, "LogindUPowerSyscall - delay lock %s released", what);
+    CLog::Log(LOGDEBUG, "LogindUPowerSyscall - delay lock {} released", what);
   }
 }

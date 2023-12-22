@@ -9,11 +9,16 @@
 
 #include "ServiceBroker.h"
 #include "URL.h"
+#include "addons/AddonEvents.h"
+#include "addons/AddonManager.h"
+#include "addons/addoninfo/AddonInfo.h"
+#include "addons/addoninfo/AddonType.h"
 #include "addons/interfaces/Filesystem.h"
 #include "network/ZeroconfBrowser.h"
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 
+#include <mutex>
 #include <utility>
 
 #if defined(TARGET_WINDOWS)
@@ -54,9 +59,9 @@ void CVFSAddonCache::Init()
 
   // Load all available VFS addons during Kodi start
   std::vector<AddonInfoPtr> addonInfos;
-  CServiceBroker::GetAddonMgr().GetAddonInfos(addonInfos, true, ADDON_VFS);
+  CServiceBroker::GetAddonMgr().GetAddonInfos(addonInfos, true, AddonType::VFS);
 
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   for (const auto& addonInfo : addonInfos)
   {
     VFSEntryPtr vfs = std::make_shared<CVFSEntry>(addonInfo);
@@ -76,7 +81,7 @@ void CVFSAddonCache::Deinit()
 
 const std::vector<VFSEntryPtr> CVFSAddonCache::GetAddonInstances()
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   return m_addonsInstances;
 }
 
@@ -84,7 +89,7 @@ VFSEntryPtr CVFSAddonCache::GetAddonInstance(const std::string& strId)
 {
   VFSEntryPtr addon;
 
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   const auto& itAddon = std::find_if(m_addonsInstances.begin(), m_addonsInstances.end(),
     [&strId](const VFSEntryPtr& addon)
@@ -104,7 +109,7 @@ void CVFSAddonCache::OnEvent(const AddonEvent& event)
   {
     for (const auto& vfs : m_addonsInstances)
     {
-      if (vfs->ID() == event.id && !vfs->GetZeroconfType().empty())
+      if (vfs->ID() == event.addonId && !vfs->GetZeroconfType().empty())
         CZeroconfBrowser::GetInstance()->RemoveServiceType(vfs->GetZeroconfType());
     }
   }
@@ -113,18 +118,18 @@ void CVFSAddonCache::OnEvent(const AddonEvent& event)
       typeid(event) == typeid(AddonEvents::Disabled) ||
       typeid(event) == typeid(AddonEvents::ReInstalled))
   {
-    if (CServiceBroker::GetAddonMgr().HasType(event.id, ADDON_VFS))
-      Update(event.id);
+    if (CServiceBroker::GetAddonMgr().HasType(event.addonId, AddonType::VFS))
+      Update(event.addonId);
   }
   else if (typeid(event) == typeid(AddonEvents::UnInstalled))
   {
-    Update(event.id);
+    Update(event.addonId);
   }
 }
 
 bool CVFSAddonCache::IsInUse(const std::string& id)
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   const auto& itAddon = std::find_if(m_addonsInstances.begin(), m_addonsInstances.end(),
                                      [&id](const VFSEntryPtr& addon) { return addon->ID() == id; });
@@ -139,7 +144,7 @@ void CVFSAddonCache::Update(const std::string& id)
 
   // Stop used instance if present, otherwise the new becomes created on already created addon base one.
   {
-    CSingleLock lock(m_critSection);
+    std::unique_lock<CCriticalSection> lock(m_critSection);
 
     const auto& itAddon =
         std::find_if(m_addonsInstances.begin(), m_addonsInstances.end(),
@@ -153,7 +158,7 @@ void CVFSAddonCache::Update(const std::string& id)
   }
 
   // Create and init the new VFS addon instance
-  AddonInfoPtr addonInfo = CServiceBroker::GetAddonMgr().GetAddonInfo(id, ADDON_VFS);
+  AddonInfoPtr addonInfo = CServiceBroker::GetAddonMgr().GetAddonInfo(id, AddonType::VFS);
   if (addonInfo && !CServiceBroker::GetAddonMgr().IsAddonDisabled(id))
   {
     VFSEntryPtr vfs = std::make_shared<CVFSEntry>(addonInfo);
@@ -161,7 +166,7 @@ void CVFSAddonCache::Update(const std::string& id)
     if (!vfs->GetZeroconfType().empty())
       CZeroconfBrowser::GetInstance()->AddServiceType(vfs->GetZeroconfType());
 
-    CSingleLock lock(m_critSection);
+    std::unique_lock<CCriticalSection> lock(m_critSection);
     m_addonsInstances.emplace_back(vfs);
   }
 }
@@ -201,39 +206,40 @@ class CVFSURLWrapper
 };
 
 CVFSEntry::ProtocolInfo::ProtocolInfo(const AddonInfoPtr& addonInfo)
-  : supportPath(addonInfo->Type(ADDON_VFS)->GetValue("@supportPath").asBoolean()),
-    supportUsername(addonInfo->Type(ADDON_VFS)->GetValue("@supportUsername").asBoolean()),
-    supportPassword(addonInfo->Type(ADDON_VFS)->GetValue("@supportPassword").asBoolean()),
-    supportPort(addonInfo->Type(ADDON_VFS)->GetValue("@supportPort").asBoolean()),
-    supportBrowsing(addonInfo->Type(ADDON_VFS)->GetValue("@supportBrowsing").asBoolean()),
-    supportWrite(addonInfo->Type(ADDON_VFS)->GetValue("@supportWrite").asBoolean()),
-    defaultPort(addonInfo->Type(ADDON_VFS)->GetValue("@defaultPort").asInteger()),
-    type(addonInfo->Type(ADDON_VFS)->GetValue("@protocols").asString()),
-    label(addonInfo->Type(ADDON_VFS)->GetValue("@label").asInteger())
+  : supportPath(addonInfo->Type(AddonType::VFS)->GetValue("@supportPath").asBoolean()),
+    supportUsername(addonInfo->Type(AddonType::VFS)->GetValue("@supportUsername").asBoolean()),
+    supportPassword(addonInfo->Type(AddonType::VFS)->GetValue("@supportPassword").asBoolean()),
+    supportPort(addonInfo->Type(AddonType::VFS)->GetValue("@supportPort").asBoolean()),
+    supportBrowsing(addonInfo->Type(AddonType::VFS)->GetValue("@supportBrowsing").asBoolean()),
+    supportWrite(addonInfo->Type(AddonType::VFS)->GetValue("@supportWrite").asBoolean()),
+    defaultPort(addonInfo->Type(AddonType::VFS)->GetValue("@defaultPort").asInteger()),
+    type(addonInfo->Type(AddonType::VFS)->GetValue("@protocols").asString()),
+    label(addonInfo->Type(AddonType::VFS)->GetValue("@label").asInteger())
 {
 }
 
 CVFSEntry::CVFSEntry(const AddonInfoPtr& addonInfo)
   : IAddonInstanceHandler(ADDON_INSTANCE_VFS, addonInfo),
-    m_protocols(addonInfo->Type(ADDON_VFS)->GetValue("@protocols").asString()),
-    m_extensions(addonInfo->Type(ADDON_VFS)->GetValue("@extensions").asString()),
-    m_zeroconf(addonInfo->Type(ADDON_VFS)->GetValue("@zeroconf").asString()),
-    m_files(addonInfo->Type(ADDON_VFS)->GetValue("@files").asBoolean()),
-    m_directories(addonInfo->Type(ADDON_VFS)->GetValue("@directories").asBoolean()),
-    m_filedirectories(addonInfo->Type(ADDON_VFS)->GetValue("@filedirectories").asBoolean()),
+    m_protocols(addonInfo->Type(AddonType::VFS)->GetValue("@protocols").asString()),
+    m_extensions(addonInfo->Type(AddonType::VFS)->GetValue("@extensions").asString()),
+    m_zeroconf(addonInfo->Type(AddonType::VFS)->GetValue("@zeroconf").asString()),
+    m_files(addonInfo->Type(AddonType::VFS)->GetValue("@files").asBoolean()),
+    m_directories(addonInfo->Type(AddonType::VFS)->GetValue("@directories").asBoolean()),
+    m_filedirectories(addonInfo->Type(AddonType::VFS)->GetValue("@filedirectories").asBoolean()),
     m_protocolInfo(addonInfo)
 {
-  if (!addonInfo->Type(ADDON_VFS)->GetValue("@supportDialog").asBoolean())
+  if (!addonInfo->Type(AddonType::VFS)->GetValue("@supportDialog").asBoolean())
     m_protocolInfo.type.clear();
 
   // Create "C" interface structures, used as own parts to prevent API problems on update
-  m_struct.props = new AddonProps_VFSEntry();
-  m_struct.toAddon = new KodiToAddonFuncTable_VFSEntry();
-  m_struct.toKodi = new AddonToKodiFuncTable_VFSEntry();
+  m_ifc.vfs = new AddonInstance_VFSEntry;
+  m_ifc.vfs->props = new AddonProps_VFSEntry();
+  m_ifc.vfs->toAddon = new KodiToAddonFuncTable_VFSEntry();
+  m_ifc.vfs->toKodi = new AddonToKodiFuncTable_VFSEntry();
 
-  m_struct.toKodi->kodiInstance = this;
-  if (CreateInstance(&m_struct) != ADDON_STATUS_OK)
-    CLog::Log(LOGFATAL, "CVFSEntry - Couldn't create instance on add-on '%s'", addonInfo->Name().c_str());
+  m_ifc.vfs->toKodi->kodiInstance = this;
+  if (CreateInstance() != ADDON_STATUS_OK)
+    CLog::Log(LOGFATAL, "CVFSEntry - Couldn't create instance on add-on '{}'", addonInfo->Name());
 }
 
 CVFSEntry::~CVFSEntry()
@@ -241,48 +247,50 @@ CVFSEntry::~CVFSEntry()
   DestroyInstance();
 
   // Delete "C" interface structures
-  delete m_struct.toAddon;
-  delete m_struct.toKodi;
-  delete m_struct.props;
+  delete m_ifc.vfs->toAddon;
+  delete m_ifc.vfs->toKodi;
+  delete m_ifc.vfs->props;
+  delete m_ifc.vfs;
 }
 
 void* CVFSEntry::Open(const CURL& url)
 {
-  if (!m_struct.toAddon->open)
+  if (!m_ifc.vfs->toAddon->open)
     return nullptr;
 
   CVFSURLWrapper url2(url);
-  return m_struct.toAddon->open(&m_struct, &url2.url);
+  return m_ifc.vfs->toAddon->open(m_ifc.vfs, &url2.url);
 }
 
 void* CVFSEntry::OpenForWrite(const CURL& url, bool bOverWrite)
 {
-  if (!m_struct.toAddon->open_for_write)
+  if (!m_ifc.vfs->toAddon->open_for_write)
     return nullptr;
 
   CVFSURLWrapper url2(url);
-  return m_struct.toAddon->open_for_write(&m_struct, &url2.url, bOverWrite);
+  return m_ifc.vfs->toAddon->open_for_write(m_ifc.vfs, &url2.url, bOverWrite);
 }
 
 bool CVFSEntry::Exists(const CURL& url)
 {
-  if (!m_struct.toAddon->exists)
+  if (!m_ifc.vfs->toAddon->exists)
     return false;
 
   CVFSURLWrapper url2(url);
-  return m_struct.toAddon->exists(&m_struct, &url2.url);
+  return m_ifc.vfs->toAddon->exists(m_ifc.vfs, &url2.url);
 }
 
 int CVFSEntry::Stat(const CURL& url, struct __stat64* buffer)
 {
   int ret = -1;
-  if (!m_struct.toAddon->stat)
+  if (!m_ifc.vfs->toAddon->stat)
     return ret;
 
   CVFSURLWrapper url2(url);
   STAT_STRUCTURE statBuffer = {};
-  ret = m_struct.toAddon->stat(&m_struct, &url2.url, &statBuffer);
+  ret = m_ifc.vfs->toAddon->stat(m_ifc.vfs, &url2.url, &statBuffer);
 
+  *buffer = {};
   buffer->st_dev = statBuffer.deviceId;
   buffer->st_ino = statBuffer.fileSerialNumber;
   buffer->st_size = statBuffer.size;
@@ -310,64 +318,64 @@ int CVFSEntry::Stat(const CURL& url, struct __stat64* buffer)
 
 ssize_t CVFSEntry::Read(void* ctx, void* lpBuf, size_t uiBufSize)
 {
-  if (!m_struct.toAddon->read)
+  if (!m_ifc.vfs->toAddon->read)
     return 0;
 
-  return m_struct.toAddon->read(&m_struct, ctx, static_cast<uint8_t*>(lpBuf), uiBufSize);
+  return m_ifc.vfs->toAddon->read(m_ifc.vfs, ctx, static_cast<uint8_t*>(lpBuf), uiBufSize);
 }
 
 ssize_t CVFSEntry::Write(void* ctx, const void* lpBuf, size_t uiBufSize)
 {
-  if (!m_struct.toAddon->write)
+  if (!m_ifc.vfs->toAddon->write)
     return 0;
 
-  return m_struct.toAddon->write(&m_struct, ctx, static_cast<const uint8_t*>(lpBuf), uiBufSize);
+  return m_ifc.vfs->toAddon->write(m_ifc.vfs, ctx, static_cast<const uint8_t*>(lpBuf), uiBufSize);
 }
 
 int64_t CVFSEntry::Seek(void* ctx, int64_t position, int whence)
 {
-  if (!m_struct.toAddon->seek)
+  if (!m_ifc.vfs->toAddon->seek)
     return 0;
 
-  return m_struct.toAddon->seek(&m_struct, ctx, position, whence);
+  return m_ifc.vfs->toAddon->seek(m_ifc.vfs, ctx, position, whence);
 }
 
 int CVFSEntry::Truncate(void* ctx, int64_t size)
 {
-  if (!m_struct.toAddon->truncate)
+  if (!m_ifc.vfs->toAddon->truncate)
     return 0;
 
-  return m_struct.toAddon->truncate(&m_struct, ctx, size);
+  return m_ifc.vfs->toAddon->truncate(m_ifc.vfs, ctx, size);
 }
 
 void CVFSEntry::Close(void* ctx)
 {
-  if (m_struct.toAddon->close)
-    m_struct.toAddon->close(&m_struct, ctx);
+  if (m_ifc.vfs->toAddon->close)
+    m_ifc.vfs->toAddon->close(m_ifc.vfs, ctx);
 }
 
 int64_t CVFSEntry::GetPosition(void* ctx)
 {
-  if (!m_struct.toAddon->get_position)
+  if (!m_ifc.vfs->toAddon->get_position)
     return 0;
 
-  return m_struct.toAddon->get_position(&m_struct, ctx);
+  return m_ifc.vfs->toAddon->get_position(m_ifc.vfs, ctx);
 }
 
 int CVFSEntry::GetChunkSize(void* ctx)
 {
-  if (!m_struct.toAddon->get_chunk_size)
+  if (!m_ifc.vfs->toAddon->get_chunk_size)
     return 0;
 
-  return m_struct.toAddon->get_chunk_size(&m_struct, ctx);
+  return m_ifc.vfs->toAddon->get_chunk_size(m_ifc.vfs, ctx);
 }
 
 int64_t CVFSEntry::GetLength(void* ctx)
 {
-  if (!m_struct.toAddon->get_length)
+  if (!m_ifc.vfs->toAddon->get_length)
     return 0;
 
-  return m_struct.toAddon->get_length(&m_struct, ctx);
+  return m_ifc.vfs->toAddon->get_length(m_ifc.vfs, ctx);
 }
 
 int CVFSEntry::IoControl(void* ctx, XFILE::EIoControl request, void* param)
@@ -376,13 +384,13 @@ int CVFSEntry::IoControl(void* ctx, XFILE::EIoControl request, void* param)
   {
     case XFILE::EIoControl::IOCTRL_SEEK_POSSIBLE:
     {
-      if (!m_struct.toAddon->io_control_get_seek_possible)
+      if (!m_ifc.vfs->toAddon->io_control_get_seek_possible)
         return -1;
-      return m_struct.toAddon->io_control_get_seek_possible(&m_struct, ctx) ? 1 : 0;
+      return m_ifc.vfs->toAddon->io_control_get_seek_possible(m_ifc.vfs, ctx) ? 1 : 0;
     }
     case XFILE::EIoControl::IOCTRL_CACHE_STATUS:
     {
-      if (!m_struct.toAddon->io_control_get_cache_status)
+      if (!m_ifc.vfs->toAddon->io_control_get_cache_status)
         return -1;
 
       XFILE::SCacheStatus* kodiData = static_cast<XFILE::SCacheStatus*>(param);
@@ -390,31 +398,31 @@ int CVFSEntry::IoControl(void* ctx, XFILE::EIoControl request, void* param)
         return -1;
 
       VFS_CACHE_STATUS_DATA status;
-      int ret = m_struct.toAddon->io_control_get_cache_status(&m_struct, ctx, &status) ? 0 : -1;
+      int ret = m_ifc.vfs->toAddon->io_control_get_cache_status(m_ifc.vfs, ctx, &status) ? 0 : -1;
       if (ret >= 0)
       {
         kodiData->forward = status.forward;
         kodiData->maxrate = status.maxrate;
         kodiData->currate = status.currate;
-        kodiData->lowspeed = status.lowspeed;
+        kodiData->lowrate = status.lowrate;
       }
       return ret;
     }
     case XFILE::EIoControl::IOCTRL_CACHE_SETRATE:
     {
-      if (!m_struct.toAddon->io_control_set_cache_rate)
+      if (!m_ifc.vfs->toAddon->io_control_set_cache_rate)
         return -1;
 
-      unsigned int& iParam = *static_cast<unsigned int*>(param);
-      return m_struct.toAddon->io_control_set_cache_rate(&m_struct, ctx, iParam) ? 1 : 0;
+      uint32_t& iParam = *static_cast<uint32_t*>(param);
+      return m_ifc.vfs->toAddon->io_control_set_cache_rate(m_ifc.vfs, ctx, iParam) ? 1 : 0;
     }
     case XFILE::EIoControl::IOCTRL_SET_RETRY:
     {
-      if (!m_struct.toAddon->io_control_set_retry)
+      if (!m_ifc.vfs->toAddon->io_control_set_retry)
         return -1;
 
       bool& bParam = *static_cast<bool*>(param);
-      return m_struct.toAddon->io_control_set_retry(&m_struct, ctx, bParam) ? 0 : -1;
+      return m_ifc.vfs->toAddon->io_control_set_retry(m_ifc.vfs, ctx, bParam) ? 0 : -1;
     }
 
     // Not by addon supported io's
@@ -429,60 +437,60 @@ int CVFSEntry::IoControl(void* ctx, XFILE::EIoControl request, void* param)
 
 bool CVFSEntry::Delete(const CURL& url)
 {
-  if (!m_struct.toAddon->delete_it)
+  if (!m_ifc.vfs->toAddon->delete_it)
     return false;
 
   CVFSURLWrapper url2(url);
-  return m_struct.toAddon->delete_it(&m_struct, &url2.url);
+  return m_ifc.vfs->toAddon->delete_it(m_ifc.vfs, &url2.url);
 }
 
 bool CVFSEntry::Rename(const CURL& url, const CURL& url2)
 {
-  if (!m_struct.toAddon->rename)
+  if (!m_ifc.vfs->toAddon->rename)
     return false;
 
   CVFSURLWrapper url3(url);
   CVFSURLWrapper url4(url2);
-  return m_struct.toAddon->rename(&m_struct, &url3.url, &url4.url);
+  return m_ifc.vfs->toAddon->rename(m_ifc.vfs, &url3.url, &url4.url);
 }
 
 void CVFSEntry::ClearOutIdle()
 {
-  if (m_struct.toAddon->clear_out_idle)
-    m_struct.toAddon->clear_out_idle(&m_struct);
+  if (m_ifc.vfs->toAddon->clear_out_idle)
+    m_ifc.vfs->toAddon->clear_out_idle(m_ifc.vfs);
 }
 
 void CVFSEntry::DisconnectAll()
 {
-  if (m_struct.toAddon->disconnect_all)
-    m_struct.toAddon->disconnect_all(&m_struct);
+  if (m_ifc.vfs->toAddon->disconnect_all)
+    m_ifc.vfs->toAddon->disconnect_all(m_ifc.vfs);
 }
 
 bool CVFSEntry::DirectoryExists(const CURL& url)
 {
-  if (!m_struct.toAddon->directory_exists)
+  if (!m_ifc.vfs->toAddon->directory_exists)
     return false;
 
   CVFSURLWrapper url2(url);
-  return m_struct.toAddon->directory_exists(&m_struct, &url2.url);
+  return m_ifc.vfs->toAddon->directory_exists(m_ifc.vfs, &url2.url);
 }
 
 bool CVFSEntry::RemoveDirectory(const CURL& url)
 {
-  if (!m_struct.toAddon->remove_directory)
+  if (!m_ifc.vfs->toAddon->remove_directory)
     return false;
 
   CVFSURLWrapper url2(url);
-  return m_struct.toAddon->remove_directory(&m_struct, &url2.url);
+  return m_ifc.vfs->toAddon->remove_directory(m_ifc.vfs, &url2.url);
 }
 
 bool CVFSEntry::CreateDirectory(const CURL& url)
 {
-  if (!m_struct.toAddon->create_directory)
+  if (!m_ifc.vfs->toAddon->create_directory)
     return false;
 
   CVFSURLWrapper url2(url);
-  return m_struct.toAddon->create_directory(&m_struct, &url2.url);
+  return m_ifc.vfs->toAddon->create_directory(m_ifc.vfs, &url2.url);
 }
 
 static void VFSDirEntriesToCFileItemList(int num_entries,
@@ -518,7 +526,7 @@ static void VFSDirEntriesToCFileItemList(int num_entries,
 bool CVFSEntry::GetDirectory(const CURL& url, CFileItemList& items,
                              void* ctx)
 {
-  if (!m_struct.toAddon->get_directory || !m_struct.toAddon->free_directory)
+  if (!m_ifc.vfs->toAddon->get_directory || !m_ifc.vfs->toAddon->free_directory)
     return false;
 
   VFSGetDirectoryCallbacks callbacks;
@@ -531,11 +539,11 @@ bool CVFSEntry::GetDirectory(const CURL& url, CFileItemList& items,
   int num_entries = 0;
   CVFSURLWrapper url2(url);
   bool ret =
-      m_struct.toAddon->get_directory(&m_struct, &url2.url, &entries, &num_entries, &callbacks);
+      m_ifc.vfs->toAddon->get_directory(m_ifc.vfs, &url2.url, &entries, &num_entries, &callbacks);
   if (ret)
   {
     VFSDirEntriesToCFileItemList(num_entries, entries, items);
-    m_struct.toAddon->free_directory(&m_struct, entries, num_entries);
+    m_ifc.vfs->toAddon->free_directory(m_ifc.vfs, entries, num_entries);
   }
 
   return ret;
@@ -543,7 +551,7 @@ bool CVFSEntry::GetDirectory(const CURL& url, CFileItemList& items,
 
 bool CVFSEntry::ContainsFiles(const CURL& url, CFileItemList& items)
 {
-  if (!m_struct.toAddon->contains_files || !m_struct.toAddon->free_directory)
+  if (!m_ifc.vfs->toAddon->contains_files || !m_ifc.vfs->toAddon->free_directory)
     return false;
 
   VFSDirEntry* entries = nullptr;
@@ -553,20 +561,19 @@ bool CVFSEntry::ContainsFiles(const CURL& url, CFileItemList& items)
   char rootpath[ADDON_STANDARD_STRING_LENGTH];
   rootpath[0] = 0;
   bool ret =
-      m_struct.toAddon->contains_files(&m_struct, &url2.url, &entries, &num_entries, rootpath);
+      m_ifc.vfs->toAddon->contains_files(m_ifc.vfs, &url2.url, &entries, &num_entries, rootpath);
   if (!ret)
     return false;
 
   VFSDirEntriesToCFileItemList(num_entries, entries, items);
-  m_struct.toAddon->free_directory(&m_struct, entries, num_entries);
+  m_ifc.vfs->toAddon->free_directory(m_ifc.vfs, entries, num_entries);
   if (strlen(rootpath))
     items.SetPath(rootpath);
 
   return true;
 }
 
-CVFSEntryIFileWrapper::CVFSEntryIFileWrapper(VFSEntryPtr ptr)
-  : m_context(nullptr), m_addon(std::move(ptr))
+CVFSEntryIFileWrapper::CVFSEntryIFileWrapper(VFSEntryPtr ptr) : m_addon(std::move(ptr))
 {
 }
 
@@ -578,13 +585,13 @@ CVFSEntryIFileWrapper::~CVFSEntryIFileWrapper()
 bool CVFSEntryIFileWrapper::Open(const CURL& url)
 {
   m_context = m_addon->Open(url);
-  return m_context != NULL;
+  return m_context != nullptr;
 }
 
 bool CVFSEntryIFileWrapper::OpenForWrite(const CURL& url, bool bOverWrite)
 {
   m_context = m_addon->OpenForWrite(url, bOverWrite);
-  return m_context != NULL;
+  return m_context != nullptr;
 }
 
 bool CVFSEntryIFileWrapper::Exists(const CURL& url)
@@ -631,7 +638,7 @@ void CVFSEntryIFileWrapper::Close()
   if (m_context)
   {
     m_addon->Close(m_context);
-    m_context = NULL;
+    m_context = nullptr;
   }
 }
 

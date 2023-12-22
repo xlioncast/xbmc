@@ -9,6 +9,7 @@
 #pragma once
 
 #include "IRetroPlayerStream.h"
+#include "cores/AudioEngine/Interfaces/AE.h"
 
 #include <memory>
 
@@ -59,8 +60,8 @@ public:
 
 private:
   CRPProcessInfo& m_processInfo;
-  IAEStream* m_pAudioStream;
-  bool m_bAudioEnabled;
+  IAE::StreamPtr m_pAudioStream;
+  bool m_bAudioEnabled = true;
 };
 } // namespace RETRO
 } // namespace KODI

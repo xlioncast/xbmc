@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "Addon.h"
+#include "addons/Addon.h"
 
 #define WEBINTERFACE_DEFAULT_ENTRY_POINT  "index.html"
 
@@ -32,7 +32,7 @@ namespace ADDON
     std::string GetBaseLocation() const;
 
   private:
-    WebinterfaceType m_type;
+    WebinterfaceType m_type = WebinterfaceTypeStatic;
     std::string m_entryPoint;
   };
 }

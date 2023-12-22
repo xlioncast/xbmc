@@ -2,6 +2,8 @@
 <window type="dialog" id="1101">
 	<defaultcontrol always="true">11000</defaultcontrol>
 	<include>Animation_DialogPopupOpenClose</include>
+	<onunload>ClearProperty(settingslist_header,Home)</onunload>
+	<onunload>ClearProperty(settingslist_content,Home)</onunload>
 	<controls>
 		<control type="group">
 			<centerleft>50%</centerleft>
@@ -127,7 +129,7 @@
 					<defaultcontrol always="true">14101</defaultcontrol>
 					<visible>String.IsEqual(window(home).Property(settingslist_content),games)</visible>
 					<width>700</width>
-					<height>430</height>
+					<height>500</height>
 					<itemgap>0</itemgap>
 					<onup>14100</onup>
 					<ondown>14100</ondown>
@@ -158,7 +160,7 @@
 						<width>700</width>
 						<include>DialogSettingButton</include>
 						<label>$LOCALIZE[13376]</label>
-						<label2>[COLOR grey]Select + Right Stick[/COLOR]</label2>
+						<label2>[COLOR grey]$FEATURE[select,game.controller.snes] + $FEATURE[rightstick,game.controller.default][/COLOR]</label2>
 						<onclick>ActivateWindow(GameVolume)</onclick>
 					</control>
 					<control type="button" id="14103">
@@ -167,6 +169,13 @@
 						<include>DialogSettingButton</include>
 						<label>$LOCALIZE[35234]</label>
 						<onclick>ActivateWindow(GameControllers)</onclick>
+					</control>
+					<control type="button" id="14107">
+						<description>Controller port configuration</description>
+						<width>700</width>
+						<include>DialogSettingButton</include>
+						<label>$LOCALIZE[35110]</label>
+						<onclick>ActivateWindow(GamePorts)</onclick>
 					</control>
 					<control type="button" id="14105">
 						<description>Advanced settings</description>

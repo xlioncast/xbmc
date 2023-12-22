@@ -16,6 +16,7 @@
 
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 
 class CCriticalSection;
@@ -37,11 +38,19 @@ class CGameClientJoystick;
 class CGameClientKeyboard;
 class CGameClientMouse;
 class CGameClientTopology;
+class CPortManager;
 class IGameInputCallback;
 
-class CGameClientInput : protected CGameClientSubsystem, public Observer
+/*!
+ * \ingroup games
+ */
+class CGameClientInput : protected CGameClientSubsystem, public Observable
 {
 public:
+  //! @todo de-duplicate
+  using PortAddress = std::string;
+  using JoystickMap = std::map<PortAddress, std::shared_ptr<CGameClientJoystick>>;
+
   CGameClientInput(CGameClient& gameClient,
                    AddonInstance_Game& addonStruct,
                    CCriticalSection& clientAccess);
@@ -57,26 +66,35 @@ public:
   bool HasFeature(const std::string& controllerId, const std::string& featureName) const;
   bool AcceptsInput() const;
   bool InputEvent(const game_input_event& event);
+  float GetPortActivation(const std::string& portAddress);
 
   // Topology functions
-  const CControllerTree& GetControllerTree() const;
+  const CControllerTree& GetDefaultControllerTree() const;
+  CControllerTree GetActiveControllerTree() const;
   bool SupportsKeyboard() const;
   bool SupportsMouse() const;
+  int GetPlayerLimit() const;
+  bool ConnectController(const std::string& portAddress, const ControllerPtr& controller);
+  bool DisconnectController(const std::string& portAddress);
+  void SavePorts();
+  void ResetPorts();
 
-  // Agent functions
-  bool HasAgent() const;
+  // Joystick functions
+  const JoystickMap& GetJoystickMap() const { return m_joysticks; }
+  void CloseJoysticks(PERIPHERALS::EventLockHandlePtr& inputHandlingLock);
 
   // Keyboard functions
-  bool OpenKeyboard(const ControllerPtr& controller);
+  bool OpenKeyboard(const ControllerPtr& controller, const PERIPHERALS::PeripheralPtr& keyboard);
+  bool IsKeyboardOpen() const;
   void CloseKeyboard();
 
   // Mouse functions
-  bool OpenMouse(const ControllerPtr& controller);
+  bool OpenMouse(const ControllerPtr& controller, const PERIPHERALS::PeripheralPtr& mouse);
+  bool IsMouseOpen() const;
   void CloseMouse();
 
-  // Joystick functions
-  bool OpenJoystick(const std::string& portAddress, const ControllerPtr& controller);
-  void CloseJoystick(const std::string& portAddress);
+  // Agent functions
+  bool HasAgent() const;
 
   // Hardware input functions
   void HardwareReset();
@@ -84,20 +102,14 @@ public:
   // Input callbacks
   bool ReceiveInputEvent(const game_input_event& eventStruct);
 
-  // Implementation of Observer
-  void Notify(const Observable& obs, const ObservableMessage msg) override;
-
 private:
-  using PortAddress = std::string;
-  using JoystickMap = std::map<PortAddress, std::unique_ptr<CGameClientJoystick>>;
-  using PortMap = std::map<JOYSTICK::IInputProvider*, CGameClientJoystick*>;
-
   // Private input helpers
   void LoadTopology();
   void SetControllerLayouts(const ControllerVector& controllers);
-  void ProcessJoysticks();
-  PortMap MapJoysticks(const PERIPHERALS::PeripheralVector& peripheralJoysticks,
-                       const JoystickMap& gameClientjoysticks) const;
+  bool OpenJoystick(const std::string& portAddress, const ControllerPtr& controller);
+  void CloseJoysticks(const CPortNode& port, PERIPHERALS::EventLockHandlePtr& inputHandlingLock);
+  void CloseJoystick(const std::string& portAddress,
+                     PERIPHERALS::EventLockHandlePtr& inputHandlingLock);
 
   // Private callback helpers
   bool SetRumble(const std::string& portAddress, const std::string& feature, float magnitude);
@@ -111,10 +123,52 @@ private:
   std::unique_ptr<CGameClientTopology> m_topology;
   using ControllerLayoutMap = std::map<std::string, std::unique_ptr<CGameClientController>>;
   ControllerLayoutMap m_controllerLayouts;
+
+  /*!
+   * \brief Map of port address to joystick handler
+   *
+   * The port address is a string that identifies the adress of the port.
+   *
+   * The joystick handler connects to joystick input of the game client.
+   *
+   * This property is always populated with the default joystick configuration
+   * (i.e. all ports are connected to the first controller they accept).
+   */
   JoystickMap m_joysticks;
-  PortMap m_portMap;
+
+  /*!
+   * \brief Serializable port state
+   */
+  std::unique_ptr<CPortManager> m_portManager;
+
+  /*!
+   * \brief Mutex for port state
+   *
+   * Mutex is recursive to allow for management of several ports within the
+   * function ResetPorts().
+   */
+  mutable std::recursive_mutex m_portMutex;
+
+  /*!
+   * \brief Keyboard handler
+   *
+   * This connects to the keyboard input of the game client.
+   */
   std::unique_ptr<CGameClientKeyboard> m_keyboard;
+
+  /*!
+   * \brief Mouse handler
+   *
+   * This connects to the mouse input of the game client.
+   */
   std::unique_ptr<CGameClientMouse> m_mouse;
+
+  /*!
+   * \brief Hardware input handler
+   *
+   * This connects to input from game console hardware belonging to the game
+   * client.
+   */
   std::unique_ptr<CGameClientHardware> m_hardware;
 };
 } // namespace GAME

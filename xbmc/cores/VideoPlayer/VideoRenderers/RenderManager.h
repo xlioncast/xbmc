@@ -15,6 +15,7 @@
 #include "cores/VideoSettings.h"
 #include "threads/CriticalSection.h"
 #include "threads/Event.h"
+#include "threads/SystemClock.h"
 #include "utils/Geometry.h"
 #include "windowing/Resolution.h"
 
@@ -47,7 +48,7 @@ protected:
   virtual void UpdateRenderBuffers(int queued, int discard, int free) = 0;
   virtual void UpdateGuiRender(bool gui) = 0;
   virtual void UpdateVideoRender(bool video) = 0;
-  virtual CVideoSettings GetVideoSettings() = 0;
+  virtual CVideoSettings GetVideoSettings() const = 0;
 };
 
 class CRenderManager
@@ -57,10 +58,10 @@ public:
   virtual ~CRenderManager();
 
   // Functions called from render thread
-  void GetVideoRect(CRect &source, CRect &dest, CRect &view);
-  float GetAspectRatio();
+  void GetVideoRect(CRect& source, CRect& dest, CRect& view) const;
+  float GetAspectRatio() const;
   void FrameMove();
-  void FrameWait(int ms);
+  void FrameWait(std::chrono::milliseconds duration);
   void Render(bool clear, DWORD flags = 0, DWORD alpha = 255, bool gui = true);
   bool IsVideoLayer();
   RESOLUTION GetResolution();
@@ -72,6 +73,15 @@ public:
   bool Flush(bool wait, bool saveBuffers);
   bool IsConfigured() const;
   void ToggleDebug();
+  void ToggleDebugVideo();
+
+  /*!
+   * \brief Set the subtitle vertical position,
+   * it depends on current screen resolution
+   * \param value The subtitle position in pixels
+   * \param save If true, the value will be saved to resolution info
+   */
+  void SetSubtitleVerticalPosition(const int value, bool save);
 
   unsigned int AllocRenderCapture();
   void ReleaseRenderCapture(unsigned int captureId);
@@ -79,14 +89,14 @@ public:
   bool RenderCaptureGetPixels(unsigned int captureId, unsigned int millis, uint8_t *buffer, unsigned int size);
 
   // Functions called from GUI
-  bool Supports(ERENDERFEATURE feature);
-  bool Supports(ESCALINGMETHOD method);
+  bool Supports(ERENDERFEATURE feature) const;
+  bool Supports(ESCALINGMETHOD method) const;
 
   int GetSkippedFrames()  { return m_QueueSkip; }
 
   bool Configure(const VideoPicture& picture, float fps, unsigned int orientation, int buffers = 0);
   bool AddVideoPicture(const VideoPicture& picture, volatile std::atomic_bool& bStop, EINTERLACEMETHOD deintMethod, bool wait);
-  void AddOverlay(CDVDOverlay* o, double pts);
+  void AddOverlay(std::shared_ptr<CDVDOverlay> o, double pts);
   void ShowVideo(bool enable);
 
   /**
@@ -95,7 +105,8 @@ public:
    * in case no buffer is available. Player may call this in a loop and decides
    * by itself when it wants to drop a frame.
    */
-  int WaitForBuffer(volatile std::atomic_bool& bStop, int timeout = 100);
+  int WaitForBuffer(volatile std::atomic_bool& bStop,
+                    std::chrono::milliseconds timeout = std::chrono::milliseconds(100));
 
   /**
    * Can be called by player for lateness detection. This is done best by
@@ -108,10 +119,10 @@ public:
    */
   void DiscardBuffer();
 
-  void SetDelay(int delay) { m_videoDelay = delay; };
-  int GetDelay() { return m_videoDelay; };
+  void SetDelay(int delay) { m_videoDelay = delay; }
+  int GetDelay() { return m_videoDelay; }
 
-  void SetVideoSettings(CVideoSettings settings);
+  void SetVideoSettings(const CVideoSettings& settings);
 
 protected:
 
@@ -141,7 +152,8 @@ protected:
   bool m_bRenderGUI = true;
   bool m_renderedOverlay = false;
   bool m_renderDebug = false;
-  XbmcThreads::EndTime m_debugTimer;
+  bool m_renderDebugVideo = false;
+  XbmcThreads::EndTime<> m_debugTimer;
   std::atomic_bool m_showVideo = {false};
 
   enum EPRESENTSTEP
@@ -174,7 +186,7 @@ protected:
   double m_latencyTweak = 0.0;
   /// Display latency updated in PrepareNextRender in DVD clock units, includes m_latencyTweak
   double m_displayLatency = 0.0;
-  std::atomic_int m_videoDelay = {0};
+  std::atomic_int m_videoDelay = {};
 
   int m_QueueSize = 2;
   int m_QueueSkip = 0;
@@ -184,7 +196,7 @@ protected:
     double         pts;
     EFIELDSYNC     presentfield;
     EPRESENTMETHOD presentmethod;
-  } m_Queue[NUM_BUFFERS];
+  } m_Queue[NUM_BUFFERS]{};
 
   std::deque<int> m_free;
   std::deque<int> m_queued;
@@ -203,7 +215,7 @@ protected:
   int m_lateframes = -1;
   double m_presentpts = 0.0;
   EPRESENTSTEP m_presentstep = PRESENT_IDLE;
-  XbmcThreads::EndTime m_presentTimer;
+  XbmcThreads::EndTime<> m_presentTimer;
   bool m_forceNext = false;
   int m_presentsource = 0;
   int m_presentsourcePast = -1;

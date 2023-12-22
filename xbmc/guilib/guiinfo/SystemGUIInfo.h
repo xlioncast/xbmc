@@ -9,7 +9,10 @@
 #pragma once
 
 #include "guilib/guiinfo/GUIInfoProvider.h"
+#include "utils/GpuInfo.h"
 #include "utils/Temperature.h"
+
+#include <memory>
 
 namespace KODI
 {
@@ -32,12 +35,13 @@ public:
   bool GetInt(int& value, const CGUIListItem *item, int contextWindow, const CGUIInfo &info) const override;
   bool GetBool(bool& value, const CGUIListItem *item, int contextWindow, const CGUIInfo &info) const override;
 
-  float GetFPS() const { return m_fps; };
+  float GetFPS() const { return m_fps; }
   void UpdateFPS();
 
 private:
   std::string GetSystemHeatInfo(int info) const;
-  CTemperature GetGPUTemperature() const;
+
+  std::unique_ptr<CGPUInfo> m_gpuInfo;
 
   static const int SYSTEM_HEAT_UPDATE_INTERVAL = 60000;
 

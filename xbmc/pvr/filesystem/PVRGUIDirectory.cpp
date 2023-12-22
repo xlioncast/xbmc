@@ -16,10 +16,13 @@
 #include "pvr/PVRManager.h"
 #include "pvr/addons/PVRClients.h"
 #include "pvr/channels/PVRChannel.h"
-#include "pvr/channels/PVRChannelGroup.h"
+#include "pvr/channels/PVRChannelGroupMember.h"
 #include "pvr/channels/PVRChannelGroups.h"
 #include "pvr/channels/PVRChannelGroupsContainer.h"
 #include "pvr/channels/PVRChannelsPath.h"
+#include "pvr/epg/EpgContainer.h"
+#include "pvr/epg/EpgSearchFilter.h"
+#include "pvr/epg/EpgSearchPath.h"
 #include "pvr/recordings/PVRRecording.h"
 #include "pvr/recordings/PVRRecordings.h"
 #include "pvr/recordings/PVRRecordingsPath.h"
@@ -63,23 +66,14 @@ bool GetRootDirectory(bool bRadio, CFileItemList& results)
 {
   std::shared_ptr<CFileItem> item;
 
-  const std::shared_ptr<CPVRClients> clients = CServiceBroker::GetPVRManager().Clients();
-
-  // Channels
-  item.reset(new CFileItem(
-      bRadio ? CPVRChannelsPath::PATH_RADIO_CHANNELS : CPVRChannelsPath::PATH_TV_CHANNELS, true));
-  item->SetLabel(g_localizeStrings.Get(19019)); // Channels
-  item->SetProperty("node.target", CWindowTranslator::TranslateWindow(bRadio ? WINDOW_RADIO_CHANNELS
-                                                                             : WINDOW_TV_CHANNELS));
-  item->SetArt("icon", "DefaultPVRChannels.png");
-  results.Add(item);
+  const std::shared_ptr<const CPVRClients> clients = CServiceBroker::GetPVRManager().Clients();
 
   // EPG
   const bool bAnyClientSupportingEPG = clients->AnyClientSupportingEPG();
   if (bAnyClientSupportingEPG)
   {
-    item.reset(
-        new CFileItem(StringUtils::Format("pvr://guide/%s/", bRadio ? "radio" : "tv"), true));
+    item = std::make_shared<CFileItem>(
+        StringUtils::Format("pvr://guide/{}/", bRadio ? "radio" : "tv"), true);
     item->SetLabel(g_localizeStrings.Get(19069)); // Guide
     item->SetProperty("node.target", CWindowTranslator::TranslateWindow(bRadio ? WINDOW_RADIO_GUIDE
                                                                                : WINDOW_TV_GUIDE));
@@ -87,12 +81,21 @@ bool GetRootDirectory(bool bRadio, CFileItemList& results)
     results.Add(item);
   }
 
+  // Channels
+  item = std::make_shared<CFileItem>(
+      bRadio ? CPVRChannelsPath::PATH_RADIO_CHANNELS : CPVRChannelsPath::PATH_TV_CHANNELS, true);
+  item->SetLabel(g_localizeStrings.Get(19019)); // Channels
+  item->SetProperty("node.target", CWindowTranslator::TranslateWindow(bRadio ? WINDOW_RADIO_CHANNELS
+                                                                             : WINDOW_TV_CHANNELS));
+  item->SetArt("icon", "DefaultPVRChannels.png");
+  results.Add(item);
+
   // Recordings
   if (clients->AnyClientSupportingRecordings())
   {
-    item.reset(new CFileItem(bRadio ? CPVRRecordingsPath::PATH_ACTIVE_RADIO_RECORDINGS
-                                    : CPVRRecordingsPath::PATH_ACTIVE_TV_RECORDINGS,
-                             true));
+    item = std::make_shared<CFileItem>(bRadio ? CPVRRecordingsPath::PATH_ACTIVE_RADIO_RECORDINGS
+                                              : CPVRRecordingsPath::PATH_ACTIVE_TV_RECORDINGS,
+                                       true);
     item->SetLabel(g_localizeStrings.Get(19017)); // Recordings
     item->SetProperty("node.target", CWindowTranslator::TranslateWindow(
                                          bRadio ? WINDOW_RADIO_RECORDINGS : WINDOW_TV_RECORDINGS));
@@ -102,16 +105,16 @@ bool GetRootDirectory(bool bRadio, CFileItemList& results)
 
   // Timers/Timer rules
   // - always present, because Reminders are always available, no client support needed for this
-  item.reset(new CFileItem(
-      bRadio ? CPVRTimersPath::PATH_RADIO_TIMERS : CPVRTimersPath::PATH_TV_TIMERS, true));
+  item = std::make_shared<CFileItem>(
+      bRadio ? CPVRTimersPath::PATH_RADIO_TIMERS : CPVRTimersPath::PATH_TV_TIMERS, true);
   item->SetLabel(g_localizeStrings.Get(19040)); // Timers
   item->SetProperty("node.target", CWindowTranslator::TranslateWindow(bRadio ? WINDOW_RADIO_TIMERS
                                                                              : WINDOW_TV_TIMERS));
   item->SetArt("icon", "DefaultPVRTimers.png");
   results.Add(item);
 
-  item.reset(new CFileItem(
-      bRadio ? CPVRTimersPath::PATH_RADIO_TIMER_RULES : CPVRTimersPath::PATH_TV_TIMER_RULES, true));
+  item = std::make_shared<CFileItem>(
+      bRadio ? CPVRTimersPath::PATH_RADIO_TIMER_RULES : CPVRTimersPath::PATH_TV_TIMER_RULES, true);
   item->SetLabel(g_localizeStrings.Get(19138)); // Timer rules
   item->SetProperty("node.target", CWindowTranslator::TranslateWindow(
                                        bRadio ? WINDOW_RADIO_TIMER_RULES : WINDOW_TV_TIMER_RULES));
@@ -121,8 +124,8 @@ bool GetRootDirectory(bool bRadio, CFileItemList& results)
   // Search
   if (bAnyClientSupportingEPG)
   {
-    item.reset(
-        new CFileItem(StringUtils::Format("pvr://search/%s/", bRadio ? "radio" : "tv"), true));
+    item = std::make_shared<CFileItem>(
+        bRadio ? CPVREpgSearchPath::PATH_RADIO_SEARCH : CPVREpgSearchPath::PATH_TV_SEARCH, true);
     item->SetLabel(g_localizeStrings.Get(137)); // Search
     item->SetProperty("node.target", CWindowTranslator::TranslateWindow(bRadio ? WINDOW_RADIO_SEARCH
                                                                                : WINDOW_TV_SEARCH));
@@ -151,17 +154,17 @@ bool CPVRGUIDirectory::GetDirectory(CFileItemList& results) const
     {
       std::shared_ptr<CFileItem> item;
 
-      item.reset(new CFileItem(base + "channels/", true));
+      item = std::make_shared<CFileItem>(base + "channels/", true);
       item->SetLabel(g_localizeStrings.Get(19019)); // Channels
       item->SetLabelPreformatted(true);
       results.Add(item);
 
-      item.reset(new CFileItem(base + "recordings/active/", true));
+      item = std::make_shared<CFileItem>(base + "recordings/active/", true);
       item->SetLabel(g_localizeStrings.Get(19017)); // Recordings
       item->SetLabelPreformatted(true);
       results.Add(item);
 
-      item.reset(new CFileItem(base + "recordings/deleted/", true));
+      item = std::make_shared<CFileItem>(base + "recordings/deleted/", true);
       item->SetLabel(g_localizeStrings.Get(19184)); // Deleted recordings
       item->SetLabelPreformatted(true);
       results.Add(item);
@@ -197,8 +200,7 @@ bool CPVRGUIDirectory::GetDirectory(CFileItemList& results) const
   }
   else if (StringUtils::StartsWith(fileName, "channels"))
   {
-    if (CServiceBroker::GetPVRManager().ChannelGroups() &&
-        CServiceBroker::GetPVRManager().ChannelGroups()->Loaded())
+    if (CServiceBroker::GetPVRManager().IsStarted())
     {
       return GetChannelsDirectory(results);
     }
@@ -209,6 +211,17 @@ bool CPVRGUIDirectory::GetDirectory(CFileItemList& results) const
     if (CServiceBroker::GetPVRManager().IsStarted())
     {
       return GetTimersDirectory(results);
+    }
+    return true;
+  }
+
+  const CPVREpgSearchPath path(m_url.Get());
+  if (path.IsValid())
+  {
+    if (CServiceBroker::GetPVRManager().IsStarted())
+    {
+      if (path.IsSavedSearchesRoot())
+        return GetSavedSearchesDirectory(path.IsRadio(), results);
     }
     return true;
   }
@@ -284,7 +297,8 @@ void GetSubDirectories(const CPVRRecordingsPath& recParentPath,
     if (recording->IsRadio() != bRadio)
       continue;
 
-    const std::string strCurrent = recParentPath.GetUnescapedSubDirectoryPath(recording->m_strDirectory);
+    const std::string strCurrent =
+        recParentPath.GetUnescapedSubDirectoryPath(recording->Directory());
     if (strCurrent.empty())
       continue;
 
@@ -295,7 +309,7 @@ void GetSubDirectories(const CPVRRecordingsPath& recParentPath,
     std::shared_ptr<CFileItem> item;
     if (!results.Contains(strFilePath))
     {
-      item.reset(new CFileItem(strCurrent, true));
+      item = std::make_shared<CFileItem>(strCurrent, true);
       item->SetPath(strFilePath);
       item->SetLabel(strCurrent);
       item->SetLabelPreformatted(true);
@@ -303,6 +317,7 @@ void GetSubDirectories(const CPVRRecordingsPath& recParentPath,
       item->SetProperty("totalepisodes", 0);
       item->SetProperty("watchedepisodes", 0);
       item->SetProperty("unwatchedepisodes", 0);
+      item->SetProperty("inprogressepisodes", 0);
       item->SetProperty("sizeinbytes", UINT64_C(0));
 
       // Assume all folders are watched, we'll change the overlay later
@@ -326,10 +341,10 @@ void GetSubDirectories(const CPVRRecordingsPath& recParentPath,
     {
       item->IncrementProperty("watchedepisodes", 1);
     }
-    item->SetLabel2(StringUtils::Format("%s / %s",
-        item->GetProperty("watchedepisodes").asString().c_str(),
-        item->GetProperty("totalepisodes").asString().c_str()));
-
+    if (recording->GetResumePoint().IsPartWay())
+    {
+      item->IncrementProperty("inprogressepisodes", 1);
+    }
     item->IncrementProperty("sizeinbytes", recording->GetSizeInBytes());
   }
 
@@ -352,8 +367,11 @@ void GetSubDirectories(const CPVRRecordingsPath& recParentPath,
 
 bool CPVRGUIDirectory::GetRecordingsDirectory(CFileItemList& results) const
 {
+  results.SetContent("recordings");
+
   bool bGrouped = false;
-  const std::vector<std::shared_ptr<CPVRRecording>> recordings = CServiceBroker::GetPVRManager().Recordings()->GetAll();
+  const std::vector<std::shared_ptr<CPVRRecording>> recordings =
+      CServiceBroker::GetPVRManager().Recordings()->GetAll();
 
   if (m_url.HasOption("view"))
   {
@@ -370,7 +388,8 @@ bool CPVRGUIDirectory::GetRecordingsDirectory(CFileItemList& results) const
   }
   else
   {
-    bGrouped = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_PVRRECORD_GROUPRECORDINGS);
+    bGrouped = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+        CSettings::SETTING_PVRRECORD_GROUPRECORDINGS);
   }
 
   const CPVRRecordingsPath recPath(m_url.GetWithoutOptions());
@@ -389,7 +408,7 @@ bool CPVRGUIDirectory::GetRecordingsDirectory(CFileItemList& results) const
       // Omit recordings not matching criteria
       if (recording->IsDeleted() != recPath.IsDeleted() ||
           recording->IsRadio() != recPath.IsRadio() ||
-          !IsDirectoryMember(strDirectory, recording->m_strDirectory, bGrouped))
+          !IsDirectoryMember(strDirectory, recording->Directory(), bGrouped))
         continue;
 
       item = std::make_shared<CFileItem>(recording);
@@ -401,44 +420,29 @@ bool CPVRGUIDirectory::GetRecordingsDirectory(CFileItemList& results) const
   return recPath.IsValid();
 }
 
-bool CPVRGUIDirectory::FilterDirectory(CFileItemList& results) const
+bool CPVRGUIDirectory::GetSavedSearchesDirectory(bool bRadio, CFileItemList& results) const
 {
-  if (!results.IsEmpty())
+  const std::vector<std::shared_ptr<CPVREpgSearchFilter>> searches =
+      CServiceBroker::GetPVRManager().EpgContainer().GetSavedSearches(bRadio);
+
+  for (const auto& search : searches)
   {
-    if (m_url.HasOption("view"))
-    {
-      const std::string view = m_url.GetOption("view");
-      if (view == "lastplayed")
-      {
-        // remove channels never played so far
-        for (int i = 0; i < results.Size(); ++i)
-        {
-          const std::shared_ptr<CPVRChannel> channel = results.Get(i)->GetPVRChannelInfoTag();
-          time_t lastWatched = channel->LastWatched();
-          if (!lastWatched)
-          {
-            results.Remove(i);
-            --i;
-          }
-        }
-      }
-      else
-      {
-        CLog::LogF(LOGERROR, "Unsupported value '{}' for channel list URL parameter 'view'", view);
-        return false;
-      }
-    }
+    results.Add(std::make_shared<CFileItem>(search));
   }
   return true;
 }
 
-bool CPVRGUIDirectory::GetChannelGroupsDirectory(bool bRadio, bool bExcludeHidden, CFileItemList& results)
+bool CPVRGUIDirectory::GetChannelGroupsDirectory(bool bRadio,
+                                                 bool bExcludeHidden,
+                                                 CFileItemList& results)
 {
-  const CPVRChannelGroups* channelGroups = CServiceBroker::GetPVRManager().ChannelGroups()->Get(bRadio);
+  const CPVRChannelGroups* channelGroups =
+      CServiceBroker::GetPVRManager().ChannelGroups()->Get(bRadio);
   if (channelGroups)
   {
     std::shared_ptr<CFileItem> item;
-    const std::vector<std::shared_ptr<CPVRChannelGroup>> groups = channelGroups->GetMembers(bExcludeHidden);
+    const std::vector<std::shared_ptr<CPVRChannelGroup>> groups =
+        channelGroups->GetMembers(bExcludeHidden);
     for (const auto& group : groups)
     {
       item = std::make_shared<CFileItem>(group->GetPath(), true);
@@ -451,6 +455,109 @@ bool CPVRGUIDirectory::GetChannelGroupsDirectory(bool bRadio, bool bExcludeHidde
   return false;
 }
 
+namespace
+{
+std::shared_ptr<CPVRChannelGroupMember> GetLastWatchedChannelGroupMember(
+    const std::shared_ptr<CPVRChannel>& channel)
+{
+  const int lastGroupId{channel->LastWatchedGroupId()};
+  if (lastGroupId != PVR_GROUP_ID_UNNKOWN)
+  {
+    const std::shared_ptr<const CPVRChannelGroup> lastGroup{
+        CServiceBroker::GetPVRManager().ChannelGroups()->GetByIdFromAll(lastGroupId)};
+    if (lastGroup && !lastGroup->IsHidden() && !lastGroup->IsDeleted())
+      return lastGroup->GetByUniqueID(channel->StorageId());
+  }
+  return {};
+}
+
+std::shared_ptr<CPVRChannelGroupMember> GetFirstMatchingGroupMember(
+    const std::shared_ptr<CPVRChannel>& channel)
+{
+  CPVRChannelGroups* groups{
+      CServiceBroker::GetPVRManager().ChannelGroups()->Get(channel->IsRadio())};
+  if (groups)
+  {
+    const std::vector<std::shared_ptr<CPVRChannelGroup>> channelGroups{
+        groups->GetMembers(true /* exclude hidden */)};
+
+    for (const auto& channelGroup : channelGroups)
+    {
+      if (channelGroup->IsDeleted())
+        continue;
+
+      std::shared_ptr<CPVRChannelGroupMember> groupMember{
+          channelGroup->GetByUniqueID(channel->StorageId())};
+      if (groupMember)
+        return groupMember;
+    }
+  }
+  return {};
+}
+
+std::vector<std::shared_ptr<CPVRChannelGroupMember>> GetChannelGroupMembers(
+    const CPVRChannelsPath& path)
+{
+  const std::string& groupName{path.GetGroupName()};
+
+  std::shared_ptr<CPVRChannelGroup> group;
+  if (path.IsHiddenChannelGroup()) // hidden channels from the 'all channels' group
+  {
+    group = CServiceBroker::GetPVRManager().ChannelGroups()->GetGroupAll(path.IsRadio());
+  }
+  else if (groupName == "*") // all channels across all groups
+  {
+    group = CServiceBroker::GetPVRManager().ChannelGroups()->GetGroupAll(path.IsRadio());
+    if (group)
+    {
+      std::vector<std::shared_ptr<CPVRChannelGroupMember>> result;
+
+      const std::vector<std::shared_ptr<CPVRChannelGroupMember>> allGroupMembers{
+          group->GetMembers(CPVRChannelGroup::Include::ONLY_VISIBLE)};
+      for (const auto& allGroupMember : allGroupMembers)
+      {
+        std::shared_ptr<CPVRChannelGroupMember> member{
+            GetLastWatchedChannelGroupMember(allGroupMember->Channel())};
+        if (member)
+        {
+          result.emplace_back(member);
+          continue; // Process next 'All channels' group member.
+        }
+
+        if (group->IsHidden())
+        {
+          // Very special case. 'All channels' group is hidden. Let's see what we get iterating all
+          // non-hidden / non-deleted groups. We must not return any 'All channels' group members,
+          // because their path is invalid (it contains the group).
+          member = GetFirstMatchingGroupMember(allGroupMember->Channel());
+          if (member)
+            result.emplace_back(member);
+        }
+        else
+        {
+          // Use the 'All channels' group member.
+          result.emplace_back(allGroupMember);
+        }
+      }
+      return result;
+    }
+  }
+  else
+  {
+    group = CServiceBroker::GetPVRManager()
+                .ChannelGroups()
+                ->Get(path.IsRadio())
+                ->GetByName(groupName, path.GetGroupClientID());
+  }
+
+  if (group)
+    return group->GetMembers(CPVRChannelGroup::Include::ALL);
+
+  CLog::LogF(LOGERROR, "Unable to obtain members for channel group '{}'", groupName);
+  return {};
+}
+} // unnamed namespace
+
 bool CPVRGUIDirectory::GetChannelsDirectory(CFileItemList& results) const
 {
   const CPVRChannelsPath path(m_url.GetWithoutOptions());
@@ -461,13 +568,13 @@ bool CPVRGUIDirectory::GetChannelsDirectory(CFileItemList& results) const
       std::shared_ptr<CFileItem> item;
 
       // all tv channels
-      item.reset(new CFileItem(CPVRChannelsPath::PATH_TV_CHANNELS, true));
+      item = std::make_shared<CFileItem>(CPVRChannelsPath::PATH_TV_CHANNELS, true);
       item->SetLabel(g_localizeStrings.Get(19020)); // TV
       item->SetLabelPreformatted(true);
       results.Add(item);
 
       // all radio channels
-      item.reset(new CFileItem(CPVRChannelsPath::PATH_RADIO_CHANNELS, true));
+      item = std::make_shared<CFileItem>(CPVRChannelsPath::PATH_RADIO_CHANNELS, true);
       item->SetLabel(g_localizeStrings.Get(19021)); // Radio
       item->SetLabelPreformatted(true);
       results.Add(item);
@@ -476,41 +583,24 @@ bool CPVRGUIDirectory::GetChannelsDirectory(CFileItemList& results) const
     }
     else if (path.IsChannelsRoot())
     {
-      return GetChannelGroupsDirectory(path.IsRadio(), false, results);
+      return GetChannelGroupsDirectory(path.IsRadio(), true, results);
     }
     else if (path.IsChannelGroup())
     {
-      const std::string& strGroupName = path.GetGroupName();
-      bool bShowHiddenChannels = path.IsHiddenChannelGroup();
-
-      std::shared_ptr<CPVRChannelGroup> group;
-      if (bShowHiddenChannels || strGroupName == "*") // all channels
+      const bool playedOnly{(m_url.HasOption("view") && (m_url.GetOption("view") == "lastplayed"))};
+      const bool showHiddenChannels{path.IsHiddenChannelGroup()};
+      const std::vector<std::shared_ptr<CPVRChannelGroupMember>> groupMembers{
+          GetChannelGroupMembers(path)};
+      for (const auto& groupMember : groupMembers)
       {
-        group = CServiceBroker::GetPVRManager().ChannelGroups()->GetGroupAll(path.IsRadio());
-      }
-      else
-      {
-        group = CServiceBroker::GetPVRManager().ChannelGroups()->Get(path.IsRadio())->GetByName(strGroupName);
-      }
+        if (showHiddenChannels != groupMember->Channel()->IsHidden())
+          continue;
 
-      if (group)
-      {
-        const std::vector<std::shared_ptr<PVRChannelGroupMember>> groupMembers = group->GetMembers();
-        for (const auto& groupMember : groupMembers)
-        {
-          if (bShowHiddenChannels != groupMember->channel->IsHidden())
-            continue;
+        if (playedOnly && !groupMember->Channel()->LastWatched())
+          continue;
 
-          results.Add(std::make_shared<CFileItem>(groupMember->channel));
-        }
+        results.Add(std::make_shared<CFileItem>(groupMember));
       }
-      else
-      {
-        CLog::LogF(LOGERROR, "Unable to obtain members of channel group '{}'", strGroupName);
-        return false;
-      }
-
-      FilterDirectory(results);
       return true;
     }
   }
@@ -521,29 +611,21 @@ namespace
 {
 
 bool GetTimersRootDirectory(const CPVRTimersPath& path,
+                            bool bHideDisabled,
                             const std::vector<std::shared_ptr<CPVRTimerInfoTag>>& timers,
                             CFileItemList& results)
 {
-  std::shared_ptr<CFileItem> item(new CFileItem(CPVRTimersPath::PATH_ADDTIMER, false));
-  item->SetLabel(g_localizeStrings.Get(19026)); // "Add timer..."
-  item->SetLabelPreformatted(true);
-  item->SetSpecialSort(SortSpecialOnTop);
-  item->SetArt("icon", "DefaultTVShows.png");
-  results.Add(item);
-
   bool bRadio = path.IsRadio();
   bool bRules = path.IsRules();
 
-  bool bHideDisabled = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_PVRTIMERS_HIDEDISABLEDTIMERS);
-
   for (const auto& timer : timers)
   {
-    if ((bRadio == timer->m_bIsRadio || (bRules && timer->m_iClientChannelUid == PVR_TIMER_ANY_CHANNEL)) &&
-        (bRules == timer->IsTimerRule()) &&
-        (!bHideDisabled || (timer->m_state != PVR_TIMER_STATE_DISABLED)))
+    if ((bRadio == timer->IsRadio() ||
+         (bRules && timer->ClientChannelUID() == PVR_TIMER_ANY_CHANNEL)) &&
+        (bRules == timer->IsTimerRule()) && (!bHideDisabled || !timer->IsDisabled()))
     {
-      item.reset(new CFileItem(timer));
-      const CPVRTimersPath timersPath(path.GetPath(), timer->m_iClientId, timer->m_iClientIndex);
+      const auto item = std::make_shared<CFileItem>(timer);
+      const CPVRTimersPath timersPath(path.GetPath(), timer->ClientID(), timer->ClientIndex());
       item->SetPath(timersPath.GetPath());
       results.Add(item);
     }
@@ -552,6 +634,7 @@ bool GetTimersRootDirectory(const CPVRTimersPath& path,
 }
 
 bool GetTimersSubDirectory(const CPVRTimersPath& path,
+                           bool bHideDisabled,
                            const std::vector<std::shared_ptr<CPVRTimerInfoTag>>& timers,
                            CFileItemList& results)
 {
@@ -559,20 +642,15 @@ bool GetTimersSubDirectory(const CPVRTimersPath& path,
   int iParentId = path.GetParentId();
   int iClientId = path.GetClientId();
 
-  bool bHideDisabled = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_PVRTIMERS_HIDEDISABLEDTIMERS);
-
   std::shared_ptr<CFileItem> item;
 
   for (const auto& timer : timers)
   {
-    if ((timer->m_bIsRadio == bRadio) &&
-        (timer->m_iParentClientIndex != PVR_TIMER_NO_PARENT) &&
-        (timer->m_iClientId == iClientId) &&
-        (timer->m_iParentClientIndex == iParentId) &&
-        (!bHideDisabled || (timer->m_state != PVR_TIMER_STATE_DISABLED)))
+    if ((timer->IsRadio() == bRadio) && timer->HasParent() && (timer->ClientID() == iClientId) &&
+        (timer->ParentClientIndex() == iParentId) && (!bHideDisabled || !timer->IsDisabled()))
     {
-      item.reset(new CFileItem(timer));
-      const CPVRTimersPath timersPath(path.GetPath(), timer->m_iClientId, timer->m_iClientIndex);
+      item = std::make_shared<CFileItem>(timer);
+      const CPVRTimersPath timersPath(path.GetPath(), timer->ClientID(), timer->ClientIndex());
       item->SetPath(timersPath.GetPath());
       results.Add(item);
     }
@@ -585,19 +663,40 @@ bool GetTimersSubDirectory(const CPVRTimersPath& path,
 bool CPVRGUIDirectory::GetTimersDirectory(CFileItemList& results) const
 {
   const CPVRTimersPath path(m_url.GetWithoutOptions());
-  if (path.IsValid())
+  if (path.IsValid() && (path.IsTimersRoot() || path.IsTimerRule()))
   {
-    const std::vector<std::shared_ptr<CPVRTimerInfoTag>> timers = CServiceBroker::GetPVRManager().Timers()->GetAll();
+    bool bHideDisabled = false;
+    if (m_url.HasOption("view"))
+    {
+      const std::string view = m_url.GetOption("view");
+      if (view == "hidedisabled")
+      {
+        bHideDisabled = true;
+      }
+      else
+      {
+        CLog::LogF(LOGERROR, "Unsupported value '{}' for url parameter 'view'", view);
+        return false;
+      }
+    }
+    else
+    {
+      bHideDisabled = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          CSettings::SETTING_PVRTIMERS_HIDEDISABLEDTIMERS);
+    }
+
+    const std::vector<std::shared_ptr<CPVRTimerInfoTag>> timers =
+        CServiceBroker::GetPVRManager().Timers()->GetAll();
 
     if (path.IsTimersRoot())
     {
       /* Root folder containing either timer rules or timers. */
-      return GetTimersRootDirectory(path, timers, results);
+      return GetTimersRootDirectory(path, bHideDisabled, timers, results);
     }
     else if (path.IsTimerRule())
     {
       /* Sub folder containing the timers scheduled by the given timer rule. */
-      return GetTimersSubDirectory(path, timers, results);
+      return GetTimersSubDirectory(path, bHideDisabled, timers, results);
     }
   }
 

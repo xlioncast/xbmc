@@ -26,6 +26,8 @@ namespace PVR
      */
     explicit CPVRGUIProgressHandler(const std::string& strTitle);
 
+    ~CPVRGUIProgressHandler() override = default;
+
     /*!
      * @brief Update the progress dialogs's content.
      * @param strText The new progress text.
@@ -41,22 +43,17 @@ namespace PVR
      */
     void UpdateProgress(const std::string& strText, int iCurrent, int iMax);
 
-    /*!
-     * @brief Destroy the progress dialog. This happens asynchrounous, instance must not be touched anymore after calling this method.
-     */
-    void DestroyProgress();
-
+  protected:
     // CThread implementation
     void Process() override;
 
   private:
-    ~CPVRGUIProgressHandler() override = default; // prevent creation of stack instances
-
     CCriticalSection m_critSection;
     const std::string m_strTitle;
     std::string m_strText;
-    float m_fProgress;
-    bool m_bChanged;
+    float m_fProgress{0.0f};
+    bool m_bChanged{false};
+    bool m_bCreated{false};
   };
 
 } // namespace PVR

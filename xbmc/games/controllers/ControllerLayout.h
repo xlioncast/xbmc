@@ -12,16 +12,22 @@
 #include <string>
 #include <vector>
 
-class TiXmlElement;
+namespace tinyxml2
+{
+class XMLElement;
+}
 
 namespace KODI
 {
 namespace GAME
 {
 class CController;
-class CControllerFeature;
-class CControllerTopology;
+class CPhysicalFeature;
+class CPhysicalTopology;
 
+/*!
+ * \ingroup games
+ */
 class CControllerLayout
 {
 public:
@@ -67,7 +73,7 @@ public:
    *
    * \return The physical topology of the controller
    */
-  const CControllerTopology& Topology(void) const { return *m_topology; }
+  const CPhysicalTopology& Topology(void) const { return *m_topology; }
 
   /*!
    * \brief Deserialize the specified XML element
@@ -76,16 +82,16 @@ public:
    * \param controller The controller, used to obtain read-only properties
    * \param features The deserialized features, if any
    */
-  void Deserialize(const TiXmlElement* pLayoutElement,
+  void Deserialize(const tinyxml2::XMLElement* pLayoutElement,
                    const CController* controller,
-                   std::vector<CControllerFeature>& features);
+                   std::vector<CPhysicalFeature>& features);
 
 private:
   const CController* m_controller = nullptr;
   int m_labelId = -1;
   std::string m_icon;
   std::string m_strImage;
-  std::unique_ptr<CControllerTopology> m_topology;
+  std::unique_ptr<CPhysicalTopology> m_topology;
 };
 
 } // namespace GAME

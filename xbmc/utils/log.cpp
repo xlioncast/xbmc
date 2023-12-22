@@ -12,20 +12,12 @@
 #include "ServiceBroker.h"
 #include "filesystem/File.h"
 #include "guilib/LocalizeStrings.h"
-#if defined(TARGET_ANDROID)
-#include "platform/android/utils/AndroidInterfaceForCLog.h"
-#elif defined(TARGET_DARWIN)
-#include "platform/darwin/utils/DarwinInterfaceForCLog.h"
-#elif defined(TARGET_WINDOWS) || defined(TARGET_WIN10)
-#include "platform/win32/utils/Win32InterfaceForCLog.h"
-#else
-#include "platform/posix/utils/PosixInterfaceForCLog.h"
-#endif
 #include "settings/SettingUtils.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/Setting.h"
 #include "settings/lib/SettingsManager.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 
 #include <cstring>
@@ -35,17 +27,18 @@
 #include <spdlog/sinks/dist_sink.h>
 #include <spdlog/sinks/dup_filter_sink.h>
 
+namespace
+{
 static constexpr unsigned char Utf8Bom[3] = {0xEF, 0xBB, 0xBF};
 static const std::string LogFileExtension = ".log";
 static const std::string LogPattern = "%Y-%m-%d %T.%e T:%-5t %7l <%n>: %v";
+} // namespace
 
 CLog::CLog()
   : m_platform(IPlatformLog::CreatePlatformLog()),
     m_sinks(std::make_shared<spdlog::sinks::dist_sink_mt>()),
     m_defaultLogger(CreateLogger("general")),
-    m_logLevel(LOG_LEVEL_DEBUG),
-    m_componentLogEnabled(false),
-    m_componentLogLevels(0)
+    m_logLevel(LOG_LEVEL_DEBUG)
 {
   // add platform-specific debug sinks
   m_platform->AddSinks(m_sinks);
@@ -61,6 +54,11 @@ CLog::CLog()
 
   // set the log level
   SetLogLevel(m_logLevel);
+}
+
+CLog::~CLog()
+{
+  spdlog::drop("general");
 }
 
 void CLog::OnSettingsLoaded()
@@ -133,17 +131,20 @@ void CLog::Initialize(const std::string& path)
   m_sinks->add_sink(m_fileSink);
 }
 
-void CLog::Uninitialize()
+void CLog::UnregisterFromSettings()
 {
-  if (m_fileSink == nullptr)
-    return;
-
   // unregister setting callbacks
   auto settingsManager =
       CServiceBroker::GetSettingsComponent()->GetSettings()->GetSettingsManager();
   settingsManager->UnregisterSettingOptionsFiller("loggingcomponents");
   settingsManager->UnregisterSettingsHandler(this);
   settingsManager->UnregisterCallback(this);
+}
+
+void CLog::Deinitialize()
+{
+  if (m_fileSink == nullptr)
+    return;
 
   // flush all loggers
   spdlog::apply_all([](const std::shared_ptr<spdlog::logger>& logger) { logger->flush(); });
@@ -211,6 +212,7 @@ void CLog::SettingOptionsLoggingComponentsFiller(const SettingConstPtr& setting,
   list.emplace_back(g_localizeStrings.Get(685), LOGPVR);
   list.emplace_back(g_localizeStrings.Get(686), LOGEPG);
   list.emplace_back(g_localizeStrings.Get(39117), LOGANNOUNCE);
+  list.emplace_back(g_localizeStrings.Get(39124), LOGADDONS);
 #ifdef HAS_DBUS
   list.emplace_back(g_localizeStrings.Get(674), LOGDBUS);
 #endif
@@ -227,6 +229,9 @@ void CLog::SettingOptionsLoggingComponentsFiller(const SettingConstPtr& setting,
   list.emplace_back(g_localizeStrings.Get(679), LOGCEC);
 #endif
   list.emplace_back(g_localizeStrings.Get(682), LOGDATABASE);
+#if defined(HAS_FILESYSTEM_SMB)
+  list.emplace_back(g_localizeStrings.Get(37050), LOGWSDISCOVERY);
+#endif
 }
 
 Logger CLog::GetLogger(const std::string& loggerName)
@@ -288,4 +293,9 @@ void CLog::SetComponentLogLevel(const std::vector<CVariant>& components)
 
     m_componentLogLevels |= static_cast<uint32_t>(component.asInteger());
   }
+}
+
+void CLog::FormatLineBreaks(std::string& message)
+{
+  StringUtils::Replace(message, "\n", "\n                                                   ");
 }

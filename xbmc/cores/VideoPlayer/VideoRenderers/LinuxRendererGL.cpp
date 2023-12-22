@@ -9,36 +9,39 @@
  *  See LICENSES/README.md for more information.
  */
 
-#include <locale.h>
-
 #include "LinuxRendererGL.h"
-#include "Application.h"
+
+#include "RenderCapture.h"
+#include "RenderCaptureGL.h"
 #include "RenderFactory.h"
 #include "ServiceBroker.h"
-#include "settings/AdvancedSettings.h"
-#include "settings/DisplaySettings.h"
-#include "settings/MediaSettings.h"
-#include "settings/Settings.h"
-#include "settings/SettingsComponent.h"
-#include "VideoShaders/YUV2RGBShaderGL.h"
 #include "VideoShaders/VideoFilterShaderGL.h"
-#include "windowing/WinSystem.h"
-#include "guilib/Texture.h"
-#include "guilib/LocalizeStrings.h"
-#include "rendering/MatrixGL.h"
-#include "rendering/gl/RenderSystemGL.h"
-#include "threads/SingleLock.h"
-#include "utils/log.h"
-#include "utils/GLUtils.h"
-#include "utils/StringUtils.h"
-#include "RenderCapture.h"
+#include "VideoShaders/YUV2RGBShaderGL.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationPlayer.h"
 #include "cores/IPlayer.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
-#include "cores/VideoPlayer/DVDCodecs/DVDCodecUtils.h"
-#include "cores/FFmpeg.h"
+#include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
+#include "rendering/MatrixGL.h"
+#include "rendering/gl/RenderSystemGL.h"
+#include "settings/AdvancedSettings.h"
+#include "settings/DisplaySettings.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
+#include "utils/GLUtils.h"
+#include "utils/log.h"
+#include "windowing/GraphicContext.h"
+#include "windowing/WinSystem.h"
 
 #ifdef TARGET_DARWIN_OSX
 #include "platform/darwin/osx/CocoaInterface.h"
+#endif
+
+#include <locale.h>
+#include <memory>
+#include <mutex>
+
+#if defined(TARGET_DARWIN_OSX)
 #include <CoreVideo/CoreVideo.h>
 #include <OpenGL/CGLIOSurface.h>
 #endif
@@ -50,6 +53,7 @@
 #define PBO_OFFSET 16
 
 using namespace Shaders;
+using namespace Shaders::GL;
 
 static const GLubyte stipple_weave[] = {
   0x00, 0x00, 0x00, 0x00,
@@ -109,19 +113,17 @@ bool CLinuxRendererGL::Register()
 
 CLinuxRendererGL::CLinuxRendererGL()
 {
-  m_textureTarget = GL_TEXTURE_2D;
-
   m_iFlags = 0;
   m_format = AV_PIX_FMT_NONE;
 
-  m_useDithering = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool("videoscreen.dither");
-  m_ditherDepth = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt("videoscreen.ditherdepth");
+  std::tie(m_useDithering, m_ditherDepth) = CServiceBroker::GetWinSystem()->GetDitherSettings();
+
   m_fullRange = !CServiceBroker::GetWinSystem()->UseLimitedColor();
 
   m_fbo.width = 0.0;
   m_fbo.height = 0.0;
 
-  m_ColorManager.reset(new CColorManager());
+  m_ColorManager = std::make_unique<CColorManager>();
   m_tCLUTTex = 0;
   m_CLUT = NULL;
   m_CLUTsize = 0;
@@ -158,7 +160,7 @@ bool CLinuxRendererGL::ValidateRenderer()
     return false;
 
   int index = m_iYV12RenderBuffer;
-  CPictureBuffer& buf = m_buffers[index];
+  const CPictureBuffer& buf = m_buffers[index];
 
   if (!buf.fields[FIELD_FULL][0].id)
     return false;
@@ -212,8 +214,7 @@ bool CLinuxRendererGL::Configure(const VideoPicture &picture, float fps, unsigne
   m_iFlags = GetFlagsChromaPosition(picture.chroma_position) |
              GetFlagsStereoMode(picture.stereoMode);
 
-  m_srcPrimaries = GetSrcPrimaries(static_cast<AVColorPrimaries>(picture.color_primaries),
-                                   picture.iWidth, picture.iHeight);
+  m_srcPrimaries = picture.color_primaries;
   m_toneMap = false;
 
   // Calculate the input frame aspect ratio.
@@ -275,8 +276,8 @@ void CLinuxRendererGL::AddVideoPicture(const VideoPicture &picture, int index)
   buf.videoBuffer = picture.videoBuffer;
   buf.videoBuffer->Acquire();
   buf.loaded = false;
-  buf.m_srcPrimaries = static_cast<AVColorPrimaries>(picture.color_primaries);
-  buf.m_srcColSpace = static_cast<AVColorSpace>(picture.color_space);
+  buf.m_srcPrimaries = picture.color_primaries;
+  buf.m_srcColSpace = picture.color_space;
   buf.m_srcFullRange = picture.color_range == 1;
   buf.m_srcBits = picture.colorBits;
 
@@ -310,7 +311,8 @@ void CLinuxRendererGL::GetPlaneTextureSize(CYuvPlane& plane)
   plane.texheight = height - 2 * border;
   if(plane.texwidth <= 0 || plane.texheight <= 0)
   {
-    CLog::Log(LOGDEBUG, "CLinuxRendererGL::GetPlaneTextureSize - invalid size %dx%d - %d", width, height, border);
+    CLog::Log(LOGDEBUG, "CLinuxRendererGL::GetPlaneTextureSize - invalid size {}x{} - {}", width,
+              height, border);
     /* to something that avoid division by zero */
     plane.texwidth  = 1;
     plane.texheight = 1;
@@ -336,9 +338,9 @@ void CLinuxRendererGL::CalculateTextureSourceRects(int source, int num_planes)
       if(field != FIELD_FULL)
       {
         /* correct for field offsets and chroma offsets */
-        float offset_y = 0.5;
+        float offset_y = 0.5f;
         if(plane != 0)
-          offset_y += 0.5;
+          offset_y += 0.5f;
         if(field == FIELD_BOT)
           offset_y *= -1;
 
@@ -397,7 +399,7 @@ void CLinuxRendererGL::LoadPlane(CYuvPlane& plane, int type,
   if (plane.pbo)
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, plane.pbo);
 
-  int bps = bpp * glFormatElementByteCount(type);
+  int bps = bpp * KODI::UTILS::GL::glFormatElementByteCount(type);
 
   unsigned datatype;
   if (bpp == 2)
@@ -439,6 +441,11 @@ bool CLinuxRendererGL::Flush(bool saveBuffers)
       ReleaseBuffer(i);
     DeleteTexture(i);
   }
+
+  delete m_pYUVShader;
+  m_pYUVShader = nullptr;
+  delete m_pVideoFilterShader;
+  m_pVideoFilterShader = nullptr;
 
   glFinish();
   m_bValidated = false;
@@ -542,7 +549,7 @@ void CLinuxRendererGL::DrawBlackBars()
   Svertex vertices[24];
   GLubyte count = 0;
 
-  m_renderSystem->EnableShader(SM_DEFAULT);
+  m_renderSystem->EnableShader(ShaderMethodGL::SM_DEFAULT);
   GLint posLoc = m_renderSystem->ShaderGetPos();
   GLint uniCol = m_renderSystem->ShaderGetUniCol();
 
@@ -552,7 +559,7 @@ void CLinuxRendererGL::DrawBlackBars()
   int osWindowHeight = CServiceBroker::GetWinSystem()->GetGfxContext().GetHeight();
 
   //top quad
-  if (m_destRect.y1 > 0.0)
+  if (m_destRect.y1 > 0.0f)
   {
     GLubyte quad = count;
     vertices[quad].x = 0.0;
@@ -594,7 +601,7 @@ void CLinuxRendererGL::DrawBlackBars()
   }
 
   // left quad
-  if (m_destRect.x1 > 0.0)
+  if (m_destRect.x1 > 0.0f)
   {
     GLubyte quad = count;
     vertices[quad].x = 0.0;
@@ -729,7 +736,10 @@ void CLinuxRendererGL::UpdateVideoFilter()
 
   if (!Supports(m_scalingMethod))
   {
-    CLog::Log(LOGWARNING, "CLinuxRendererGL::UpdateVideoFilter - chosen scaling method %d, is not supported by renderer", (int)m_scalingMethod);
+    CLog::Log(LOGWARNING,
+              "CLinuxRendererGL::UpdateVideoFilter - chosen scaling method {}, is not supported by "
+              "renderer",
+              m_scalingMethod);
     m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
   }
 
@@ -795,6 +805,8 @@ void CLinuxRendererGL::UpdateVideoFilter()
           return;
         }
       }
+
+      [[fallthrough]];
     }
 
   case VS_SCALINGMETHOD_LANCZOS2:
@@ -874,7 +886,7 @@ void CLinuxRendererGL::LoadShaders(int field)
   if (!LoadShadersHook())
   {
     int requestedMethod = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_RENDERMETHOD);
-    CLog::Log(LOGDEBUG, "GL: Requested render method: %d", requestedMethod);
+    CLog::Log(LOGDEBUG, "GL: Requested render method: {}", requestedMethod);
 
     if (m_pYUVShader)
     {
@@ -956,7 +968,7 @@ void CLinuxRendererGL::LoadShaders(int field)
 void CLinuxRendererGL::UnInit()
 {
   CLog::Log(LOGDEBUG, "LinuxRendererGL: Cleaning up GL resources");
-  CSingleLock lock(CServiceBroker::GetWinSystem()->GetGfxContext());
+  std::unique_lock<CCriticalSection> lock(CServiceBroker::GetWinSystem()->GetGfxContext());
 
   glFinish();
 
@@ -1063,7 +1075,9 @@ void CLinuxRendererGL::RenderSinglePass(int index, int field)
 
   //disable non-linear stretch when a dvd menu is shown, parts of the menu are rendered through the overlay renderer
   //having non-linear stretch on breaks the alignment
-  if (g_application.GetAppPlayer().IsInMenu())
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsInMenu())
     m_pYUVShader->SetNonLinStretch(1.0);
   else
     m_pYUVShader->SetNonLinStretch(pow(CDisplaySettings::GetInstance().GetPixelRatio(), CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoNonLinStretchRatio));
@@ -1421,7 +1435,9 @@ void CLinuxRendererGL::RenderFromFBO()
 
   //disable non-linear stretch when a dvd menu is shown, parts of the menu are rendered through the overlay renderer
   //having non-linear stretch on breaks the alignment
-  if (g_application.GetAppPlayer().IsInMenu())
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsInMenu())
     m_pVideoFilterShader->SetNonLinStretch(1.0);
   else
     m_pVideoFilterShader->SetNonLinStretch(pow(CDisplaySettings::GetInstance().GetPixelRatio(), CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoNonLinStretchRatio));
@@ -1565,7 +1581,9 @@ void CLinuxRendererGL::RenderRGB(int index, int field)
 
   //disable non-linear stretch when a dvd menu is shown, parts of the menu are rendered through the overlay renderer
   //having non-linear stretch on breaks the alignment
-  if (g_application.GetAppPlayer().IsInMenu())
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (appPlayer->IsInMenu())
     m_pVideoFilterShader->SetNonLinStretch(1.0);
   else
     m_pVideoFilterShader->SetNonLinStretch(pow(CDisplaySettings::GetInstance().GetPixelRatio(), CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoNonLinStretchRatio));
@@ -1754,8 +1772,6 @@ bool CLinuxRendererGL::UploadTexture(int index)
 
   if (!m_buffers[index].loaded)
   {
-    ret = false;
-
     YuvImage &dst = m_buffers[index].image;
     YuvImage src;
     m_buffers[index].videoBuffer->GetPlanes(src.plane);
@@ -2527,7 +2543,7 @@ void CLinuxRendererGL::SetTextureFilter(GLenum method)
   }
 }
 
-bool CLinuxRendererGL::Supports(ERENDERFEATURE feature)
+bool CLinuxRendererGL::Supports(ERENDERFEATURE feature) const
 {
   if (feature == RENDERFEATURE_STRETCH ||
       feature == RENDERFEATURE_NONLINSTRETCH ||
@@ -2549,7 +2565,7 @@ bool CLinuxRendererGL::SupportsMultiPassRendering()
   return m_renderSystem->IsExtSupported("GL_EXT_framebuffer_object");
 }
 
-bool CLinuxRendererGL::Supports(ESCALINGMETHOD method)
+bool CLinuxRendererGL::Supports(ESCALINGMETHOD method) const
 {
   //nearest neighbor doesn't work on YUY2 and UYVY
   if (method == VS_SCALINGMETHOD_NEAREST &&
@@ -2588,14 +2604,7 @@ bool CLinuxRendererGL::Supports(ESCALINGMETHOD method)
     if (m_renderSystem->IsExtSupported("GL_EXT_framebuffer_object"))
       hasFramebuffer = true;
     if (hasFramebuffer  && (m_renderMethod & RENDER_GLSL))
-    {
-      // spline36 and lanczos3 are only allowed through advancedsettings.xml
-      if(method != VS_SCALINGMETHOD_SPLINE36
-      && method != VS_SCALINGMETHOD_LANCZOS3)
-        return true;
-      else
-        return CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoEnableHighQualityHwScalers;
-    }
+      return true;
   }
 
   return false;
@@ -2705,13 +2714,12 @@ void CLinuxRendererGL::DeleteCLUT()
 
 void CLinuxRendererGL::CheckVideoParameters(int index)
 {
-  CPictureBuffer &buf = m_buffers[index];
-  int method = m_videoSettings.m_ToneMapMethod;
+  const CPictureBuffer& buf = m_buffers[index];
+  ETONEMAPMETHOD method = m_videoSettings.m_ToneMapMethod;
 
-  AVColorPrimaries srcPrim = GetSrcPrimaries(buf.m_srcPrimaries, buf.image.width, buf.image.height);
-  if (srcPrim != m_srcPrimaries)
+  if (buf.m_srcPrimaries != m_srcPrimaries)
   {
-    m_srcPrimaries = srcPrim;
+    m_srcPrimaries = buf.m_srcPrimaries;
     m_reloadShaders = true;
   }
 
@@ -2732,15 +2740,7 @@ void CLinuxRendererGL::CheckVideoParameters(int index)
   m_toneMapMethod = method;
 }
 
-AVColorPrimaries CLinuxRendererGL::GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned int width, unsigned int height)
+CRenderCapture* CLinuxRendererGL::GetRenderCapture()
 {
-  AVColorPrimaries ret = srcPrimaries;
-  if (ret == AVCOL_PRI_UNSPECIFIED)
-  {
-    if (width > 1024 || height >= 600)
-      ret = AVCOL_PRI_BT709;
-    else
-      ret = AVCOL_PRI_BT470BG;
-  }
-  return ret;
+  return new CRenderCaptureGL;
 }

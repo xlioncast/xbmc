@@ -5,16 +5,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: KODI Main\n"
-"Report-Msgid-Bugs-To: https://github.com/xbmc/xbmc/issues/\n"
+"Report-Msgid-Bugs-To: translations@kodi.tv\n"
 "POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Kodi Translation Team\n"
-"Language-Team: Catalan (Spain) (http://www.transifex.com/projects/p/kodi-main/language/ca_ES/)\n"
+"PO-Revision-Date: 2022-08-24 06:31+0000\n"
+"Last-Translator: Xean <xeanhort007@gmail.com>\n"
+"Language-Team: Catalan (Spain) <https://kodi.weblate.cloud/projects/kodi-add-ons-skins/skin-estouchy/ca_es/>\n"
+"Language: ca_es\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: ca_ES\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 4.13\n"
+
+msgctxt "Addon Summary"
+msgid "Skin for touchscreen devices"
+msgstr "Aparença per als dispositius amb pantalla tàctil"
+
+msgctxt "Addon Description"
+msgid "Skin designed to be used on touchscreen devices like tablets and smartphones"
+msgstr "Aparença dissenyada perquè s'utilitzi en dispositius amb pantalla tàctil com taules i telèfons intel·ligents"
 
 msgctxt "#31002"
 msgid "Audio Settings"
@@ -56,26 +65,35 @@ msgctxt "#31014"
 msgid "Episodes"
 msgstr "Episodis"
 
+msgctxt "#31015"
+msgid "Player info"
+msgstr "Informació del reproductor"
+
 msgctxt "#31016"
 msgid "Albums"
 msgstr "Àlbums"
 
+#. Label to show PVR info page
 msgctxt "#31017"
-msgid "PVR info"
-msgstr "Informació PVR"
+msgid "PVR"
+msgstr "PVR"
 
+#. Label to show player info page
 msgctxt "#31018"
-msgid "Player process info"
-msgstr "Informació del procés del reproductor"
+msgid "Player"
+msgstr "Reproductor"
 
+#. Label to show video decoder name
 msgctxt "#31019"
 msgid "Video decoder"
 msgstr "Descodificador de vídeo"
 
+#. Label to show the video pixel format
 msgctxt "#31020"
 msgid "Pixel format"
 msgstr "Format del píxel"
 
+#. Label to show the system memory usage
 msgctxt "#31021"
 msgid "System memory usage"
 msgstr "Ús de la memòria del sistema"
@@ -96,13 +114,25 @@ msgctxt "#31039"
 msgid "Updated:"
 msgstr "Actualització:"
 
+msgctxt "#31040"
+msgid "Select + X"
+msgstr "Select + X"
+
+msgctxt "#31041"
+msgid "Select + B"
+msgstr "Select + B"
+
+msgctxt "#31042"
+msgid "Select + Start"
+msgstr "Select + Start"
+
 msgctxt "#31043"
 msgid "PAUSED"
-msgstr "PAUSA"
+msgstr "EN PAUSA"
 
 msgctxt "#31044"
 msgid "FAST FORWARD"
-msgstr "AVANÇA DE PRESSA"
+msgstr "AVANÇ RÀPID"
 
 msgctxt "#31045"
 msgid "REWIND"
@@ -118,11 +148,11 @@ msgstr "Hora d'acabament"
 
 msgctxt "#31050"
 msgid "Sort: Ascending"
-msgstr "Ordre: Ascendent"
+msgstr "Ordena: Ascendent"
 
 msgctxt "#31051"
 msgid "Sort: Descending"
-msgstr "Ordre: Descendent"
+msgstr "Ordena: Descendent"
 
 msgctxt "#31055"
 msgid "Open playlist"
@@ -134,7 +164,7 @@ msgstr "Desa la llista reproducció"
 
 msgctxt "#31057"
 msgid "Close playlist"
-msgstr "Tanca la llista reproducció"
+msgstr "Tanca la llista de reproducció"
 
 msgctxt "#31058"
 msgid "System music files"
@@ -186,7 +216,7 @@ msgstr "Menú del vídeo"
 
 msgctxt "#31356"
 msgid "Download Subtitles"
-msgstr "Baixa els subtítols"
+msgstr "Baixar-se els subtítols"
 
 msgctxt "#31358"
 msgid "Teletext"
@@ -209,7 +239,7 @@ msgid "Configure & manage media sharing services · Configure & manage the weath
 msgstr "Configureu i gestioneu els serveis de compartició de mitjans · Configureu i gestioneu el servei del temps"
 
 msgctxt "#31406"
-msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+msgid "Configure display · Configure audio · Configure internet access · Configure power saving · Configure logging"
 msgstr "Configureu la visualització · Configureu l'àudio · Configureu l'accés a Internet · Configureu l'estalvi energètic · Configureu el registrament"
 
 msgctxt "#31407"
@@ -312,6 +342,67 @@ msgctxt "#31565"
 msgid "Show deleted"
 msgstr "Mostra els suprimits"
 
+# empty strings from id 31566 to 31599
+#. Label to show the video codec name
+msgctxt "#31600"
+msgid "Video codec"
+msgstr "Còdec de vídeo"
+
+#. Label to show the video resolution
+msgctxt "#31601"
+msgid "Video resolution"
+msgstr "Resolució de vídeo"
+
+#. Label to show the video aspect
+msgctxt "#31602"
+msgid "Video aspect"
+msgstr "Aspecte del vídeo"
+
+#. Label to show the video bitrate
+msgctxt "#31603"
+msgid "Video bitrate"
+msgstr "Taxa de bits del vídeo"
+
+#. Label to show the audio codec name
+msgctxt "#31604"
+msgid "Audio codec"
+msgstr "Còdec d'àudio"
+
+#. Label to show the number of audio channels
+msgctxt "#31605"
+msgid "Audio channels"
+msgstr "Canals d'àudio"
+
+#. Label to show the audio bitrate
+msgctxt "#31606"
+msgid "Audio bitrate"
+msgstr "Taxa de bits d'àudio"
+
+#. Label to show the screen resolution
+msgctxt "#31607"
+msgid "Screen resolution"
+msgstr "Resolució de pantalla"
+
+#. Label to show the system rendering speed
+msgctxt "#31608"
+msgid "System rendering speed"
+msgstr "Velocitat de renderització del sistema"
+
+#. Label to show the system CPU usage
+msgctxt "#31609"
+msgid "System CPU usage"
+msgstr "Ús de la CPU del sistema"
+
+#. Label to show the media (metadata) info page
+msgctxt "#31610"
+msgid "Media"
+msgstr "Multimèdia"
+
+#. Label to show the system info page
+msgctxt "#31611"
+msgid "System"
+msgstr "Sistema"
+
 msgctxt "#31900"
 msgid "First Run"
 msgstr "Primera execució"
@@ -331,3 +422,15 @@ msgstr "Quan esteu reproduint àudio o vídeo, el títol de l'element apareixer�
 msgctxt "#31904"
 msgid "Now Playing Title..."
 msgstr "Títol en reproducció..."
+
+#~ msgctxt "#31406"
+#~ msgid "Configure display · Configure audio · Configure internet access · Configure power saving· Configure logging"
+#~ msgstr "Configureu la visualització · Configureu l'àudio · Configureu l'accés a Internet · Configureu l'estalvi energètic · Configureu el registrament"
+
+#~ msgctxt "#31017"
+#~ msgid "PVR info"
+#~ msgstr "Informació PVR"
+
+#~ msgctxt "#31018"
+#~ msgid "Player process info"
+#~ msgstr "Informació del procés del reproductor"

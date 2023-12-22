@@ -5,12 +5,7 @@ endif()
 set(CORE_MAIN_SOURCE ${CMAKE_SOURCE_DIR}/xbmc/platform/darwin/${CORE_PLATFORM_NAME_LC}/XBMCApplication.mm)
 set(PLATFORM_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/xbmc/platform/darwin/${CORE_PLATFORM_NAME_LC}/Info.plist.in)
 
-set(ARCH_DEFINES -DTARGET_POSIX -DTARGET_DARWIN -DTARGET_DARWIN_EMBEDDED)
-if(CORE_PLATFORM_NAME_LC STREQUAL tvos)
-  list(APPEND ARCH_DEFINES -DTARGET_DARWIN_TVOS)
-else()
-  list(APPEND ARCH_DEFINES -DTARGET_DARWIN_IOS)
-endif()
+list(APPEND ARCH_DEFINES -DTARGET_POSIX -DTARGET_DARWIN -DTARGET_DARWIN_EMBEDDED)
 set(SYSTEM_DEFINES -D_REENTRANT -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
                    -D__STDC_CONSTANT_MACROS -DHAS_IOS_NETWORK -DHAS_ZEROCONF)
 set(PLATFORM_DIR platform/darwin)
@@ -28,6 +23,15 @@ else()
   set(NEON True)
 endif()
 
+if(NOT APP_RENDER_SYSTEM OR APP_RENDER_SYSTEM STREQUAL "gles")
+  set(PLATFORM_REQUIRED_DEPS OpenGLES)
+  set(APP_RENDER_SYSTEM gles)
+  list(APPEND SYSTEM_DEFINES -DGL_DO_NOT_WARN_IF_MULTI_GL_VERSION_HEADERS_INCLUDED
+                             -DGLES_SILENCE_DEPRECATION)
+else()
+  message(SEND_ERROR "Currently only OpenGLES rendering is supported. Please set APP_RENDER_SYSTEM to \"gles\"")
+endif()
+
 list(APPEND CMAKE_SYSTEM_PREFIX_PATH ${NATIVEPREFIX})
 
 list(APPEND DEPLIBS "-framework CoreFoundation" "-framework CoreVideo"
@@ -39,12 +43,12 @@ list(APPEND DEPLIBS "-framework CoreFoundation" "-framework CoreVideo"
                     "-framework VideoToolbox" "-lresolv" "-ObjC"
                     "-framework AVKit" "-framework GameController")
 
-set(ENABLE_OPTICAL OFF CACHE BOOL "" FORCE)
-
-# AppleTV already has built-in AirPlay support
-if(CORE_PLATFORM_NAME_LC STREQUAL tvos)
-  set(ENABLE_AIRTUNES OFF CACHE BOOL "" FORCE)
+# Speech not available on tvOS
+if(NOT CORE_PLATFORM_NAME_LC STREQUAL tvos)
+  list(APPEND DEPLIBS "-framework Speech")
 endif()
+
+set(ENABLE_OPTICAL OFF CACHE BOOL "" FORCE)
 set(CMAKE_XCODE_ATTRIBUTE_INLINES_ARE_PRIVATE_EXTERN OFF)
 set(CMAKE_XCODE_ATTRIBUTE_GCC_SYMBOLS_PRIVATE_EXTERN OFF)
 set(CMAKE_XCODE_ATTRIBUTE_COPY_PHASE_STRIP OFF)

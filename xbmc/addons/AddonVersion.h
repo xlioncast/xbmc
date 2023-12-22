@@ -12,9 +12,9 @@
 
 namespace ADDON
 {
-  /* \brief Addon versioning using the debian versioning scheme
+/* \brief Addon versioning using the debian versioning scheme
 
-    AddonVersion uses debian versioning, which means in the each section of the period
+    CAddonVersion uses debian versioning, which means in the each section of the period
     separated version string, numbers are compared numerically rather than lexicographically,
     thus any preceding zeros are ignored.
 
@@ -24,38 +24,39 @@ namespace ADDON
 
     See here for more info: http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Version
     */
-  class AddonVersion
-  {
-  public:
-    AddonVersion(const AddonVersion& other) { *this = other; }
-    explicit AddonVersion(const std::string& version);
-    explicit AddonVersion(const char* version = nullptr);
-    virtual ~AddonVersion() = default;
+class CAddonVersion
+{
+public:
+  explicit CAddonVersion(const char* version = nullptr);
+  explicit CAddonVersion(const std::string& version);
 
-    int Epoch() const { return mEpoch; }
-    const std::string &Upstream() const { return mUpstream; }
-    const std::string &Revision() const { return mRevision; }
+  CAddonVersion(const CAddonVersion& other) = default;
+  CAddonVersion(CAddonVersion&& other) = default;
+  CAddonVersion& operator=(const CAddonVersion& other) = default;
+  CAddonVersion& operator=(CAddonVersion&& other) = default;
 
-    AddonVersion& operator=(const AddonVersion& other);
-    bool operator< (const AddonVersion& other) const;
-    bool operator> (const AddonVersion& other) const;
-    bool operator<=(const AddonVersion& other) const;
-    bool operator>=(const AddonVersion& other) const;
-    bool operator==(const AddonVersion& other) const;
-    bool operator!=(const AddonVersion& other) const;
-    std::string asString() const;
-    bool empty() const;
+  virtual ~CAddonVersion() = default;
 
-    static bool SplitFileName(std::string& ID, std::string& version,
-                              const std::string& filename);
+  int Epoch() const { return mEpoch; }
+  const std::string& Upstream() const { return mUpstream; }
+  const std::string& Revision() const { return mRevision; }
 
-  protected:
-    int mEpoch;
-    std::string mUpstream;
-    std::string mRevision;
+  bool operator<(const CAddonVersion& other) const;
+  bool operator>(const CAddonVersion& other) const;
+  bool operator<=(const CAddonVersion& other) const;
+  bool operator>=(const CAddonVersion& other) const;
+  bool operator==(const CAddonVersion& other) const;
+  bool operator!=(const CAddonVersion& other) const;
+  std::string asString() const;
+  bool empty() const;
 
-    static int CompareComponent(const char *a, const char *b);
-  };
+  static bool SplitFileName(std::string& ID, std::string& version, const std::string& filename);
 
-  inline AddonVersion& AddonVersion::operator=(const AddonVersion& other) = default;
-}
+protected:
+  int mEpoch;
+  std::string mUpstream;
+  std::string mRevision;
+
+  static int CompareComponent(const char* a, const char* b);
+};
+} // namespace ADDON

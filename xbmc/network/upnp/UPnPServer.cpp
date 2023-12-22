@@ -7,11 +7,11 @@
  */
 #include "UPnPServer.h"
 
-#include "Application.h"
 #include "GUIUserMessages.h"
 #include "ServiceBroker.h"
 #include "TextureDatabase.h"
 #include "UPnPInternal.h"
+#include "URL.h"
 #include "Util.h"
 #include "filesystem/Directory.h"
 #include "filesystem/MusicDatabaseDirectory.h"
@@ -24,6 +24,7 @@
 #include "interfaces/AnnouncementManager.h"
 #include "music/Artist.h"
 #include "music/MusicDatabase.h"
+#include "music/MusicLibraryQueue.h"
 #include "music/MusicThumbLoader.h"
 #include "music/tags/MusicInfoTag.h"
 #include "settings/Settings.h"
@@ -37,9 +38,11 @@
 #include "utils/Variant.h"
 #include "utils/log.h"
 #include "video/VideoDatabase.h"
+#include "video/VideoLibraryQueue.h"
 #include "video/VideoThumbLoader.h"
 #include "view/GUIViewState.h"
-#include "xbmc/interfaces/AnnouncementManager.h"
+
+#include <memory>
 
 #include <Platinum/Source/Platinum/Platinum.h>
 
@@ -67,7 +70,8 @@ const char* video_containers[] = { "library://video/movies/titles.xml/", "librar
 CUPnPServer::CUPnPServer(const char* friendly_name, const char* uuid /*= NULL*/, int port /*= 0*/)
   : PLT_MediaConnect(friendly_name, false, uuid, port),
     PLT_FileMediaConnectDelegate("/", "/"),
-    m_scanning(g_application.IsMusicScanning() || g_application.IsVideoScanning()),
+    m_scanning(CMusicLibraryQueue::GetInstance().IsScanningLibrary() ||
+               CVideoLibraryQueue::GetInstance().IsScanningLibrary()),
     m_logger(CServiceBroker::GetLogging().GetLogger(
         StringUtils::Format("CUPnPServer[{}]", friendly_name)))
 {
@@ -178,8 +182,8 @@ CUPnPServer::PropagateUpdates()
     // only broadcast ids with modified bit set
     for (itr = m_UpdateIDs.begin(); itr != m_UpdateIDs.end(); ++itr) {
         if (itr->second.first) {
-            buffer.append(StringUtils::Format("%s,%ld,", itr->first.c_str(), itr->second.second).c_str());
-            itr->second.first = false;
+          buffer.append(StringUtils::Format("{},{},", itr->first, itr->second.second));
+          itr->second.first = false;
         }
     }
 
@@ -255,7 +259,7 @@ NPT_String CUPnPServer::BuildSafeResourceUri(const NPT_HttpUrl &rooturi,
 /*----------------------------------------------------------------------
 |   CUPnPServer::Build
 +---------------------------------------------------------------------*/
-PLT_MediaObject* CUPnPServer::Build(const CFileItemPtr& item,
+PLT_MediaObject* CUPnPServer::Build(const std::shared_ptr<CFileItem>& item,
                                     bool with_count,
                                     const PLT_HttpRequestContext& context,
                                     NPT_Reference<CThumbLoader>& thumb_loader,
@@ -269,17 +273,18 @@ PLT_MediaObject* CUPnPServer::Build(const CFileItemPtr& item,
 
     m_logger->debug("Preparing upnp object for item '{}'", (const char*)path);
 
-    if (path == "virtualpath://upnproot") {
+    if (path.StartsWith("virtualpath://upnproot")) {
         path.TrimRight("/");
+        item->m_bIsFolder =  true;
         if (path.StartsWith("virtualpath://")) {
             object = new PLT_MediaContainer;
             object->m_Title = item->GetLabel().c_str();
             object->m_ObjectClass.type = "object.container";
-            object->m_ObjectID = path;
+            object->m_ObjectID = EncodeObjectId(path.GetChars());
 
             // root
-            object->m_ObjectID = "0";
-            object->m_ParentID = "-1";
+            object->m_ObjectID = EncodeObjectId("0");
+            object->m_ParentID = EncodeObjectId("-1");
             // root has 5 children
 
             //This is dead code because of the HACK a few lines up setting with_count to false
@@ -300,6 +305,7 @@ PLT_MediaObject* CUPnPServer::Build(const CFileItemPtr& item,
             if (path == "musicdb://" ) {
                 item->SetLabel("Music Library");
                 item->SetLabelPreformatted(true);
+                item->m_bIsFolder = true;
             } else {
                 if (!item->HasMusicInfoTag()) {
                     MUSICDATABASEDIRECTORY::CQueryParams params;
@@ -314,17 +320,24 @@ PLT_MediaObject* CUPnPServer::Build(const CFileItemPtr& item,
                             item->GetMusicInfoTag()->SetSong(song);
                     }
                     else if (params.GetAlbumId() >= 0 ) {
+                        item->m_bIsFolder = true;
                         CAlbum album;
                         if (db.GetAlbum(params.GetAlbumId(), album, false))
                             item->GetMusicInfoTag()->SetAlbum(album);
                     }
                     else if (params.GetArtistId() >= 0 ) {
+                        item->m_bIsFolder = true;
                         CArtist artist;
                         if (db.GetArtist(params.GetArtistId(), artist, false))
                             item->GetMusicInfoTag()->SetArtist(artist);
                     }
                 }
 
+                // all items appart from songs (artists, albums, etc) are folders
+                if (!item->HasMusicInfoTag() || item->GetMusicInfoTag()->GetType() != MediaTypeSong)
+                {
+                    item->m_bIsFolder = true;
+                }
 
                 if (item->GetLabel().empty()) {
                     /* if no label try to grab it from node type */
@@ -339,6 +352,7 @@ PLT_MediaObject* CUPnPServer::Build(const CFileItemPtr& item,
             if (path == "library://video/" ) {
                 item->SetLabel("Video Library");
                 item->SetLabelPreformatted(true);
+                item->m_bIsFolder = true;
             } else {
                 if (!item->HasVideoInfoTag()) {
                     VIDEODATABASEDIRECTORY::CQueryParams params;
@@ -353,15 +367,30 @@ PLT_MediaObject* CUPnPServer::Build(const CFileItemPtr& item,
                         db.GetMusicVideoInfo((const char*)path, *item->GetVideoInfoTag(), params.GetMVideoId());
                     else if (params.GetEpisodeId() >= 0 )
                         db.GetEpisodeInfo((const char*)path, *item->GetVideoInfoTag(), params.GetEpisodeId());
-                    else if (params.GetTvShowId() >= 0 )
-                        db.GetTvShowInfo((const char*)path, *item->GetVideoInfoTag(), params.GetTvShowId());
+                    else if (params.GetTvShowId() >= 0)
+                    {
+                        if (params.GetSeason() >= 0)
+                        {
+                            int idSeason = db.GetSeasonId(params.GetTvShowId(), params.GetSeason());
+                            if (idSeason >= 0)
+                                db.GetSeasonInfo(idSeason, *item->GetVideoInfoTag());
+                        }
+                        else
+                            db.GetTvShowInfo((const char*)path, *item->GetVideoInfoTag(), params.GetTvShowId());
+                    }
                 }
 
                 if (item->GetVideoInfoTag()->m_type == MediaTypeTvShow || item->GetVideoInfoTag()->m_type == MediaTypeSeason) {
                     // for tvshows and seasons, iEpisode and playCount are
                     // invalid
+                    item->m_bIsFolder = true;
                     item->GetVideoInfoTag()->m_iEpisode = (int)item->GetProperty("totalepisodes").asInteger();
                     item->GetVideoInfoTag()->SetPlayCount(static_cast<int>(item->GetProperty("watchedepisodes").asInteger()));
+                }
+                // if this is an item in the library without a playable path it most be a folder
+                else if (item->GetVideoInfoTag()->m_strFileNameAndPath.empty())
+                {
+                    item->m_bIsFolder = true;
                 }
 
                 // try to grab title from tag
@@ -380,24 +409,40 @@ PLT_MediaObject* CUPnPServer::Build(const CFileItemPtr& item,
                 }
             }
         }
+        // all playlist types are folders
+        else if (item->IsPlayList() || item->IsSmartPlayList())
+        {
+            item->m_bIsFolder = true;
+        }
+        // audio and not a playlist -> song, so it's not a folder
+        else if (item->IsAudio())
+        {
+            item->m_bIsFolder = false;
+        }
+        // any other type of item -> delegate to CDirectory
+        else
+        {
+            item->m_bIsFolder = CDirectory::Exists(item->GetPath());
+        }
 
         // not a virtual path directory, new system
         object = BuildObject(*item.get(), file_path, with_count, thumb_loader, &context, this, UPnPContentDirectory);
 
         // set parent id if passed, otherwise it should have been determined
         if (object && parent_id) {
-            object->m_ParentID = parent_id;
+            object->m_ParentID = EncodeObjectId(parent_id);
         }
     }
 
     if (object) {
         // remap Root virtualpath://upnproot/ to id "0"
-        if (object->m_ObjectID == "virtualpath://upnproot/")
-            object->m_ObjectID = "0";
+        const NPT_String encodedRootObjectId = EncodeObjectId("virtualpath://upnproot/");
+        if (StringUtils::EqualsNoCase(object->m_ObjectID, encodedRootObjectId))
+            object->m_ObjectID = EncodeObjectId("0");
 
         // remap Parent Root virtualpath://upnproot/ to id "0"
-        if (object->m_ParentID == "virtualpath://upnproot/")
-            object->m_ParentID = "0";
+        if (StringUtils::EqualsNoCase(object->m_ParentID, encodedRootObjectId))
+            object->m_ParentID = EncodeObjectId("0");
     }
 
     return object;
@@ -455,8 +500,9 @@ void CUPnPServer::Announce(AnnouncementFlag flag,
                 if (!db.Open()) return;
                 int show_id = db.GetTvShowForEpisode(item_id);
                 int season_id = db.GetSeasonForEpisode(item_id);
-                UpdateContainer(StringUtils::Format("videodb://tvshows/titles/%d/", show_id));
-                UpdateContainer(StringUtils::Format("videodb://tvshows/titles/%d/%d/?tvshowid=%d", show_id, season_id, show_id));
+                UpdateContainer(StringUtils::Format("videodb://tvshows/titles/{}/", show_id));
+                UpdateContainer(StringUtils::Format("videodb://tvshows/titles/{}/{}/?tvshowid={}",
+                                                    show_id, season_id, show_id));
                 UpdateContainer("videodb://recentlyaddedepisodes/");
             }
             else if(item_type == MediaTypeTvShow) {
@@ -479,9 +525,9 @@ void CUPnPServer::Announce(AnnouncementFlag flag,
             CAlbum album;
             if (!db.Open()) return;
             if (db.GetAlbumFromSong(item_id, album)) {
-                UpdateContainer(StringUtils::Format("musicdb://albums/%ld", album.idAlbum));
-                UpdateContainer("musicdb://songs/");
-                UpdateContainer("musicdb://recentlyaddedalbums/");
+              UpdateContainer(StringUtils::Format("musicdb://albums/{}", album.idAlbum));
+              UpdateContainer("musicdb://songs/");
+              UpdateContainer("musicdb://recentlyaddedalbums/");
             }
         }
     }
@@ -540,11 +586,12 @@ CUPnPServer::OnBrowseMetadata(PLT_ActionReference&          action,
 
     NPT_String                     didl;
     NPT_Reference<PLT_MediaObject> object;
-    NPT_String id = TranslateWMPObjectId(object_id, m_logger);
     CFileItemPtr                   item;
     NPT_Reference<CThumbLoader>    thumb_loader;
 
-    m_logger->info("Received UPnP Browse Metadata request for object '{}'", object_id);
+    m_logger->info("Received UPnP Browse Metadata request for encoded object '{}' (plain value: '{}')", object_id, DecodeObjectId(object_id).GetChars());
+
+    NPT_String id = TranslateWMPObjectId(DecodeObjectId(object_id), m_logger);
 
     if(NPT_FAILED(ObjectIDValidate(id))) {
         action->SetError(701, "Incorrect ObjectID.");
@@ -555,17 +602,16 @@ CUPnPServer::OnBrowseMetadata(PLT_ActionReference&          action,
         id.TrimRight("/");
         if (id == "virtualpath://upnproot") {
             id += "/";
-            item.reset(new CFileItem((const char*)id, true));
+            item = std::make_shared<CFileItem>((const char*)id, true);
             item->SetLabel("Root");
             item->SetLabelPreformatted(true);
             object = Build(item, true, context, thumb_loader);
-            object->m_ParentID = "-1";
+            object->m_ParentID = EncodeObjectId("-1");
         } else {
             return NPT_FAILURE;
         }
     } else {
-        // determine if it's a container by calling CDirectory::Exists
-        item.reset(new CFileItem((const char*)id, CDirectory::Exists((const char*)id)));
+        item = std::make_shared<CFileItem>((const char*)id, false);
 
         // attempt to determine the parent of this item
         std::string parent;
@@ -640,10 +686,11 @@ CUPnPServer::OnBrowseDirectChildren(PLT_ActionReference&          action,
                                     const PLT_HttpRequestContext& context)
 {
     CFileItemList items;
-    NPT_String parent_id = TranslateWMPObjectId(object_id, m_logger);
+    const NPT_String decodedObjectId = DecodeObjectId(object_id);
+    m_logger->info("Received Browse DirectChildren request for encoded object '{}' (plain value: '{}'), with sort criteria {}",
+                   object_id, decodedObjectId.GetChars(), sort_criteria);
 
-    m_logger->info("Received Browse DirectChildren request for object '{}', with sort criteria {}",
-                   object_id, sort_criteria);
+    NPT_String parent_id = TranslateWMPObjectId(decodedObjectId, m_logger);
 
     if(NPT_FAILED(ObjectIDValidate(parent_id))) {
         action->SetError(701, "Incorrect ObjectID.");
@@ -661,19 +708,19 @@ CUPnPServer::OnBrowseDirectChildren(PLT_ActionReference&          action,
 
     if (!load) {
         // cache anything that takes more than a second to retrieve
-        unsigned int time = XbmcThreads::SystemClockMillis();
+        auto start = std::chrono::steady_clock::now();
 
         if (parent_id.StartsWith("virtualpath://upnproot")) {
             CFileItemPtr item;
 
             // music library
-            item.reset(new CFileItem("musicdb://", true));
+            item = std::make_shared<CFileItem>("musicdb://", true);
             item->SetLabel("Music Library");
             item->SetLabelPreformatted(true);
             items.Add(item);
 
             // video library
-            item.reset(new CFileItem("library://video/", true));
+            item = std::make_shared<CFileItem>("library://video/", true);
             item->SetLabel("Video Library");
             item->SetLabelPreformatted(true);
             items.Add(item);
@@ -691,9 +738,13 @@ CUPnPServer::OnBrowseDirectChildren(PLT_ActionReference&          action,
             DefaultSortItems(items);
         }
 
-        if (items.CacheToDiscAlways() || (items.CacheToDiscIfSlow() && (XbmcThreads::SystemClockMillis() - time) > 1000 )) {
-            NPT_AutoLock lock(m_CacheMutex);
-            items.Save();
+        auto end = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        if (items.CacheToDiscAlways() || (items.CacheToDiscIfSlow() && duration.count() > 1000))
+        {
+          NPT_AutoLock lock(m_CacheMutex);
+          items.Save();
         }
     }
 
@@ -706,10 +757,11 @@ CUPnPServer::OnBrowseDirectChildren(PLT_ActionReference&          action,
 
       CVideoDatabase database;
       database.Open();
-      if (database.HasContent(VIDEODB_CONTENT_MUSICVIDEOS)) {
-          CFileItemPtr mvideos(new CFileItem("library://video/musicvideos/", true));
-          mvideos->SetLabel(g_localizeStrings.Get(20389));
-          items.Add(mvideos);
+      if (database.HasContent(VideoDbContentType::MUSICVIDEOS))
+      {
+        CFileItemPtr mvideos(new CFileItem("library://video/musicvideos/", true));
+        mvideos->SetLabel(g_localizeStrings.Get(20389));
+        items.Add(mvideos);
       }
     }
 
@@ -848,133 +900,160 @@ CUPnPServer::OnSearchContainer(PLT_ActionReference&          action,
                                const char*                   sort_criteria,
                                const PLT_HttpRequestContext& context)
 {
-  m_logger->debug("Received Search request for object '{}' with search '{}'", object_id,
-                  search_criteria);
+  NPT_String id = DecodeObjectId(object_id);
+  m_logger->debug("Received Search request for encoded object '{}' (plain value: '{}') with search '{}'",
+                  object_id, id.GetChars(), search_criteria);
 
-  NPT_String id = object_id;
-  if (id.StartsWith("musicdb://"))
-  {
-    // we browse for all tracks given a genre, artist or album
-    if (NPT_String(search_criteria).Find("object.item.audioItem") >= 0)
-    {
-      if (!id.EndsWith("/"))
-        id += "/";
-      NPT_Cardinal count = id.SubString(10).Split("/").GetItemCount();
-      // remove extra empty node count
-      count = count ? count - 1 : 0;
+  NPT_String searchClass = NPT_String(search_criteria);
+  if (id.StartsWith("musicdb://")) {
+      // we browse for all tracks given a genre, artist or album
+      if (searchClass.Find("object.item.audioItem") >= 0) {
+          if (!id.EndsWith("/")) id += "/";
+          NPT_Cardinal count = id.SubString(10).Split("/").GetItemCount();
+          // remove extra empty node count
+          count = count?count-1:0;
 
-      // genre
-      if (id.StartsWith("musicdb://genres/"))
-      {
-        // all tracks of all genres
-        if (count == 1)
-          id += "-1/-1/-1/";
-        // all tracks of a specific genre
-        else if (count == 2)
-          id += "-1/-1/";
-        // all tracks of a specific genre of a specific artist
-        else if (count == 3)
-          id += "-1/";
+          // genre
+          if (id.StartsWith("musicdb://genres/")) {
+              // all tracks of all genres
+              if (count == 1)
+                  id += "-1/-1/-1/";
+              // all tracks of a specific genre
+              else if (count == 2)
+                  id += "-1/-1/";
+              // all tracks of a specific genre of a specific artist
+              else if (count == 3)
+                  id += "-1/";
+          }
+          else if (id.StartsWith("musicdb://artists/")) {
+              // all tracks by all artists
+              if (count == 1)
+                  id += "-1/-1/";
+              // all tracks of a specific artist
+              else if (count == 2)
+                  id += "-1/";
+          }
+          else if (id.StartsWith("musicdb://albums/")) {
+              // all albums ?
+              if (count == 1) id += "-1/";
+          }
       }
-      else if (id.StartsWith("musicdb://artists/"))
-      {
-        // all tracks by all artists
-        if (count == 1)
-          id += "-1/-1/";
-        // all tracks of a specific artist
-        else if (count == 2)
-          id += "-1/";
-      }
-      else if (id.StartsWith("musicdb://albums/"))
-      {
-        // all albums ?
-        if (count == 1)
-          id += "-1/";
-      }
-    }
-    return OnBrowseDirectChildren(action, id, filter, starting_index, requested_count,
-                                  sort_criteria, context);
-    } else if (NPT_String(search_criteria).Find("object.item.audioItem") >= 0) {
+      return OnBrowseDirectChildren(action, id, filter, starting_index, requested_count, sort_criteria, context);
+    } else if (searchClass.Find("object.item.audioItem") >= 0) {
         // look for artist, album & genre filters
-        NPT_String genre = FindSubCriteria(search_criteria, "upnp:genre");
-        NPT_String album = FindSubCriteria(search_criteria, "upnp:album");
-        NPT_String artist = FindSubCriteria(search_criteria, "upnp:artist");
+        NPT_String genre = FindSubCriteria(searchClass, "upnp:genre");
+        NPT_String album = FindSubCriteria(searchClass, "upnp:album");
+        NPT_String artist = FindSubCriteria(searchClass, "upnp:artist");
         // sonos looks for microsoft specific stuff
-        artist = artist.GetLength()?artist:FindSubCriteria(search_criteria, "microsoft:artistPerformer");
-        artist = artist.GetLength()?artist:FindSubCriteria(search_criteria, "microsoft:artistAlbumArtist");
-        artist = artist.GetLength()?artist:FindSubCriteria(search_criteria, "microsoft:authorComposer");
+        artist = artist.GetLength()?artist:FindSubCriteria(searchClass, "microsoft:artistPerformer");
+        artist = artist.GetLength()?artist:FindSubCriteria(searchClass, "microsoft:artistAlbumArtist");
+        artist = artist.GetLength()?artist:FindSubCriteria(searchClass, "microsoft:authorComposer");
 
         CMusicDatabase database;
         database.Open();
 
         if (genre.GetLength() > 0) {
             // all tracks by genre filtered by artist and/or album
-            std::string strPath = StringUtils::Format("musicdb://genres/%i/%i/%i/",
-                                          database.GetGenreByName((const char*)genre),
-                                          database.GetArtistByName((const char*)artist), // will return -1 if no artist
-                                          database.GetAlbumByName((const char*)album));  // will return -1 if no album
+            std::string strPath = StringUtils::Format(
+                "musicdb://genres/{}/{}/{}/", database.GetGenreByName((const char*)genre),
+                database.GetArtistByName((const char*)artist), // will return -1 if no artist
+                database.GetAlbumByName((const char*)album)); // will return -1 if no album
 
             return OnBrowseDirectChildren(action, strPath.c_str(), filter, starting_index, requested_count, sort_criteria, context);
         } else if (artist.GetLength() > 0) {
             // all tracks by artist name filtered by album if passed
-            std::string strPath = StringUtils::Format("musicdb://artists/%i/%i/",
-                                          database.GetArtistByName((const char*)artist),
-                                          database.GetAlbumByName((const char*)album)); // will return -1 if no album
+            std::string strPath = StringUtils::Format(
+                "musicdb://artists/{}/{}/", database.GetArtistByName((const char*)artist),
+                database.GetAlbumByName((const char*)album)); // will return -1 if no album
 
             return OnBrowseDirectChildren(action, strPath.c_str(), filter, starting_index, requested_count, sort_criteria, context);
         } else if (album.GetLength() > 0) {
             // all tracks by album name
-            std::string strPath = StringUtils::Format("musicdb://albums/%i/",
-                                                     database.GetAlbumByName((const char*)album));
+            std::string strPath = StringUtils::Format("musicdb://albums/{}/",
+                                                      database.GetAlbumByName((const char*)album));
 
             return OnBrowseDirectChildren(action, strPath.c_str(), filter, starting_index, requested_count, sort_criteria, context);
         }
 
         // browse all songs
         return OnBrowseDirectChildren(action, "musicdb://songs/", filter, starting_index, requested_count, sort_criteria, context);
-    } else if (NPT_String(search_criteria).Find("object.container.album.musicAlbum") >= 0) {
+    } else if (searchClass.Find("object.container.album.musicAlbum") >= 0) {
         // sonos filters by genre
-        NPT_String genre = FindSubCriteria(search_criteria, "upnp:genre");
+        NPT_String genre = FindSubCriteria(searchClass, "upnp:genre");
 
         // 360 hack: artist/albums using search
-        NPT_String artist = FindSubCriteria(search_criteria, "upnp:artist");
+        NPT_String artist = FindSubCriteria(searchClass, "upnp:artist");
         // sonos looks for microsoft specific stuff
-        artist = artist.GetLength()?artist:FindSubCriteria(search_criteria, "microsoft:artistPerformer");
-        artist = artist.GetLength()?artist:FindSubCriteria(search_criteria, "microsoft:artistAlbumArtist");
-        artist = artist.GetLength()?artist:FindSubCriteria(search_criteria, "microsoft:authorComposer");
+        artist = artist.GetLength()?artist:FindSubCriteria(searchClass, "microsoft:artistPerformer");
+        artist = artist.GetLength()?artist:FindSubCriteria(searchClass, "microsoft:artistAlbumArtist");
+        artist = artist.GetLength()?artist:FindSubCriteria(searchClass, "microsoft:authorComposer");
 
         CMusicDatabase database;
         database.Open();
 
         if (genre.GetLength() > 0) {
-            std::string strPath = StringUtils::Format("musicdb://genres/%i/%i/",
-                                                     database.GetGenreByName((const char*)genre),
-                                                     database.GetArtistByName((const char*)artist)); // no artist should return -1
-            return OnBrowseDirectChildren(action, strPath.c_str(), filter, starting_index, requested_count, sort_criteria, context);
+          std::string strPath = StringUtils::Format(
+              "musicdb://genres/{}/{}/", database.GetGenreByName((const char*)genre),
+              database.GetArtistByName((const char*)artist)); // no artist should return -1
+          return OnBrowseDirectChildren(action, strPath.c_str(), filter, starting_index,
+                                        requested_count, sort_criteria, context);
         } else if (artist.GetLength() > 0) {
-            std::string strPath = StringUtils::Format("musicdb://artists/%i/",
-                                                     database.GetArtistByName((const char*)artist));
-            return OnBrowseDirectChildren(action, strPath.c_str(), filter, starting_index, requested_count, sort_criteria, context);
+          std::string strPath = StringUtils::Format("musicdb://artists/{}/",
+                                                    database.GetArtistByName((const char*)artist));
+          return OnBrowseDirectChildren(action, strPath.c_str(), filter, starting_index,
+                                        requested_count, sort_criteria, context);
         }
 
         // all albums
         return OnBrowseDirectChildren(action, "musicdb://albums/", filter, starting_index, requested_count, sort_criteria, context);
-    } else if (NPT_String(search_criteria).Find("object.container.person.musicArtist") >= 0) {
+    } else if (searchClass.Find("object.container.person.musicArtist") >= 0) {
         // Sonos filters by genre
-        NPT_String genre = FindSubCriteria(search_criteria, "upnp:genre");
+        NPT_String genre = FindSubCriteria(searchClass, "upnp:genre");
         if (genre.GetLength() > 0) {
             CMusicDatabase database;
             database.Open();
-            std::string strPath = StringUtils::Format("musicdb://genres/%i/", database.GetGenreByName((const char*)genre));
+            std::string strPath = StringUtils::Format("musicdb://genres/{}/",
+                                                      database.GetGenreByName((const char*)genre));
             return OnBrowseDirectChildren(action, strPath.c_str(), filter, starting_index, requested_count, sort_criteria, context);
         }
         return OnBrowseDirectChildren(action, "musicdb://artists/", filter, starting_index, requested_count, sort_criteria, context);
-    }  else if (NPT_String(search_criteria).Find("object.container.genre.musicGenre") >= 0) {
+    } else if (searchClass.Find("object.container.genre.musicGenre") >= 0) {
         return OnBrowseDirectChildren(action, "musicdb://genres/", filter, starting_index, requested_count, sort_criteria, context);
-    } else if (NPT_String(search_criteria).Find("object.container.playlistContainer") >= 0) {
+    } else if (searchClass.Find("object.container.playlistContainer") >= 0) {
         return OnBrowseDirectChildren(action, "special://musicplaylists/", filter, starting_index, requested_count, sort_criteria, context);
-    } else if (NPT_String(search_criteria).Find("object.item.videoItem") >= 0) {
-      CFileItemList items, itemsall;
+    } else if (searchClass.Find("object.container.album.videoAlbum.videoBroadcastShow") >= 0) {
+      CVideoDatabase database;
+      if (!database.Open()) {
+        action->SetError(800, "Internal Error");
+        return NPT_SUCCESS;
+      }
+
+      CFileItemList items;
+      if (!database.GetTvShowsByWhere("videodb://tvshows/titles/?local", CDatabase::Filter(),
+        items, SortDescription(), GetRequiredVideoDbDetails(NPT_String(filter)))) {
+        action->SetError(800, "Internal Error");
+        return NPT_SUCCESS;
+      }
+
+      items.SetPath("videodb://tvshows/titles/");
+      return BuildResponse(action, items, filter, starting_index, requested_count, sort_criteria, context, NULL);
+    } else if (searchClass.Find("object.container.album.videoAlbum.videoBroadcastSeason") >= 0) {
+      CVideoDatabase database;
+      if (!database.Open()) {
+        action->SetError(800, "Internal Error");
+        return NPT_SUCCESS;
+      }
+
+      CFileItemList items;
+      if (!database.GetSeasonsByWhere("videodb://tvshows/titles/-1/?local", CDatabase::Filter(), items, true)) {
+        action->SetError(800, "Internal Error");
+        return NPT_SUCCESS;
+      }
+
+      items.SetPath("videodb://tvshows/titles/-1/");
+      return BuildResponse(action, items, filter, starting_index, requested_count, sort_criteria, context, NULL);
+    } else if (searchClass.Find("object.item.videoItem") >= 0) {
+      CFileItemList items, allItems;
 
       CVideoDatabase database;
       if (!database.Open()) {
@@ -982,29 +1061,58 @@ CUPnPServer::OnSearchContainer(PLT_ActionReference&          action,
         return NPT_SUCCESS;
       }
 
-      if (!database.GetMoviesNav("videodb://movies/titles/", items)) {
-        action->SetError(800, "Internal Error");
-        return NPT_SUCCESS;
-      }
-      itemsall.Append(items);
-      items.Clear();
+      bool allVideoItems = searchClass.Compare("object.item.videoItem") == 0;
 
-      if (!database.GetEpisodesByWhere("videodb://tvshows/titles/", CDatabase::Filter(), items)) {
-        action->SetError(800, "Internal Error");
-        return NPT_SUCCESS;
-      }
-      itemsall.Append(items);
-      items.Clear();
+      // determine the required videodb details to be retrieved
+      int requiredVideoDbDetails = GetRequiredVideoDbDetails(NPT_String(filter));
 
-      if (!database.GetMusicVideosByWhere("videodb://musicvideos/titles/", CDatabase::Filter(), items)) {
-        action->SetError(800, "Internal Error");
-        return NPT_SUCCESS;
-      }
-      itemsall.Append(items);
-      items.Clear();
+      if (allVideoItems || searchClass.Find("object.item.videoItem.movie") >= 0)
+      {
+        if (!database.GetMoviesByWhere("videodb://movies/titles/?local", CDatabase::Filter(), items, SortDescription(), requiredVideoDbDetails)) {
+          action->SetError(800, "Internal Error");
+          return NPT_SUCCESS;
+        }
 
-      return BuildResponse(action, itemsall, filter, starting_index, requested_count, sort_criteria, context, NULL);
-  } else if (NPT_String(search_criteria).Find("object.item.imageItem") >= 0) {
+        allItems.Append(items);
+        items.Clear();
+
+        if (!allVideoItems)
+          allItems.SetPath("videodb://movies/titles/");
+      }
+
+      if (allVideoItems || searchClass.Find("object.item.videoItem.videoBroadcast") >= 0)
+      {
+        if (!database.GetEpisodesByWhere("videodb://tvshows/titles/?local", CDatabase::Filter(), items, true, SortDescription(), requiredVideoDbDetails)) {
+          action->SetError(800, "Internal Error");
+          return NPT_SUCCESS;
+        }
+
+        allItems.Append(items);
+        items.Clear();
+
+        if (!allVideoItems)
+          allItems.SetPath("videodb://tvshows/titles/");
+      }
+
+      if (allVideoItems || searchClass.Find("object.item.videoItem.musicVideoClip") >= 0)
+      {
+        if (!database.GetMusicVideosByWhere("videodb://musicvideos/titles/?local", CDatabase::Filter(), items, true, SortDescription(), requiredVideoDbDetails)) {
+          action->SetError(800, "Internal Error");
+          return NPT_SUCCESS;
+        }
+
+        allItems.Append(items);
+        items.Clear();
+
+        if (!allVideoItems)
+          allItems.SetPath("videodb://musicvideos/titles/");
+      }
+
+      if (allVideoItems)
+        allItems.SetPath("videodb://movies/titles/");
+
+      return BuildResponse(action, allItems, filter, starting_index, requested_count, sort_criteria, context, NULL);
+  } else if (searchClass.Find("object.item.imageItem") >= 0) {
       CFileItemList items;
       return BuildResponse(action, items, filter, starting_index, requested_count, sort_criteria, context, NULL);
   }
@@ -1028,7 +1136,7 @@ CUPnPServer::OnUpdateObject(PLT_ActionReference&             action,
     m_logger->info("OnUpdateObject: {} from {}", path,
                    (const char*)context.GetRemoteAddress().GetIpAddress().ToString());
 
-    NPT_String playCount, position;
+    NPT_String playCount, position, lastPlayed;
     int err;
     const char* msg = NULL;
     bool updatelisting(false);
@@ -1047,13 +1155,13 @@ CUPnPServer::OnUpdateObject(PLT_ActionReference&             action,
         VIDEODATABASEDIRECTORY::CDirectoryNode::GetDatabaseInfo(path.c_str(), params);
 
         int id = -1;
-        VIDEODB_CONTENT_TYPE content_type;
+        VideoDbContentType content_type;
         if ((id = params.GetMovieId()) >= 0 )
-            content_type = VIDEODB_CONTENT_MOVIES;
+          content_type = VideoDbContentType::MOVIES;
         else if ((id = params.GetEpisodeId()) >= 0 )
-            content_type = VIDEODB_CONTENT_EPISODES;
+          content_type = VideoDbContentType::EPISODES;
         else if ((id = params.GetMVideoId()) >= 0 )
-            content_type = VIDEODB_CONTENT_MUSICVIDEOS;
+          content_type = VideoDbContentType::MUSICVIDEOS;
         else {
             err = 701;
             msg = "No such object";
@@ -1069,6 +1177,8 @@ CUPnPServer::OnUpdateObject(PLT_ActionReference&             action,
 
         position = new_vals["lastPlaybackPosition"];
         playCount = new_vals["playCount"];
+        lastPlayed = new_vals["lastPlaybackTime"];
+
 
         if (!position.IsEmpty()
               && position.Compare(current_vals["lastPlaybackPosition"]) != 0) {
@@ -1100,7 +1210,13 @@ CUPnPServer::OnUpdateObject(PLT_ActionReference&             action,
 
             NPT_UInt32 count;
             NPT_CHECK_LABEL(playCount.ToInteger32(count), args);
-            db.SetPlayCount(updated, count);
+
+            CDateTime lastPlayedObj;
+            if (!lastPlayed.IsEmpty() &&
+                lastPlayed.Compare(current_vals["lastPlaybackTime"]) != 0)
+                lastPlayedObj.SetFromW3CDateTime(lastPlayed.GetChars());
+
+            db.SetPlayCount(updated, count, lastPlayedObj);
             updatelisting = true;
         }
 
@@ -1108,6 +1224,11 @@ CUPnPServer::OnUpdateObject(PLT_ActionReference&             action,
         if (updatelisting) {
             db.LoadVideoInfo(file_path, tag);
             updated.SetFromVideoInfoTag(tag);
+            //! TODO: we should find a way to avoid obtaining the artwork just to
+            // update the playcount or similar properties. Maybe a flag in the GUI
+            // update message to inform we should only update the playback properties
+            // without touching other parts of the item.
+            CVideoThumbLoader().FillLibraryArt(updated);
         }
 
     } else if (updated.IsMusicDb()) {
@@ -1254,6 +1375,17 @@ NPT_Result CUPnPServer::AddSubtitleUriForSecResponse(const NPT_String& movie_md5
   NPT_CHECK(m_FileMap.Put(movie, subtitle_uri));
 
   return NPT_SUCCESS;
+}
+
+int CUPnPServer::GetRequiredVideoDbDetails(const NPT_String& filter)
+{
+  int details = VideoDbDetailsRating;
+  if (filter.Find("res@resolution") >= 0 || filter.Find("res@nrAudioChannels") >= 0)
+    details |= VideoDbDetailsStream;
+  if (filter.Find("upnp:actor") >= 0)
+    details |= VideoDbDetailsCast;
+
+  return details;
 }
 
 } /* namespace UPNP */

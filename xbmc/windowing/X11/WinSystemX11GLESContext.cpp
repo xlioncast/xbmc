@@ -6,13 +6,13 @@
  *  See LICENSES/README.md for more information.
  */
 
-
 #include "WinSystemX11GLESContext.h"
 
-#include "Application.h"
 #include "GLContextEGL.h"
 #include "OptionalsReg.h"
 #include "X11DPMSSupport.h"
+#include "application/ApplicationComponents.h"
+#include "application/ApplicationSkinHandling.h"
 #include "cores/RetroPlayer/process/X11/RPProcessInfoX11.h"
 #include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererOpenGLES.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDFactoryCodec.h"
@@ -20,10 +20,11 @@
 #include "cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
 #include "guilib/DispResource.h"
-#include "threads/SingleLock.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 #include "windowing/WindowSystemFactory.h"
+
+#include <mutex>
 
 using namespace KODI;
 using namespace KODI::WINDOWING::X11;
@@ -51,7 +52,7 @@ void CWinSystemX11GLESContext::PresentRenderImpl(bool rendered)
   if (m_delayDispReset && m_dispResetTimer.IsTimePast())
   {
     m_delayDispReset = false;
-    CSingleLock lock(m_resourceSection);
+    std::unique_lock<CCriticalSection> lock(m_resourceSection);
     // tell any shared resources
     for (std::vector<IDispResource*>::iterator i = m_resources.begin(); i != m_resources.end(); ++i)
       (*i)->OnResetDisplay();
@@ -109,7 +110,7 @@ bool CWinSystemX11GLESContext::SetWindow(int width, int height, bool fullscreen,
 
     if (!m_delayDispReset)
     {
-      CSingleLock lock(m_resourceSection);
+      std::unique_lock<CCriticalSection> lock(m_resourceSection);
       // tell any shared resources
       for (std::vector<IDispResource*>::iterator i = m_resources.begin(); i != m_resources.end(); ++i)
         (*i)->OnResetDisplay();
@@ -135,7 +136,11 @@ bool CWinSystemX11GLESContext::ResizeWindow(int newWidth, int newHeight, int new
   CRenderSystemGLES::ResetRenderSystem(newWidth, newHeight);
 
   if (m_newGlContext)
-    g_application.ReloadSkin();
+  {
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appSkin = components.GetComponent<CApplicationSkinHandling>();
+    appSkin->ReloadSkin();
+  }
 
   return true;
 }
@@ -147,7 +152,11 @@ void CWinSystemX11GLESContext::FinishWindowResize(int newWidth, int newHeight)
   CRenderSystemGLES::ResetRenderSystem(newWidth, newHeight);
 
   if (m_newGlContext)
-    g_application.ReloadSkin();
+  {
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appSkin = components.GetComponent<CApplicationSkinHandling>();
+    appSkin->ReloadSkin();
+  }
 }
 
 bool CWinSystemX11GLESContext::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays)
@@ -157,7 +166,11 @@ bool CWinSystemX11GLESContext::SetFullScreen(bool fullScreen, RESOLUTION_INFO& r
   CRenderSystemGLES::ResetRenderSystem(res.iWidth, res.iHeight);
 
   if (m_newGlContext)
-    g_application.ReloadSkin();
+  {
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appSkin = components.GetComponent<CApplicationSkinHandling>();
+    appSkin->ReloadSkin();
+  }
 
   return true;
 }
@@ -220,7 +233,7 @@ XVisualInfo* CWinSystemX11GLESContext::GetVisual()
   EGLConfig eglConfig = 0;
   if (!eglChooseConfig(eglDisplay, att, &eglConfig, 1, &numConfigs) || numConfigs == 0)
   {
-    CLog::Log(LOGERROR, "Failed to choose a config %d", eglGetError());
+    CLog::Log(LOGERROR, "Failed to choose a config {}", eglGetError());
     return nullptr;
   }
 

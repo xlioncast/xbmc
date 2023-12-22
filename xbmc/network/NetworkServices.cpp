@@ -8,10 +8,10 @@
 
 #include "NetworkServices.h"
 
-#include <utility>
-
 #include "ServiceBroker.h"
 #include "dialogs/GUIDialogKaiToast.h"
+#include "guilib/GUIComponent.h"
+#include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
 #include "interfaces/json-rpc/JSONRPC.h"
 #include "messaging/ApplicationMessenger.h"
@@ -21,14 +21,16 @@
 #include "network/Network.h"
 #include "network/TCPServer.h"
 #include "settings/AdvancedSettings.h"
-#include "settings/lib/Setting.h"
-#include "settings/lib/SettingsManager.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "utils/log.h"
+#include "settings/lib/Setting.h"
+#include "settings/lib/SettingsManager.h"
 #include "utils/RssManager.h"
 #include "utils/SystemInfo.h"
 #include "utils/Variant.h"
+#include "utils/log.h"
+
+#include <utility>
 
 #ifdef TARGET_LINUX
 #include "Util.h"
@@ -64,7 +66,15 @@
 #endif // HAS_WEB_INTERFACE
 #endif // HAS_WEB_SERVER
 
-#if defined(TARGET_DARWIN_OSX)
+#if defined(HAS_FILESYSTEM_SMB)
+#if defined(TARGET_WINDOWS)
+#include "platform/win32/network/WSDiscoveryWin32.h"
+#else // defined(TARGET_POSIX)
+#include "platform/posix/filesystem/SMBWSDiscovery.h"
+#endif
+#endif
+
+#if defined(TARGET_DARWIN_OSX) and defined(HAS_XBMCHELPER)
 #include "platform/darwin/osx/XBMCHelper.h"
 #endif
 
@@ -107,32 +117,33 @@ CNetworkServices::CNetworkServices()
 #endif // HAS_WEB_INTERFACE
 #endif // HAS_WEB_SERVER
   std::set<std::string> settingSet{
-    CSettings::SETTING_SERVICES_WEBSERVER,
-    CSettings::SETTING_SERVICES_WEBSERVERPORT,
-    CSettings::SETTING_SERVICES_WEBSERVERAUTHENTICATION,
-    CSettings::SETTING_SERVICES_WEBSERVERUSERNAME,
-    CSettings::SETTING_SERVICES_WEBSERVERPASSWORD,
-    CSettings::SETTING_SERVICES_WEBSERVERSSL,
-    CSettings::SETTING_SERVICES_ZEROCONF,
-    CSettings::SETTING_SERVICES_AIRPLAY,
-    CSettings::SETTING_SERVICES_AIRPLAYVOLUMECONTROL,
-    CSettings::SETTING_SERVICES_AIRPLAYVIDEOSUPPORT,
-    CSettings::SETTING_SERVICES_USEAIRPLAYPASSWORD,
-    CSettings::SETTING_SERVICES_AIRPLAYPASSWORD,
-    CSettings::SETTING_SERVICES_UPNP,
-    CSettings::SETTING_SERVICES_UPNPSERVER,
-    CSettings::SETTING_SERVICES_UPNPRENDERER,
-    CSettings::SETTING_SERVICES_UPNPCONTROLLER,
-    CSettings::SETTING_SERVICES_ESENABLED,
-    CSettings::SETTING_SERVICES_ESPORT,
-    CSettings::SETTING_SERVICES_ESALLINTERFACES,
-    CSettings::SETTING_SERVICES_ESINITIALDELAY,
-    CSettings::SETTING_SERVICES_ESCONTINUOUSDELAY,
-    CSettings::SETTING_SMB_WINSSERVER,
-    CSettings::SETTING_SMB_WORKGROUP,
-    CSettings::SETTING_SMB_MINPROTOCOL,
-    CSettings::SETTING_SMB_MAXPROTOCOL,
-    CSettings::SETTING_SMB_LEGACYSECURITY
+      CSettings::SETTING_SERVICES_WEBSERVER,
+      CSettings::SETTING_SERVICES_WEBSERVERPORT,
+      CSettings::SETTING_SERVICES_WEBSERVERAUTHENTICATION,
+      CSettings::SETTING_SERVICES_WEBSERVERUSERNAME,
+      CSettings::SETTING_SERVICES_WEBSERVERPASSWORD,
+      CSettings::SETTING_SERVICES_WEBSERVERSSL,
+      CSettings::SETTING_SERVICES_ZEROCONF,
+      CSettings::SETTING_SERVICES_AIRPLAY,
+      CSettings::SETTING_SERVICES_AIRPLAYVOLUMECONTROL,
+      CSettings::SETTING_SERVICES_AIRPLAYVIDEOSUPPORT,
+      CSettings::SETTING_SERVICES_USEAIRPLAYPASSWORD,
+      CSettings::SETTING_SERVICES_AIRPLAYPASSWORD,
+      CSettings::SETTING_SERVICES_UPNP,
+      CSettings::SETTING_SERVICES_UPNPSERVER,
+      CSettings::SETTING_SERVICES_UPNPRENDERER,
+      CSettings::SETTING_SERVICES_UPNPCONTROLLER,
+      CSettings::SETTING_SERVICES_ESENABLED,
+      CSettings::SETTING_SERVICES_ESPORT,
+      CSettings::SETTING_SERVICES_ESALLINTERFACES,
+      CSettings::SETTING_SERVICES_ESINITIALDELAY,
+      CSettings::SETTING_SERVICES_ESCONTINUOUSDELAY,
+      CSettings::SETTING_SMB_WINSSERVER,
+      CSettings::SETTING_SMB_WORKGROUP,
+      CSettings::SETTING_SMB_MINPROTOCOL,
+      CSettings::SETTING_SMB_MAXPROTOCOL,
+      CSettings::SETTING_SMB_LEGACYSECURITY,
+      CSettings::SETTING_SERVICES_WSDISCOVERY,
   };
   m_settings = CServiceBroker::GetSettingsComponent()->GetSettings();
   m_settings->GetSettingsManager()->RegisterCallback(this, settingSet);
@@ -180,7 +191,7 @@ bool CNetworkServices::OnSettingChanging(const std::shared_ptr<const CSetting>& 
       (!m_settings->GetBool(CSettings::SETTING_SERVICES_WEBSERVER) ||
        (m_settings->GetBool(CSettings::SETTING_SERVICES_WEBSERVER) &&
         !m_settings->GetString(CSettings::SETTING_SERVICES_WEBSERVERPASSWORD).empty())) &&
-      HELPERS::ShowYesNoDialogText(19098, 36634) != DialogResponse::YES)
+      HELPERS::ShowYesNoDialogText(19098, 36634) != DialogResponse::CHOICE_YES)
   {
     // Leave it as-is
     return false;
@@ -218,7 +229,7 @@ bool CNetworkServices::OnSettingChanging(const std::shared_ptr<const CSetting>& 
 
       // Ask for confirmation when enabling the web server
       if (settingId == CSettings::SETTING_SERVICES_WEBSERVER &&
-          HELPERS::ShowYesNoDialogText(19098, 36632) != DialogResponse::YES)
+          HELPERS::ShowYesNoDialogText(19098, 36632) != DialogResponse::CHOICE_YES)
       {
         // Revert change, do not start server
         return false;
@@ -421,7 +432,7 @@ bool CNetworkServices::OnSettingChanging(const std::shared_ptr<const CSetting>& 
       return false;
     }
 
-#if defined(TARGET_DARWIN_OSX)
+#if defined(TARGET_DARWIN_OSX) and defined(HAS_XBMCHELPER)
     // reconfigure XBMCHelper for port changes
     XBMCHelper::GetInstance().Configure();
 #endif // TARGET_DARWIN_OSX
@@ -429,7 +440,7 @@ bool CNetworkServices::OnSettingChanging(const std::shared_ptr<const CSetting>& 
   else if (settingId == CSettings::SETTING_SERVICES_ESALLINTERFACES)
   {
     if (m_settings->GetBool(CSettings::SETTING_SERVICES_ESALLINTERFACES) &&
-        HELPERS::ShowYesNoDialogText(19098, 36633) != DialogResponse::YES)
+        HELPERS::ShowYesNoDialogText(19098, 36633) != DialogResponse::CHOICE_YES)
     {
       // Revert change, do not start server
       return false;
@@ -467,6 +478,19 @@ bool CNetworkServices::OnSettingChanging(const std::shared_ptr<const CSetting>& 
       return RefreshEventServer();
   }
 
+#if defined(HAS_FILESYSTEM_SMB)
+  else if (settingId == CSettings::SETTING_SERVICES_WSDISCOVERY)
+  {
+    if (std::static_pointer_cast<const CSettingBool>(setting)->GetValue())
+    {
+      if (!StartWSDiscovery())
+        return false;
+    }
+    else
+      return StopWSDiscovery();
+  }
+#endif // HAS_FILESYSTEM_SMB
+
   return true;
 }
 
@@ -484,10 +508,11 @@ void CNetworkServices::OnSettingChanged(const std::shared_ptr<const CSetting>& s
   {
     // okey we really don't need to restart, only deinit samba, but that could be damn hard if something is playing
     //! @todo - General way of handling setting changes that require restart
-    if (HELPERS::ShowYesNoDialogText(CVariant{14038}, CVariant{14039}) == DialogResponse::YES)
+    if (HELPERS::ShowYesNoDialogText(CVariant{14038}, CVariant{14039}) ==
+        DialogResponse::CHOICE_YES)
     {
       m_settings->Save();
-      CApplicationMessenger::GetInstance().PostMsg(TMSG_RESTARTAPP);
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_RESTARTAPP);
     }
   }
 }
@@ -558,6 +583,7 @@ void CNetworkServices::Start()
   StartAirTunesServer();
   StartAirPlayServer();
   StartRss();
+  StartWSDiscovery();
 }
 
 void CNetworkServices::Stop(bool bWait)
@@ -574,6 +600,69 @@ void CNetworkServices::Stop(bool bWait)
   StopJSONRPCServer(bWait);
   StopAirPlayServer(bWait);
   StopAirTunesServer(bWait);
+  StopWSDiscovery();
+}
+
+bool CNetworkServices::StartServer(enum ESERVERS server, bool start)
+{
+  auto settingsComponent = CServiceBroker::GetSettingsComponent();
+  if (!settingsComponent)
+    return false;
+
+  auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  if (!settings)
+    return false;
+
+  bool ret = false;
+  switch (server)
+  {
+    case ES_WEBSERVER:
+      // the callback will take care of starting/stopping webserver
+      ret = settings->SetBool(CSettings::SETTING_SERVICES_WEBSERVER, start);
+      break;
+
+    case ES_AIRPLAYSERVER:
+      // the callback will take care of starting/stopping airplay
+      ret = settings->SetBool(CSettings::SETTING_SERVICES_AIRPLAY, start);
+      break;
+
+    case ES_JSONRPCSERVER:
+      // the callback will take care of starting/stopping jsonrpc server
+      ret = settings->SetBool(CSettings::SETTING_SERVICES_ESENABLED, start);
+      break;
+
+    case ES_UPNPSERVER:
+      // the callback will take care of starting/stopping upnp server
+      ret = settings->SetBool(CSettings::SETTING_SERVICES_UPNPSERVER, start);
+      break;
+
+    case ES_UPNPRENDERER:
+      // the callback will take care of starting/stopping upnp renderer
+      ret = settings->SetBool(CSettings::SETTING_SERVICES_UPNPRENDERER, start);
+      break;
+
+    case ES_EVENTSERVER:
+      // the callback will take care of starting/stopping event server
+      ret = settings->SetBool(CSettings::SETTING_SERVICES_ESENABLED, start);
+      break;
+
+    case ES_ZEROCONF:
+      // the callback will take care of starting/stopping zeroconf
+      ret = settings->SetBool(CSettings::SETTING_SERVICES_ZEROCONF, start);
+      break;
+
+    case ES_WSDISCOVERY:
+      // the callback will take care of starting/stopping WS-Discovery
+      ret = settings->SetBool(CSettings::SETTING_SERVICES_WSDISCOVERY, start);
+      break;
+
+    default:
+      ret = false;
+      break;
+  }
+  settings->Save();
+
+  return ret;
 }
 
 bool CNetworkServices::StartWebserver()
@@ -596,7 +685,7 @@ bool CNetworkServices::StartWebserver()
   int webPort = m_settings->GetInt(CSettings::SETTING_SERVICES_WEBSERVERPORT);
   if (!ValidatePort(webPort))
   {
-    CLog::Log(LOGERROR, "Cannot start Web Server on port %i", webPort);
+    CLog::Log(LOGERROR, "Cannot start Web Server on port {}", webPort);
     return false;
   }
 
@@ -854,8 +943,8 @@ bool CNetworkServices::StopEventServer(bool bWait, bool promptuser)
   {
     if (server->GetNumberOfClients() > 0)
     {
-      if (HELPERS::ShowYesNoDialogText(CVariant{13140}, CVariant{13141}, CVariant{""}, CVariant{""}, 10000) !=
-        DialogResponse::YES)
+      if (HELPERS::ShowYesNoDialogText(CVariant{13140}, CVariant{13141}, CVariant{""}, CVariant{""},
+                                       10000) != DialogResponse::CHOICE_YES)
       {
         CLog::Log(LOGINFO, "ES: Not stopping event server");
         return false;
@@ -1129,13 +1218,48 @@ bool CNetworkServices::StopZeroconf()
   return false;
 }
 
+bool CNetworkServices::StartWSDiscovery()
+{
+#if defined(HAS_FILESYSTEM_SMB)
+  if (!m_settings->GetBool(CSettings::SETTING_SERVICES_WSDISCOVERY))
+    return false;
+
+  if (IsWSDiscoveryRunning())
+    return true;
+
+  return CServiceBroker::GetWSDiscovery().StartServices();
+#endif // HAS_FILESYSTEM_SMB
+  return false;
+}
+
+bool CNetworkServices::IsWSDiscoveryRunning()
+{
+#if defined(HAS_FILESYSTEM_SMB)
+  return CServiceBroker::GetWSDiscovery().IsRunning();
+#endif // HAS_FILESYSTEM_SMB
+  return false;
+}
+
+bool CNetworkServices::StopWSDiscovery()
+{
+#if defined(HAS_FILESYSTEM_SMB)
+  if (!IsWSDiscoveryRunning())
+    return true;
+
+  CServiceBroker::GetWSDiscovery().StopServices();
+
+  return true;
+#endif // HAS_FILESYSTEM_SMB
+  return false;
+}
+
 bool CNetworkServices::ValidatePort(int port)
 {
   if (port <= 0 || port > 65535)
     return false;
 
 #ifdef TARGET_LINUX
-  if (!CUtil::CanBindPrivileged() && (port < 1024 || port > 65535))
+  if (!CUtil::CanBindPrivileged() && (port < 1024))
     return false;
 #endif
 

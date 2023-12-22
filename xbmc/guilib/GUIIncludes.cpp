@@ -113,14 +113,15 @@ bool CGUIIncludes::Load_Internal(const std::string &file)
   CXBMCTinyXML doc;
   if (!doc.LoadFile(file))
   {
-    CLog::Log(LOGINFO, "Error loading include file %s: %s (row: %i, col: %i)", file.c_str(), doc.ErrorDesc(), doc.ErrorRow(), doc.ErrorCol());
+    CLog::Log(LOGINFO, "Error loading include file {}: {} (row: {}, col: {})", file,
+              doc.ErrorDesc(), doc.ErrorRow(), doc.ErrorCol());
     return false;
   }
 
   TiXmlElement *root = doc.RootElement();
   if (!root || !StringUtils::EqualsNoCase(root->Value(), "includes"))
   {
-    CLog::Log(LOGERROR, "Error loading include file %s: Root element <includes> required.", file.c_str());
+    CLog::Log(LOGERROR, "Error loading include file {}: Root element <includes> required.", file);
     return false;
   }
 
@@ -221,7 +222,7 @@ void CGUIIncludes::LoadIncludes(const TiXmlElement *node)
       Params defaultParams;
       bool haveParamTags = GetParameters(child, "default", defaultParams);
       if (haveParamTags && !definitionTag)
-        CLog::Log(LOGWARNING, "Skin has invalid include definition: %s", tagName);
+        CLog::Log(LOGWARNING, "Skin has invalid include definition: {}", tagName);
       else
         m_includes.insert({ tagName, { *includeBody, std::move(defaultParams) } });
     }
@@ -232,7 +233,8 @@ void CGUIIncludes::LoadIncludes(const TiXmlElement *node)
 
       if (condition)
       { // load include file if condition evals to true
-        if (CServiceBroker::GetGUI()->GetInfoManager().Register(condition)->Get())
+        if (CServiceBroker::GetGUI()->GetInfoManager().Register(condition)->Get(
+                INFO::DEFAULT_CONTEXT))
           Load_Internal(file);
       }
       else
@@ -258,7 +260,7 @@ void CGUIIncludes::FlattenExpression(std::string &expression, const std::vector<
   GUIINFO::CGUIInfoLabel::ReplaceSpecialKeywordReferences(expression, "EXP", [&](const std::string &expressionName) -> std::string {
     if (std::find(resolved.begin(), resolved.end(), expressionName) != resolved.end())
     {
-      CLog::Log(LOGERROR, "Skin has a circular expression \"%s\": %s", resolved.back().c_str(), original.c_str());
+      CLog::Log(LOGERROR, "Skin has a circular expression \"{}\": {}", resolved.back(), original);
       return std::string();
     }
     auto it = m_expressions.find(expressionName);
@@ -412,11 +414,17 @@ void CGUIIncludes::ResolveIncludes(TiXmlElement *node, std::map<INFO::InfoPtr, b
     const char *condition = include->Attribute("condition");
     if (condition)
     {
-      INFO::InfoPtr conditionID = CServiceBroker::GetGUI()->GetInfoManager().Register(ResolveExpressions(condition));
-      bool value = conditionID->Get();
+      INFO::InfoPtr conditionID =
+          CServiceBroker::GetGUI()->GetInfoManager().Register(ResolveExpressions(condition));
+      bool value = false;
 
-      if (xmlIncludeConditions)
-        xmlIncludeConditions->insert(std::make_pair(conditionID, value));
+      if (conditionID)
+      {
+        value = conditionID->Get(INFO::DEFAULT_CONTEXT);
+
+        if (xmlIncludeConditions)
+          xmlIncludeConditions->insert(std::make_pair(conditionID, value));
+      }
 
       if (!value)
       {
@@ -486,7 +494,7 @@ void CGUIIncludes::ResolveIncludes(TiXmlElement *node, std::map<INFO::InfoPtr, b
     }
     else
     { // invalid include
-      CLog::Log(LOGWARNING, "Skin has invalid include: %s", tagName.c_str());
+      CLog::Log(LOGWARNING, "Skin has invalid include: {}", tagName);
       include = include->NextSiblingElement("include");
     }
   }
@@ -610,12 +618,17 @@ void CGUIIncludes::ResolveParametersForNode(TiXmlElement *node, const Params& pa
       else if (result != NO_PARAMS_FOUND)
         child->SetValue(newValue);
     }
-    else if (child->Type() == TiXmlNode::TINYXML_ELEMENT)
+    else if (child->Type() == TiXmlNode::TINYXML_ELEMENT ||
+             child->Type() == TiXmlNode::TINYXML_COMMENT)
     {
       do
       {
-        TiXmlElement *next = child->NextSiblingElement();   // save next as current child might be removed from the tree
-        ResolveParametersForNode(static_cast<TiXmlElement *>(child), params);
+        // save next as current child might be removed from the tree
+        TiXmlElement* next = child->NextSiblingElement();
+
+        if (child->Type() == TiXmlNode::TINYXML_ELEMENT)
+          ResolveParametersForNode(static_cast<TiXmlElement*>(child), params);
+
         child = next;
       }
       while (child);
@@ -627,11 +640,11 @@ class ParamReplacer
 {
   const std::map<std::string, std::string>& m_params;
   // keep some stats so that we know exactly what's been resolved
-  int m_numTotalParams;
-  int m_numUndefinedParams;
+  int m_numTotalParams = 0;
+  int m_numUndefinedParams = 0;
+
 public:
-  explicit ParamReplacer(const std::map<std::string, std::string>& params)
-    : m_params(params), m_numTotalParams(0), m_numUndefinedParams(0) {}
+  explicit ParamReplacer(const std::map<std::string, std::string>& params) : m_params(params) {}
   int GetNumTotalParams() const { return m_numTotalParams; }
   int GetNumDefinedParams() const { return m_numTotalParams - m_numUndefinedParams; }
   int GetNumUndefinedParams() const { return m_numUndefinedParams; }

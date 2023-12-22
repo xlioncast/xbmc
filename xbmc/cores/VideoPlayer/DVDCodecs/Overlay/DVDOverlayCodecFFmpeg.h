@@ -24,11 +24,10 @@ public:
   CDVDOverlayCodecFFmpeg();
   ~CDVDOverlayCodecFFmpeg() override;
   bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options) override;
-  void Dispose() override;
-  int Decode(DemuxPacket *pPacket) override;
+  OverlayMessage Decode(DemuxPacket* pPacket) override;
   void Reset() override;
   void Flush() override;
-  CDVDOverlay* GetOverlay() override;
+  std::shared_ptr<CDVDOverlay> GetOverlay() override;
 
 private:
   AVCodecContext* m_pCodecContext;

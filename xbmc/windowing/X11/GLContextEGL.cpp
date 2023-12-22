@@ -11,31 +11,34 @@
   #define GL_GLEXT_PROTOTYPES
 #endif
 
-#include <clocale>
-#include "system_gl.h"
 #include "GLContextEGL.h"
-#include "utils/log.h"
-#include <EGL/eglext.h>
+
 #include "ServiceBroker.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
-#include "threads/SingleLock.h"
+#include "utils/log.h"
+
+#include <clocale>
+#include <mutex>
+
+#include <EGL/eglext.h>
+#include <unistd.h>
+
+#include "PlatformDefs.h"
+#include "system_gl.h"
 
 #define EGL_NO_CONFIG (EGLConfig)0
 
-CGLContextEGL::CGLContextEGL(Display *dpy, EGLint renderingApi) : CGLContext(dpy)
+CGLContextEGL::CGLContextEGL(Display* dpy, EGLint renderingApi)
+  : CGLContext(dpy),
+    m_renderingApi(renderingApi),
+    m_eglConfig(EGL_NO_CONFIG),
+    m_eglGetPlatformDisplayEXT(
+        (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT"))
 {
   m_extPrefix = "EGL_";
-  m_renderingApi = renderingApi;
 
-  m_eglDisplay = EGL_NO_DISPLAY;
-  m_eglSurface = EGL_NO_SURFACE;
-  m_eglContext = EGL_NO_CONTEXT;
-  m_eglConfig = EGL_NO_CONFIG;
-
-  m_eglGetPlatformDisplayEXT = (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT");
-
-  CSettingsComponent *settings = CServiceBroker::GetSettingsComponent();
+  const auto settings = CServiceBroker::GetSettingsComponent();
   if (settings)
   {
     m_omlSync = settings->GetAdvancedSettings()->m_omlSync;
@@ -59,7 +62,7 @@ bool CGLContextEGL::Refresh(bool force, int screen, Window glWindow, bool &newCo
       m_eglSurface = eglCreateWindowSurface(m_eglDisplay, m_eglConfig, glWindow, NULL);
       if (m_eglSurface == EGL_NO_SURFACE)
       {
-        CLog::Log(LOGERROR, "failed to create EGL window surface %d", eglGetError());
+        CLog::Log(LOGERROR, "failed to create EGL window surface {}", eglGetError());
         return false;
       }
     }
@@ -123,7 +126,7 @@ bool CGLContextEGL::Refresh(bool force, int screen, Window glWindow, bool &newCo
   vInfo = XGetVisualInfo(m_dpy, VisualScreenMask | VisualIDMask, &vMask, &availableVisuals);
   if (!vInfo)
   {
-    CLog::Log(LOGERROR, "Failed to get VisualInfo of visual 0x%x", (unsigned) vMask.visualid);
+    CLog::Log(LOGERROR, "Failed to get VisualInfo of visual 0x{:x}", (unsigned)vMask.visualid);
     Destroy();
     return false;
   }
@@ -134,17 +137,17 @@ bool CGLContextEGL::Refresh(bool force, int screen, Window glWindow, bool &newCo
 
   if (m_eglConfig == EGL_NO_CONFIG)
   {
-    CLog::Log(LOGERROR, "failed to get suitable eglconfig for visual 0x%x", visualid);
+    CLog::Log(LOGERROR, "failed to get suitable eglconfig for visual 0x{:x}", visualid);
     Destroy();
     return false;
   }
 
-  CLog::Log(LOGINFO, "Using visual 0x%x", visualid);
+  CLog::Log(LOGINFO, "Using visual 0x{:x}", visualid);
 
   m_eglSurface = eglCreateWindowSurface(m_eglDisplay, m_eglConfig, glWindow, NULL);
   if (m_eglSurface == EGL_NO_SURFACE)
   {
-    CLog::Log(LOGERROR, "failed to create EGL window surface %d", eglGetError());
+    CLog::Log(LOGERROR, "failed to create EGL window surface {}", eglGetError());
     Destroy();
     return false;
   }
@@ -179,8 +182,8 @@ bool CGLContextEGL::Refresh(bool force, int screen, Window glWindow, bool &newCo
 
   if (!eglMakeCurrent(m_eglDisplay, m_eglSurface, m_eglSurface, m_eglContext))
   {
-    CLog::Log(LOGERROR, "Failed to make context current %p %p %p", m_eglDisplay, m_eglSurface,
-              m_eglContext);
+    CLog::Log(LOGERROR, "Failed to make context current {} {} {}", fmt::ptr(m_eglDisplay),
+              fmt::ptr(m_eglSurface), fmt::ptr(m_eglContext));
     Destroy();
     return false;
   }
@@ -245,7 +248,7 @@ bool CGLContextEGL::CreatePB()
   m_eglSurface = eglCreatePbufferSurface(m_eglDisplay, m_eglConfig, pbufferAttribs);
   if (m_eglSurface == EGL_NO_SURFACE)
   {
-    CLog::Log(LOGERROR, "failed to create EGL window surface %d", eglGetError());
+    CLog::Log(LOGERROR, "failed to create EGL window surface {}", eglGetError());
     Destroy();
     return false;
   }
@@ -277,8 +280,8 @@ bool CGLContextEGL::CreatePB()
 
   if (!eglMakeCurrent(m_eglDisplay, m_eglSurface, m_eglSurface, m_eglContext))
   {
-    CLog::Log(LOGERROR, "Failed to make context current %p %p %p", m_eglDisplay, m_eglSurface,
-              m_eglContext);
+    CLog::Log(LOGERROR, "Failed to make context current {} {} {}", fmt::ptr(m_eglDisplay),
+              fmt::ptr(m_eglSurface), fmt::ptr(m_eglContext));
     Destroy();
     return false;
   }
@@ -473,7 +476,7 @@ void CGLContextEGL::SwapBuffers()
       usleep(sleeptime);
       cont++;
       msc2++;
-      CLog::Log(LOGDEBUG, "CGLContextEGL::SwapBuffers: sync sleep: %ld", sleeptime);
+      CLog::Log(LOGDEBUG, "CGLContextEGL::SwapBuffers: sync sleep: {}", sleeptime);
     }
   }
   else if ((m_sync.cont > 5) && (msc2 == m_sync.msc2))
@@ -491,7 +494,7 @@ void CGLContextEGL::SwapBuffers()
     msc2++;
   }
   {
-    CSingleLock lock(m_syncLock);
+    std::unique_lock<CCriticalSection> lock(m_syncLock);
     m_sync.ust1 = ust1;
     m_sync.ust2 = ust2;
     m_sync.msc1 = msc1;
@@ -509,7 +512,7 @@ uint64_t CGLContextEGL::GetVblankTiming(uint64_t &msc, uint64_t &interval)
   now = static_cast<uint64_t>(nowTs.tv_sec) * 1000000000ULL + nowTs.tv_nsec;
   now /= 1000;
 
-  CSingleLock lock(m_syncLock);
+  std::unique_lock<CCriticalSection> lock(m_syncLock);
   msc = m_sync.msc2;
 
   interval = (m_sync.cont >= 5) ? m_sync.interval : m_sync.ust2 - m_sync.ust1;
@@ -536,5 +539,5 @@ void CGLContextEGL::QueryExtensions()
   std::string extensions = eglQueryString(m_eglDisplay, EGL_EXTENSIONS);
   m_extensions = std::string(" ") + extensions + " ";
 
-  CLog::Log(LOGDEBUG, "EGL_EXTENSIONS:%s", m_extensions.c_str());
+  CLog::Log(LOGDEBUG, "EGL_EXTENSIONS:{}", m_extensions);
 }

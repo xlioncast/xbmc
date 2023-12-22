@@ -11,7 +11,6 @@
 #include "Connection.h"
 #include "Registry.h"
 #include "WinEventsWayland.h"
-#include "threads/SingleLock.h"
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 
@@ -20,6 +19,7 @@
 #include <cerrno>
 #include <chrono>
 #include <cstring>
+#include <mutex>
 #include <system_error>
 #include <utility>
 
@@ -71,8 +71,9 @@ CSeatSelection::CSeatSelection(CConnection& connection, wayland::seat_t const& s
       m_mimeTypeOffers.push_back(std::move(mime));
     };
   };
-  m_dataDevice.on_selection() = [this](const wayland::data_offer_t& offer) {
-    CSingleLock lock(m_currentSelectionMutex);
+  m_dataDevice.on_selection() = [this](const wayland::data_offer_t& offer)
+  {
+    std::unique_lock<CCriticalSection> lock(m_currentSelectionMutex);
     m_matchedMimeType.clear();
 
     if (offer != m_currentOffer)
@@ -95,11 +96,13 @@ CSeatSelection::CSeatSelection(CConnection& connection, wayland::seat_t const& s
       if (mimeIt != MIME_TYPES_PREFERENCE.cend())
       {
         m_matchedMimeType = *mimeIt;
-        CLog::Log(LOGDEBUG, "Chose selection MIME type %s out of offered %s", m_matchedMimeType.c_str(), offers.c_str());
+        CLog::Log(LOGDEBUG, "Chose selection MIME type {} out of offered {}", m_matchedMimeType,
+                  offers);
       }
       else
       {
-        CLog::Log(LOGDEBUG, "Could not find compatible MIME type for selection data (offered: %s)", offers.c_str());
+        CLog::Log(LOGDEBUG, "Could not find compatible MIME type for selection data (offered: {})",
+                  offers);
       }
     }
   };
@@ -107,7 +110,7 @@ CSeatSelection::CSeatSelection(CConnection& connection, wayland::seat_t const& s
 
 std::string CSeatSelection::GetSelectionText() const
 {
-  CSingleLock lock(m_currentSelectionMutex);
+  std::unique_lock<CCriticalSection> lock(m_currentSelectionMutex);
   if (!m_currentSelection || m_matchedMimeType.empty())
   {
     return "";
@@ -116,7 +119,8 @@ std::string CSeatSelection::GetSelectionText() const
   std::array<int, 2> fds;
   if (pipe(fds.data()) != 0)
   {
-    CLog::LogF(LOGERROR, "Could not open pipe for selection data transfer: %s", std::strerror(errno));
+    CLog::LogF(LOGERROR, "Could not open pipe for selection data transfer: {}",
+               std::strerror(errno));
     return "";
   }
 
@@ -124,7 +128,7 @@ std::string CSeatSelection::GetSelectionText() const
   CFileHandle writeFd{fds[1]};
 
   m_currentSelection.receive(m_matchedMimeType, writeFd);
-  lock.Leave();
+  lock.unlock();
   // Make sure the other party gets the request as soon as possible
   CWinEventsWayland::Flush();
   // Fd now gets sent to the other party -> make sure our write end is closed
@@ -183,7 +187,7 @@ std::string CSeatSelection::GetSelectionText() const
       ssize_t readBytes{read(fd.fd, buffer.data() + totalBytesRead, buffer.size() - totalBytesRead)};
       if (readBytes < 0)
       {
-        CLog::LogF(LOGERROR, "read() from selection pipe failed: %s", std::strerror(errno));
+        CLog::LogF(LOGERROR, "read() from selection pipe failed: {}", std::strerror(errno));
         return "";
       }
       totalBytesRead += readBytes;

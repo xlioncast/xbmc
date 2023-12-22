@@ -94,7 +94,6 @@ namespace controls
 /// ~~~~~~~~~~~~
 ///
 
-
 //==============================================================================
 /// @ingroup cpp_kodi_gui_windows_controls_CSpin
 /// @anchor AddonGUISpinControlType
@@ -114,7 +113,7 @@ typedef enum AddonGUISpinControlType
 } AddonGUISpinControlType;
 //------------------------------------------------------------------------------
 
-class ATTRIBUTE_HIDDEN CSpin : public CAddonGUIControlBase
+class ATTR_DLL_LOCAL CSpin : public CAddonGUIControlBase
 {
 public:
   //============================================================================

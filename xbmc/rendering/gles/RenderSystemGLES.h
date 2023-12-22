@@ -10,13 +10,16 @@
 
 #include "GLESShader.h"
 #include "rendering/RenderSystem.h"
-#include "utils/Color.h"
+#include "utils/ColorUtils.h"
+#include "utils/Map.h"
 
-#include <array>
+#include <map>
+
+#include <fmt/format.h>
 
 #include "system_gl.h"
 
-enum ESHADERMETHOD
+enum class ShaderMethodGLES
 {
   SM_DEFAULT,
   SM_TEXTURE,
@@ -33,6 +36,40 @@ enum ESHADERMETHOD
   SM_MAX
 };
 
+template<>
+struct fmt::formatter<ShaderMethodGLES> : fmt::formatter<std::string_view>
+{
+  template<typename FormatContext>
+  constexpr auto format(const ShaderMethodGLES& shaderMethod, FormatContext& ctx)
+  {
+    const auto it = ShaderMethodGLESMap.find(shaderMethod);
+    if (it == ShaderMethodGLESMap.cend())
+      throw std::range_error("no string mapping found for shader method");
+
+    return fmt::formatter<string_view>::format(it->second, ctx);
+  }
+
+private:
+  static constexpr auto ShaderMethodGLESMap = make_map<ShaderMethodGLES, std::string_view>({
+      {ShaderMethodGLES::SM_DEFAULT, "default"},
+      {ShaderMethodGLES::SM_TEXTURE, "texture"},
+      {ShaderMethodGLES::SM_MULTI, "multi"},
+      {ShaderMethodGLES::SM_FONTS, "fonts"},
+      {ShaderMethodGLES::SM_TEXTURE_NOBLEND, "texture no blending"},
+      {ShaderMethodGLES::SM_MULTI_BLENDCOLOR, "multi blend colour"},
+      {ShaderMethodGLES::SM_TEXTURE_RGBA, "texure rgba"},
+      {ShaderMethodGLES::SM_TEXTURE_RGBA_OES, "texture rgba OES"},
+      {ShaderMethodGLES::SM_TEXTURE_RGBA_BLENDCOLOR, "texture rgba blend colour"},
+      {ShaderMethodGLES::SM_TEXTURE_RGBA_BOB, "texture rgba bob"},
+      {ShaderMethodGLES::SM_TEXTURE_RGBA_BOB_OES, "texture rgba bob OES"},
+      {ShaderMethodGLES::SM_TEXTURE_NOALPHA, "texture no alpha"},
+  });
+
+  static_assert(static_cast<size_t>(ShaderMethodGLES::SM_MAX) == ShaderMethodGLESMap.size(),
+                "ShaderMethodGLESMap doesn't match the size of ShaderMethodGLES, did you forget to "
+                "add/remove a mapping?");
+};
+
 class CRenderSystemGLES : public CRenderSystemBase
 {
 public:
@@ -46,7 +83,7 @@ public:
   bool BeginRender() override;
   bool EndRender() override;
   void PresentRender(bool rendered, bool videoLayer) override;
-  bool ClearBuffers(UTILS::Color color) override;
+  bool ClearBuffers(UTILS::COLOR::Color color) override;
   bool IsExtSupported(const char* extension) const override;
 
   void SetVSync(bool vsync);
@@ -73,7 +110,7 @@ public:
 
   void InitialiseShaders();
   void ReleaseShaders();
-  void EnableGUIShader(ESHADERMETHOD method);
+  void EnableGUIShader(ShaderMethodGLES method);
   void DisableGUIShader();
 
   GLint GUIShaderGetPos();
@@ -99,9 +136,8 @@ protected:
 
   std::string m_RenderExtensions;
 
-  std::array<std::unique_ptr<CGLESShader>, SM_MAX> m_pShader;
-  ESHADERMETHOD m_method = SM_DEFAULT;
+  std::map<ShaderMethodGLES, std::unique_ptr<CGLESShader>> m_pShader;
+  ShaderMethodGLES m_method = ShaderMethodGLES::SM_DEFAULT;
 
   GLint      m_viewPort[4];
 };
-

@@ -10,12 +10,12 @@
 
 #include "ServiceBroker.h"
 #include "guilib/GUIComponent.h"
-#include "guilib/GUIProgressControl.h"
 #include "guilib/GUIWindowManager.h"
 #include "threads/IRunnable.h"
 #include "threads/Thread.h"
+#include "utils/log.h"
 
-#define PROGRESS_CONTROL 10
+using namespace std::chrono_literals;
 
 class CBusyWaiter : public CThread
 {
@@ -32,12 +32,16 @@ public:
     std::shared_ptr<CEvent> e_done(m_done);
 
     Create();
-    unsigned int start = XbmcThreads::SystemClockMillis();
+    auto start = std::chrono::steady_clock::now();
     if (!CGUIDialogBusy::WaitOnEvent(*e_done, displaytime, allowCancel))
     {
       m_runnable->Cancel();
-      unsigned int elapsed = XbmcThreads::SystemClockMillis() - start;
-      unsigned int remaining = (elapsed >= displaytime) ? 0 : displaytime - elapsed;
+
+      auto end = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+      unsigned int remaining =
+          (duration.count() >= displaytime) ? 0 : displaytime - duration.count();
       CGUIDialogBusy::WaitOnEvent(*e_done, remaining, false);
       return false;
     }
@@ -70,7 +74,7 @@ bool CGUIDialogBusy::Wait(IRunnable *runnable, unsigned int displaytime, bool al
 bool CGUIDialogBusy::WaitOnEvent(CEvent &event, unsigned int displaytime /* = 100 */, bool allowCancel /* = true */)
 {
   bool cancelled = false;
-  if (!event.WaitMSec(displaytime))
+  if (!event.Wait(std::chrono::milliseconds(displaytime)))
   {
     // throw up the progress
     CGUIDialogBusy* dialog = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogBusy>(WINDOW_DIALOG_BUSY);
@@ -78,12 +82,14 @@ bool CGUIDialogBusy::WaitOnEvent(CEvent &event, unsigned int displaytime /* = 10
     {
       if (dialog->IsDialogRunning())
       {
+        CLog::Log(LOGFATAL, "Logic error due to two concurrent busydialogs, this is a known issue. "
+                            "The application will exit.");
         throw std::logic_error("busy dialog already running");
       }
 
       dialog->Open();
 
-      while(!event.WaitMSec(1))
+      while (!event.Wait(1ms))
       {
         dialog->ProcessRenderLoop(false);
         if (allowCancel && dialog->IsCanceled())
@@ -104,7 +110,6 @@ CGUIDialogBusy::CGUIDialogBusy(void)
 {
   m_loadType = LOAD_ON_GUI_INIT;
   m_bCanceled = false;
-  m_progress = -1;
 }
 
 CGUIDialogBusy::~CGUIDialogBusy(void) = default;
@@ -113,7 +118,6 @@ void CGUIDialogBusy::Open_Internal(bool bProcessRenderLoop, const std::string& p
 {
   m_bCanceled = false;
   m_bLastVisible = true;
-  m_progress = -1;
 
   CGUIDialog::Open_Internal(false, param);
 }
@@ -123,17 +127,8 @@ void CGUIDialogBusy::DoProcess(unsigned int currentTime, CDirtyRegionList &dirty
 {
   bool visible = CServiceBroker::GetGUI()->GetWindowManager().IsModalDialogTopmost(WINDOW_DIALOG_BUSY);
   if(!visible && m_bLastVisible)
-    dirtyregions.push_back(CDirtyRegion(m_renderRegion));
+    dirtyregions.emplace_back(m_renderRegion);
   m_bLastVisible = visible;
-
-  // update the progress control if available
-  CGUIControl *control = GetControl(PROGRESS_CONTROL);
-  if (control && control->GetControlType() == CGUIControl::GUICONTROL_PROGRESS)
-  {
-    CGUIProgressControl *progress = static_cast<CGUIProgressControl*>(control);
-    progress->SetPercentage(m_progress);
-    progress->SetVisible(m_progress > -1);
-  }
 
   CGUIDialog::DoProcess(currentTime, dirtyregions);
 }
@@ -149,9 +144,4 @@ bool CGUIDialogBusy::OnBack(int actionID)
 {
   m_bCanceled = true;
   return true;
-}
-
-void CGUIDialogBusy::SetProgress(float percent)
-{
-  m_progress = percent;
 }

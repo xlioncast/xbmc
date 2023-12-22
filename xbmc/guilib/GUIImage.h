@@ -55,7 +55,7 @@ public:
   CGUIImage(int parentID, int controlID, float posX, float posY, float width, float height, const CTextureInfo& texture);
   CGUIImage(const CGUIImage &left);
   ~CGUIImage(void) override;
-  CGUIImage *Clone() const override { return new CGUIImage(*this); };
+  CGUIImage* Clone() const override { return new CGUIImage(*this); }
 
   void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
   void Render() override;
@@ -65,7 +65,7 @@ public:
   void AllocResources() override;
   void FreeResources(bool immediately = false) override;
   void DynamicResourceAlloc(bool bOnOff) override;
-  bool IsDynamicallyAllocated() override { return m_bDynamicResourceAlloc; };
+  bool IsDynamicallyAllocated() override { return m_bDynamicResourceAlloc; }
   void SetInvalid() override;
   bool CanFocus() const override;
   void UpdateInfo(const CGUIListItem *item = NULL) override;
@@ -94,6 +94,12 @@ protected:
   void FreeResourcesButNotAnims();
   unsigned char GetFadeLevel(unsigned int time) const;
   bool ProcessFading(CFadingTexture *texture, unsigned int frameTime, unsigned int currentTime);
+
+  /*!
+   * \brief Update the diffuse color based on the current item infos
+   * \param item the item to for info resolution
+  */
+  void UpdateDiffuseColor(const CGUIListItem* item);
 
   bool m_bDynamicResourceAlloc;
 

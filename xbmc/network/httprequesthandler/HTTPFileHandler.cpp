@@ -8,6 +8,7 @@
 
 #include "HTTPFileHandler.h"
 
+#include "filesystem/File.h"
 #include "utils/Mime.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
@@ -92,7 +93,7 @@ void CHTTPFileHandler::SetLastModifiedDate(const struct __stat64 *statBuffer)
 {
   struct tm *time;
 #ifdef HAVE_LOCALTIME_R
-  struct tm result = { };
+  struct tm result = {};
   time = localtime_r((const time_t*)&statBuffer->st_mtime, &result);
 #else
   time = localtime((time_t *)&statBuffer->st_mtime);

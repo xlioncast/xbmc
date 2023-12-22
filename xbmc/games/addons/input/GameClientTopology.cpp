@@ -18,7 +18,7 @@
 using namespace KODI;
 using namespace GAME;
 
-#define CONTROLLER_ADDRESS_SEPARATOR "/"
+#define CONTROLLER_ADDRESS_SEPARATOR '/'
 
 CGameClientTopology::CGameClientTopology(GameClientPortVec ports, int playerLimit)
   : m_ports(std::move(ports)), m_playerLimit(playerLimit), m_controllers(GetControllerTree(m_ports))
@@ -35,10 +35,10 @@ CControllerTree CGameClientTopology::GetControllerTree(const GameClientPortVec& 
 {
   CControllerTree tree;
 
-  ControllerPortVec controllerPorts;
+  PortVec controllerPorts;
   for (const GameClientPortPtr& port : ports)
   {
-    CControllerPortNode portNode = GetPortNode(port, "");
+    CPortNode portNode = GetPortNode(port, "");
     controllerPorts.emplace_back(std::move(portNode));
   }
 
@@ -47,17 +47,18 @@ CControllerTree CGameClientTopology::GetControllerTree(const GameClientPortVec& 
   return tree;
 }
 
-CControllerPortNode CGameClientTopology::GetPortNode(const GameClientPortPtr& port,
-                                                     const std::string& address)
+CPortNode CGameClientTopology::GetPortNode(const GameClientPortPtr& port,
+                                           const std::string& controllerAddress)
 {
-  CControllerPortNode portNode;
+  CPortNode portNode;
 
-  std::string portAddress = MakeAddress(address, port->ID());
+  std::string portAddress = MakeAddress(controllerAddress, port->ID());
 
   portNode.SetConnected(false);
   portNode.SetPortType(port->PortType());
   portNode.SetPortID(port->ID());
   portNode.SetAddress(portAddress);
+  portNode.SetForceConnected(port->ForceConnected());
 
   ControllerNodeVec nodes;
   for (const GameClientDevicePtr& device : port->Devices())
@@ -71,19 +72,20 @@ CControllerPortNode CGameClientTopology::GetPortNode(const GameClientPortPtr& po
 }
 
 CControllerNode CGameClientTopology::GetControllerNode(const GameClientDevicePtr& device,
-                                                       const std::string& address)
+                                                       const std::string& portAddress)
 {
   CControllerNode controllerNode;
 
-  std::string controllerAddress = MakeAddress(address, device->Controller()->ID());
+  const std::string controllerAddress = MakeAddress(portAddress, device->Controller()->ID());
 
   controllerNode.SetController(device->Controller());
-  controllerNode.SetAddress(controllerAddress);
+  controllerNode.SetPortAddress(portAddress);
+  controllerNode.SetControllerAddress(controllerAddress);
 
-  ControllerPortVec ports;
+  PortVec ports;
   for (const GameClientPortPtr& port : device->Ports())
   {
-    CControllerPortNode portNode = GetPortNode(port, controllerAddress);
+    CPortNode portNode = GetPortNode(port, controllerAddress);
     ports.emplace_back(std::move(portNode));
   }
 
@@ -105,4 +107,24 @@ std::string CGameClientTopology::MakeAddress(const std::string& baseAddress,
   address << CONTROLLER_ADDRESS_SEPARATOR << nodeId;
 
   return address.str();
+}
+
+std::pair<std::string, std::string> CGameClientTopology::SplitAddress(
+    const std::string& nodeAddress)
+{
+  std::string baseAddress;
+  std::string nodeId;
+
+  size_t separatorPos = nodeAddress.find_last_of(CONTROLLER_ADDRESS_SEPARATOR);
+  if (separatorPos != std::string::npos)
+  {
+    baseAddress = nodeAddress.substr(0, separatorPos);
+    nodeId = nodeAddress.substr(separatorPos + 1);
+  }
+  else
+  {
+    baseAddress = nodeAddress;
+  }
+
+  return std::make_pair(baseAddress, nodeId);
 }

@@ -144,7 +144,7 @@ protected:
                                           int label,
                                           SettingLevel level,
                                           const std::string& value,
-                                          ADDON::TYPE addonType,
+                                          ADDON::AddonType addonType,
                                           bool allowEmpty = false,
                                           int heading = -1,
                                           bool hideValue = false,
@@ -288,7 +288,8 @@ protected:
                                           StringSettingOptionsFiller filler,
                                           int heading,
                                           bool visible = true,
-                                          int help = -1);
+                                          int help = -1,
+                                          bool details = false);
   std::shared_ptr<CSettingInt> AddList(const std::shared_ptr<CSettingGroup>& group,
                                        const std::string& id,
                                        int label,
@@ -297,7 +298,8 @@ protected:
                                        const TranslatableIntegerSettingOptions& entries,
                                        int heading,
                                        bool visible = true,
-                                       int help = -1);
+                                       int help = -1,
+                                       bool details = false);
   std::shared_ptr<CSettingInt> AddList(const std::shared_ptr<CSettingGroup>& group,
                                        const std::string& id,
                                        int label,
@@ -306,7 +308,8 @@ protected:
                                        const IntegerSettingOptions& entries,
                                        int heading,
                                        bool visible = true,
-                                       int help = -1);
+                                       int help = -1,
+                                       bool details = false);
   std::shared_ptr<CSettingInt> AddList(const std::shared_ptr<CSettingGroup>& group,
                                        const std::string& id,
                                        int label,
@@ -315,7 +318,8 @@ protected:
                                        IntegerSettingOptionsFiller filler,
                                        int heading,
                                        bool visible = true,
-                                       int help = -1);
+                                       int help = -1,
+                                       bool details = false);
   std::shared_ptr<CSettingList> AddList(const std::shared_ptr<CSettingGroup>& group,
                                         const std::string& id,
                                         int label,
@@ -326,7 +330,8 @@ protected:
                                         int minimumItems = 0,
                                         int maximumItems = -1,
                                         bool visible = true,
-                                        int help = -1);
+                                        int help = -1,
+                                        bool details = false);
   std::shared_ptr<CSettingList> AddList(const std::shared_ptr<CSettingGroup>& group,
                                         const std::string& id,
                                         int label,
@@ -337,7 +342,8 @@ protected:
                                         int minimumItems = 0,
                                         int maximumItems = -1,
                                         bool visible = true,
-                                        int help = -1);
+                                        int help = -1,
+                                        bool details = false);
   std::shared_ptr<CSettingList> AddList(const std::shared_ptr<CSettingGroup>& group,
                                         const std::string& id,
                                         int label,
@@ -348,7 +354,8 @@ protected:
                                         int minimumItems = 0,
                                         int maximumItems = -1,
                                         bool visible = true,
-                                        int help = -1);
+                                        int help = -1,
+                                        bool details = false);
   std::shared_ptr<CSettingList> AddList(const std::shared_ptr<CSettingGroup>& group,
                                         const std::string& id,
                                         int label,
@@ -360,7 +367,8 @@ protected:
                                         int maximumItems = -1,
                                         bool visible = true,
                                         int help = -1,
-                                        SettingControlListValueFormatter formatter = NULL);
+                                        SettingControlListValueFormatter formatter = nullptr,
+                                        bool details = false);
 
   // slider controls
   std::shared_ptr<CSettingInt> AddPercentageSlider(const std::shared_ptr<CSettingGroup>& group,
@@ -463,7 +471,7 @@ protected:
                                                    SettingLevel level,
                                                    int valueLower,
                                                    int valueUpper,
-                                                   const std::string& valueFormatString = "%i %%",
+                                                   const std::string& valueFormatString = "{:d} %",
                                                    int step = 1,
                                                    int formatLabel = 21469,
                                                    bool delayed = false,
@@ -492,7 +500,7 @@ protected:
                                          int minimum,
                                          int step,
                                          int maximum,
-                                         const std::string& valueFormatString = "%d",
+                                         const std::string& valueFormatString = "{:d}",
                                          int formatLabel = 21469,
                                          bool delayed = false,
                                          bool visible = true,
@@ -520,7 +528,7 @@ protected:
                                          float minimum,
                                          float step,
                                          float maximum,
-                                         const std::string& valueFormatString = "%.1f",
+                                         const std::string& valueFormatString = "{:.1f}",
                                          int formatLabel = 21469,
                                          bool delayed = false,
                                          bool visible = true,
@@ -588,7 +596,13 @@ protected:
   std::shared_ptr<ISettingControl> GetButtonControl(const std::string &format, bool delayed = false, int heading = -1, bool hideValue = false, bool showInstalledAddons = true,
     bool showInstallableAddons = false, bool showMoreAddons = true);
   std::shared_ptr<ISettingControl> GetSpinnerControl(const std::string &format, bool delayed = false, int minimumLabel = -1, int formatLabel = -1, const std::string &formatString = "");
-  std::shared_ptr<ISettingControl> GetListControl(const std::string &format, bool delayed = false, int heading = -1, bool multiselect = false, SettingControlListValueFormatter formatter = NULL);
+  std::shared_ptr<ISettingControl> GetListControl(
+      const std::string& format,
+      bool delayed = false,
+      int heading = -1,
+      bool multiselect = false,
+      SettingControlListValueFormatter formatter = nullptr,
+      bool details = false);
   std::shared_ptr<ISettingControl> GetSliderControl(const std::string &format, bool delayed = false, int heading = -1, bool usePopup = false, int formatLabel = -1, const std::string &formatString = "");
   std::shared_ptr<ISettingControl> GetRangeControl(const std::string &format, bool delayed = false, int formatLabel = -1, int valueFormatLabel = -1, const std::string &valueFormatString = "");
 
@@ -631,6 +645,6 @@ private:
                          bool visible,
                          int help);
 
-  mutable CSettingsManager *m_settingsManager;
+  mutable CSettingsManager* m_settingsManager = nullptr;
   std::shared_ptr<CSettingSection> m_section;
 };

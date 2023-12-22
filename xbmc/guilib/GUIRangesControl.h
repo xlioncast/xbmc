@@ -58,7 +58,7 @@ public:
                     const CTextureInfo& rightTexture, const CTextureInfo& overlayTexture,
                     int iInfo);
   ~CGUIRangesControl() override = default;
-  CGUIRangesControl* Clone() const override { return new CGUIRangesControl(*this); };
+  CGUIRangesControl* Clone() const override { return new CGUIRangesControl(*this); }
 
   void Process(unsigned int iCurrentTime, CDirtyRegionList& dirtyregions) override;
   void Render() override;
@@ -74,7 +74,7 @@ protected:
   void SetRanges(const std::vector<std::pair<float, float>>& ranges);
   void ClearRanges();
 
-  bool UpdateColors() override;
+  bool UpdateColors(const CGUIListItem* item) override;
   bool UpdateLayout();
 
   std::unique_ptr<CGUITexture> m_guiBackground;

@@ -25,9 +25,13 @@ class CFileItemList;
 class CInputManager;
 class CSetting;
 class CSettingsCategory;
-class TiXmlElement;
 class CAction;
 class CKey;
+
+namespace tinyxml2
+{
+class XMLElement;
+}
 
 namespace KODI
 {
@@ -341,11 +345,16 @@ public:
    */
   KODI::GAME::CControllerManager& GetControllerProfiles() { return m_controllerProfiles; }
 
+  /*!
+   * \brief Get a mutex that allows for add-on install tasks to block on each other
+   */
+  CCriticalSection& GetAddonInstallMutex() { return m_addonInstallMutex; }
+
 private:
   bool LoadMappings();
   bool GetMappingForDevice(const CPeripheralBus& bus, PeripheralScanResult& result) const;
   static void GetSettingsFromMappingsFile(
-      TiXmlElement* xmlNode, std::map<std::string, PeripheralDeviceSetting>& m_settings);
+      tinyxml2::XMLElement* xmlNode, std::map<std::string, PeripheralDeviceSetting>& m_settings);
 
   void OnDeviceChanged();
 
@@ -361,5 +370,6 @@ private:
   std::unique_ptr<CEventScanner> m_eventScanner;
   mutable CCriticalSection m_critSectionBusses;
   mutable CCriticalSection m_critSectionMappings;
+  CCriticalSection m_addonInstallMutex;
 };
 } // namespace PERIPHERALS

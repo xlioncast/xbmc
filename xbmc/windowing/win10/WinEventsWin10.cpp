@@ -8,10 +8,10 @@
 
 #include "WinEventsWin10.h"
 
-#include "AppInboundProtocol.h"
-#include "Application.h"
 #include "GUIUserMessages.h"
 #include "ServiceBroker.h"
+#include "application/AppInboundProtocol.h"
+#include "application/Application.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "input/actions/Action.h"
@@ -47,7 +47,6 @@ using namespace winrt::Windows::UI::Input;
 using namespace winrt::Windows::UI::ViewManagement;
 
 using namespace PERIPHERALS;
-using namespace KODI::MESSAGING;
 
 static winrt::Point GetScreenPoint(winrt::Point point)
 {
@@ -171,7 +170,10 @@ void CWinEventsWin10::UpdateWindowSize()
 {
   auto size = DX::DeviceResources::Get()->GetOutputSize();
 
-  CLog::Log(LOGDEBUG, __FUNCTION__": window resize event %f x %f (as:%s)", size.Width, size.Height, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_fullScreen ? "true" : "false");
+  CLog::Log(LOGDEBUG, __FUNCTION__ ": window resize event {:f} x {:f} (as:{})", size.Width,
+            size.Height,
+            CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_fullScreen ? "true"
+                                                                                        : "false");
 
   auto appView = ApplicationView::GetForCurrentView();
   appView.SetDesiredBoundsMode(ApplicationViewBoundsMode::UseCoreWindow);
@@ -180,8 +182,7 @@ void CWinEventsWin10::UpdateWindowSize()
   if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_fullScreen && !appView.IsFullScreenMode())
     CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_fullScreen = false;
 
-  XBMC_Event newEvent;
-  memset(&newEvent, 0, sizeof(newEvent));
+  XBMC_Event newEvent = {};
   newEvent.type = XBMC_VIDEORESIZE;
   newEvent.resize.w = size.Width;
   newEvent.resize.h = size.Height;
@@ -253,7 +254,8 @@ void CWinEventsWin10::OnVisibilityChanged(const CoreWindow& sender, const Visibi
 
   if (g_application.GetRenderGUI() != active)
     DX::Windowing()->NotifyAppActiveChange(g_application.GetRenderGUI());
-  CLog::Log(LOGDEBUG, __FUNCTION__": window is %s", g_application.GetRenderGUI() ? "shown" : "hidden");
+  CLog::Log(LOGDEBUG, __FUNCTION__ ": window is {}",
+            g_application.GetRenderGUI() ? "shown" : "hidden");
 }
 
 void CWinEventsWin10::OnWindowActivationChanged(const CoreWindow& sender, const WindowActivatedEventArgs& args)
@@ -274,7 +276,10 @@ void CWinEventsWin10::OnWindowActivationChanged(const CoreWindow& sender, const 
   }
   if (g_application.GetRenderGUI() != active)
     DX::Windowing()->NotifyAppActiveChange(g_application.GetRenderGUI());
-  CLog::Log(LOGDEBUG, __FUNCTION__": window is %s", g_application.GetRenderGUI() ? "active" : "inactive");
+
+  if (CServiceBroker::IsLoggingUp())
+    CLog::Log(LOGDEBUG, __FUNCTION__ ": window is {}",
+              g_application.GetRenderGUI() ? "active" : "inactive");
 }
 
 void CWinEventsWin10::OnWindowClosed(const CoreWindow& sender, const CoreWindowEventArgs& args)
@@ -282,8 +287,7 @@ void CWinEventsWin10::OnWindowClosed(const CoreWindow& sender, const CoreWindowE
   // send quit command to the application if it's still running
   if (!g_application.m_bStop)
   {
-    XBMC_Event newEvent;
-    memset(&newEvent, 0, sizeof(newEvent));
+    XBMC_Event newEvent = {};
     newEvent.type = XBMC_QUIT;
     MessagePush(&newEvent);
   }
@@ -291,8 +295,7 @@ void CWinEventsWin10::OnWindowClosed(const CoreWindow& sender, const CoreWindowE
 
 void CWinEventsWin10::OnPointerPressed(const CoreWindow&, const PointerEventArgs& args)
 {
-  XBMC_Event newEvent;
-  memset(&newEvent, 0, sizeof(newEvent));
+  XBMC_Event newEvent = {};
 
   PointerPoint point = args.CurrentPoint();
   auto position = GetScreenPoint(point.Position());
@@ -340,8 +343,7 @@ void CWinEventsWin10::OnPointerMoved(const CoreWindow&, const PointerEventArgs& 
     return;
   }
 
-  XBMC_Event newEvent;
-  memset(&newEvent, 0, sizeof(newEvent));
+  XBMC_Event newEvent = {};
   newEvent.type = XBMC_MOUSEMOTION;
   newEvent.motion.x = position.X;
   newEvent.motion.y = position.Y;
@@ -359,8 +361,7 @@ void CWinEventsWin10::OnPointerReleased(const CoreWindow&, const PointerEventArg
     return;
   }
 
-  XBMC_Event newEvent;
-  memset(&newEvent, 0, sizeof(newEvent));
+  XBMC_Event newEvent = {};
   newEvent.type = XBMC_MOUSEBUTTONUP;
   newEvent.button.x = position.X;
   newEvent.button.y = position.Y;
@@ -388,8 +389,7 @@ void CWinEventsWin10::OnPointerExited(const CoreWindow&, const PointerEventArgs&
 
 void CWinEventsWin10::OnPointerWheelChanged(const CoreWindow&, const PointerEventArgs& args)
 {
-  XBMC_Event newEvent;
-  memset(&newEvent, 0, sizeof(newEvent));
+  XBMC_Event newEvent = {};
   newEvent.type = XBMC_MOUSEBUTTONDOWN;
   newEvent.button.x = args.CurrentPoint().Position().X;
   newEvent.button.y = args.CurrentPoint().Position().Y;
@@ -403,8 +403,7 @@ void CWinEventsWin10::Kodi_KeyEvent(unsigned int vkey, unsigned scancode, unsign
 {
   using State = CoreVirtualKeyStates;
 
-  XBMC_keysym keysym;
-  memset(&keysym, 0, sizeof(keysym));
+  XBMC_keysym keysym = {};
   keysym.scancode = scancode;
   keysym.sym = KODI::WINDOWING::WINDOWS::VK_keymap[vkey];
   keysym.unicode = keycode;
@@ -443,8 +442,7 @@ void CWinEventsWin10::Kodi_KeyEvent(unsigned int vkey, unsigned scancode, unsign
 
   keysym.mod = static_cast<XBMCMod>(mod);
 
-  XBMC_Event newEvent;
-  memset(&newEvent, 0, sizeof(newEvent));
+  XBMC_Event newEvent = {};
   newEvent.type = isDown ? XBMC_KEYDOWN : XBMC_KEYUP;
   newEvent.key.keysym = keysym;
   MessagePush(&newEvent);
@@ -552,7 +550,8 @@ void CWinEventsWin10::OnBackRequested(const winrt::IInspectable&, const BackRequ
   // handle this only on windows mobile
   if (CSysInfo::GetWindowsDeviceFamily() == CSysInfo::WindowsDeviceFamily::Mobile)
   {
-    CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1, static_cast<void*>(new CAction(ACTION_NAV_BACK)));
+    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1,
+                                               static_cast<void*>(new CAction(ACTION_NAV_BACK)));
   }
   args.Handled(true);
 }
@@ -595,7 +594,8 @@ void CWinEventsWin10::OnSystemMediaButtonPressed(const SystemMediaTransportContr
   }
   if (action != ACTION_NONE)
   {
-    CApplicationMessenger::GetInstance().PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1, static_cast<void*>(new CAction(action)));
+    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_GUI_ACTION, WINDOW_INVALID, -1,
+                                               static_cast<void*>(new CAction(action)));
   }
 }
 

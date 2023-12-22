@@ -80,7 +80,8 @@ void CPtsTracker::Add(double pts)
     {
       m_VFRCounter++;
       m_lastPattern = m_pattern;
-      CLog::Log(LOGDEBUG, "CPtsTracker: pattern lost on diff %f, number of losses %i", GetDiff(0), m_VFRCounter);
+      CLog::Log(LOGDEBUG, "CPtsTracker: pattern lost on diff {:f}, number of losses {}", GetDiff(0),
+                m_VFRCounter);
       Flush();
     }
 
@@ -103,8 +104,8 @@ void CPtsTracker::Add(double pts)
       }
 
       double frameduration = CalcFrameDuration();
-      CLog::Log(LOGDEBUG, "CPtsTracker: detected pattern of length %i: %s, frameduration: %f",
-                (int)pattern.size(), GetPatternStr().c_str(), frameduration);
+      CLog::Log(LOGDEBUG, "CPtsTracker: detected pattern of length {}: {}, frameduration: {:f}",
+                (int)pattern.size(), GetPatternStr(), frameduration);
     }
   }
 
@@ -252,7 +253,7 @@ bool CPtsTracker::CheckPattern(std::vector<double>& pattern)
 }
 
 //calculate how long each frame should last from the saved pattern
-//Retreive also information of max and min frame rate duration, for VFR files case
+//also retrieve information of max and min frame rate duration, for VFR files case
 double CPtsTracker::CalcFrameDuration()
 {
   if (!m_pattern.empty())
@@ -314,7 +315,7 @@ std::string CPtsTracker::GetPatternStr()
   std::string patternstr;
 
   for (unsigned int i = 0; i < m_pattern.size(); i++)
-    patternstr += StringUtils::Format("%.2f ", m_pattern[i]);
+    patternstr += StringUtils::Format("{:.2f} ", m_pattern[i]);
 
   StringUtils::Trim(patternstr);
 

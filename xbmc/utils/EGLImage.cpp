@@ -9,11 +9,13 @@
 #include "EGLImage.h"
 
 #include "ServiceBroker.h"
+#include "utils/DRMHelpers.h"
 #include "utils/EGLUtils.h"
+#include "utils/StringUtils.h"
 #include "utils/log.h"
 
+#include <algorithm>
 #include <map>
-#include <sstream>
 
 namespace
 {
@@ -101,25 +103,18 @@ std::map<EGLint, const char*> eglAttributes =
 #endif
 };
 
-std::string FourCCToString(uint32_t fourcc)
-{
-  std::stringstream ss;
-  ss << static_cast<char>((fourcc & 0x000000FF));
-  ss << static_cast<char>((fourcc & 0x0000FF00) >> 8);
-  ss << static_cast<char>((fourcc & 0x00FF0000) >> 16);
-  ss << static_cast<char>((fourcc & 0xFF000000) >> 24);
-
-  return ss.str();
-}
-
 } // namespace
 
-CEGLImage::CEGLImage(EGLDisplay display) :
-  m_display(display)
+CEGLImage::CEGLImage(EGLDisplay display)
+  : m_display(display),
+    m_eglCreateImageKHR(
+        CEGLUtils::GetRequiredProcAddress<PFNEGLCREATEIMAGEKHRPROC>("eglCreateImageKHR")),
+    m_eglDestroyImageKHR(
+        CEGLUtils::GetRequiredProcAddress<PFNEGLDESTROYIMAGEKHRPROC>("eglDestroyImageKHR")),
+    m_glEGLImageTargetTexture2DOES(
+        CEGLUtils::GetRequiredProcAddress<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(
+            "glEGLImageTargetTexture2DOES"))
 {
-  m_eglCreateImageKHR = CEGLUtils::GetRequiredProcAddress<PFNEGLCREATEIMAGEKHRPROC>("eglCreateImageKHR");
-  m_eglDestroyImageKHR = CEGLUtils::GetRequiredProcAddress<PFNEGLDESTROYIMAGEKHRPROC>("eglDestroyImageKHR");
-  m_glEGLImageTargetTexture2DOES = CEGLUtils::GetRequiredProcAddress<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>("glEGLImageTargetTexture2DOES");
 }
 
 bool CEGLImage::CreateImage(EglAttrs imageAttrs)
@@ -184,12 +179,12 @@ bool CEGLImage::CreateImage(EglAttrs imageAttrs)
       else
       {
         if (eglAttrKey != eglAttributes.end() && eglAttrKey->first == EGL_LINUX_DRM_FOURCC_EXT)
-          valueStr = FourCCToString(attrs[i + 1]);
+          valueStr = DRMHELPERS::FourCCToString(attrs[i + 1]);
         else
           valueStr = std::to_string(attrs[i + 1]);
       }
 
-      eglString.append(StringUtils::Format("%s: %s\n", keyStr, valueStr));
+      eglString.append(StringUtils::Format("{}: {}\n", keyStr, valueStr));
     }
 
     CLog::Log(LOGDEBUG, "CEGLImage::{} - attributes:\n{}", __FUNCTION__, eglString);
@@ -240,15 +235,24 @@ bool CEGLImage::SupportsFormat(uint32_t format)
   }
 
   auto foundFormat = std::find(formats.begin(), formats.end(), format);
+  if (foundFormat == formats.end() || CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
+  {
+    std::string formatStr;
+    for (const auto& supportedFormat : formats)
+      formatStr.append("\n" + DRMHELPERS::FourCCToString(supportedFormat));
+
+    CLog::Log(LOGDEBUG, "CEGLImage::{} - supported formats:{}", __FUNCTION__, formatStr);
+  }
+
   if (foundFormat != formats.end())
+  {
+    CLog::Log(LOGDEBUG, LOGVIDEO, "CEGLImage::{} - supported format: {}", __FUNCTION__,
+              DRMHELPERS::FourCCToString(format));
     return true;
+  }
 
-  CLog::Log(LOGDEBUG, "CEGLImage::{} - format not supported: {}", __FUNCTION__,
-            FourCCToString(format));
-
-  CLog::Log(LOGERROR, "CEGLImage::{} - supported formats:", __FUNCTION__);
-  for (const auto& supportedFormat : formats)
-    CLog::Log(LOGERROR, "CEGLImage::{} -   {}", __FUNCTION__, FourCCToString(supportedFormat));
+  CLog::Log(LOGERROR, "CEGLImage::{} - format not supported: {}", __FUNCTION__,
+            DRMHELPERS::FourCCToString(format));
 
   return false;
 }
@@ -278,7 +282,7 @@ bool CEGLImage::SupportsFormatAndModifier(uint32_t format, uint64_t modifier)
     CLog::Log(LOGERROR,
               "CEGLImage::{} - failed to query the max number of EGL dma-buf format modifiers for "
               "format: {} - {:#4x}",
-              __FUNCTION__, FourCCToString(format), eglGetError());
+              __FUNCTION__, DRMHELPERS::FourCCToString(format), eglGetError());
     return false;
   }
 
@@ -290,20 +294,29 @@ bool CEGLImage::SupportsFormatAndModifier(uint32_t format, uint64_t modifier)
     CLog::Log(
         LOGERROR,
         "CEGLImage::{} - failed to query EGL dma-buf format modifiers for format: {} - {:#4x}",
-        __FUNCTION__, FourCCToString(format), eglGetError());
+        __FUNCTION__, DRMHELPERS::FourCCToString(format), eglGetError());
     return false;
   }
 
   auto foundModifier = std::find(modifiers.begin(), modifiers.end(), modifier);
+  if (foundModifier == modifiers.end() || CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
+  {
+    std::string modifierStr;
+    for (const auto& supportedModifier : modifiers)
+      modifierStr.append("\n" + DRMHELPERS::ModifierToString(supportedModifier));
+
+    CLog::Log(LOGDEBUG, "CEGLImage::{} - supported modifiers:{}", __FUNCTION__, modifierStr);
+  }
+
   if (foundModifier != modifiers.end())
+  {
+    CLog::Log(LOGDEBUG, LOGVIDEO, "CEGLImage::{} - supported modifier: {}", __FUNCTION__,
+              DRMHELPERS::ModifierToString(modifier));
     return true;
+  }
 
-  CLog::Log(LOGDEBUG, "CEGLImage::{} - modifier ({:#x}) not supported for format ({})",
-            __FUNCTION__, modifier, FourCCToString(format));
-
-  CLog::Log(LOGERROR, "CEGLImage::{} - supported modifiers:", __FUNCTION__);
-  for (const auto& supportedModifier : modifiers)
-    CLog::Log(LOGERROR, "CEGLImage::{} -   {}", __FUNCTION__, supportedModifier);
+  CLog::Log(LOGERROR, "CEGLImage::{} - modifier ({}) not supported for format ({})", __FUNCTION__,
+            DRMHELPERS::ModifierToString(modifier), DRMHELPERS::FourCCToString(format));
 
   return false;
 }

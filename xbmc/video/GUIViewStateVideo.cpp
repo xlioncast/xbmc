@@ -9,12 +9,12 @@
 #include "GUIViewStateVideo.h"
 
 #include "FileItem.h"
-#include "PlayListPlayer.h"
 #include "ServiceBroker.h"
 #include "VideoDatabase.h"
 #include "filesystem/Directory.h"
 #include "filesystem/VideoDatabaseDirectory.h"
 #include "guilib/WindowIDs.h"
+#include "playlists/PlayListTypes.h"
 #include "settings/MediaSettings.h"
 #include "settings/MediaSourceSettings.h"
 #include "settings/Settings.h"
@@ -36,9 +36,9 @@ std::string CGUIViewStateWindowVideo::GetExtensions()
   return CServiceBroker::GetFileExtensionProvider().GetVideoExtensions();
 }
 
-int CGUIViewStateWindowVideo::GetPlaylist() const
+PLAYLIST::Id CGUIViewStateWindowVideo::GetPlaylist() const
 {
-  return PLAYLIST_VIDEO;
+  return PLAYLIST::TYPE_VIDEO;
 }
 
 VECSOURCES& CGUIViewStateWindowVideo::GetSources()
@@ -127,12 +127,22 @@ CGUIViewStateWindowVideoNav::CGUIViewStateWindowVideoNav(const CFileItemList& it
     case NODE_TYPE_INPROGRESS_TVSHOWS:
       {
         AddSortMethod(SortBySortTitle, sortAttributes, 556, LABEL_MASKS("%T", "%M", "%T", "%M"));  // Title, #Episodes | Title, #Episodes
+        AddSortMethod(SortByOriginalTitle, sortAttributes, 20376,
+                      LABEL_MASKS("%T", "%M", "%T", "%M")); // Title, #Episodes | Title, #Episodes
 
-        AddSortMethod(SortByNumberOfEpisodes, 20360, LABEL_MASKS("%L", "%M", "%L", "%M"));  // Label, #Episodes | Label, #Episodes
-        AddSortMethod(SortByLastPlayed, 568, LABEL_MASKS("%T", "%p", "%T", "%p"));  // Title, #Last played | Title, #Last played
-        AddSortMethod(SortByDateAdded, 570, LABEL_MASKS("%T", "%a", "%T", "%a"));  // Title, DateAdded | Title, DateAdded
-        AddSortMethod(SortByYear, 562, LABEL_MASKS("%L","%Y","%L","%Y")); // Label, Year | Label, Year
-        AddSortMethod(SortByUserRating, 38018, LABEL_MASKS("%T", "%r", "%T", "%r"));  // Title, Userrating | Title, Userrating
+        AddSortMethod(SortByNumberOfEpisodes, sortAttributes, 20360,
+                      LABEL_MASKS("%L", "%M", "%L", "%M")); // Label, #Episodes | Label, #Episodes
+        AddSortMethod(
+            SortByLastPlayed, sortAttributes, 568,
+            LABEL_MASKS("%T", "%p", "%T", "%p")); // Title, #Last played | Title, #Last played
+        AddSortMethod(SortByDateAdded, sortAttributes, 570,
+                      LABEL_MASKS("%T", "%a", "%T", "%a")); // Title, DateAdded | Title, DateAdded
+        AddSortMethod(SortByYear, sortAttributes, 562,
+                      LABEL_MASKS("%L", "%Y", "%L", "%Y")); // Label, Year | Label, Year
+        AddSortMethod(SortByRating, sortAttributes, 563,
+                      LABEL_MASKS("%T", "%R", "%T", "%R")); // Title, Rating | Title, Rating
+        AddSortMethod(SortByUserRating, sortAttributes, 38018,
+                      LABEL_MASKS("%T", "%r", "%T", "%r")); // Title, Userrating | Title, Userrating
         SetSortMethod(SortByLabel);
 
         const CViewState *viewState = CViewStateSettings::GetInstance().Get("videonavtvshows");
@@ -171,14 +181,16 @@ CGUIViewStateWindowVideoNav::CGUIViewStateWindowVideoNav(const CFileItemList& it
       }
       break;
     case NODE_TYPE_TAGS:
-      {
-        AddSortMethod(SortByLabel, sortAttributes, 551, LABEL_MASKS("%T","", "%T",""));  // Title, empty | Title, empty
-        SetSortMethod(SortByLabel);
+    case NODE_TYPE_VIDEOVERSIONS:
+    {
+      AddSortMethod(SortByLabel, sortAttributes, 551,
+                    LABEL_MASKS("%T", "", "%T", "")); // Title, empty | Title, empty
+      SetSortMethod(SortByLabel);
 
-        const CViewState *viewState = CViewStateSettings::GetInstance().Get("videonavgenres");
-        SetViewAsControl(viewState->m_viewMode);
-        SetSortOrder(viewState->m_sortDescription.sortOrder);
-      }
+      const CViewState* viewState = CViewStateSettings::GetInstance().Get("videonavgenres");
+      SetViewAsControl(viewState->m_viewMode);
+      SetSortOrder(viewState->m_sortDescription.sortOrder);
+    }
       break;
     case NODE_TYPE_EPISODES:
       {
@@ -228,10 +240,14 @@ CGUIViewStateWindowVideoNav::CGUIViewStateWindowVideoNav(const CFileItemList& it
         {
           AddSortMethod(SortByYear, 562, LABEL_MASKS("%T", "%Y"));  // Title, Year | empty, empty
           AddSortMethod(SortBySortTitle, sortAttributes, 556, LABEL_MASKS("%T", "%R"));  // Title, Rating | empty, empty
+          AddSortMethod(SortByOriginalTitle, sortAttributes, 20376,
+                        LABEL_MASKS("%T", "%R")); // Title, Rating | empty, empty
         }
         else
         {
           AddSortMethod(SortBySortTitle, sortAttributes, 556, LABEL_MASKS("%T", "%R", "%T", "%R"));  // Title, Rating | Title, Rating
+          AddSortMethod(SortByOriginalTitle, sortAttributes, 20376,
+                        LABEL_MASKS("%T", "%R", "%T", "%R")); // Title, Rating | Title, Rating
           AddSortMethod(SortByYear, 562, LABEL_MASKS("%T", "%Y", "%T", "%Y"));  // Title, Year | Title, Year
         }
         AddSortMethod(SortByRating, 563, LABEL_MASKS("%T", "%R", "%T", "%R"));  // Title, Rating | Title, Rating
@@ -239,6 +255,7 @@ CGUIViewStateWindowVideoNav::CGUIViewStateWindowVideoNav(const CFileItemList& it
         AddSortMethod(SortByMPAA, 20074, LABEL_MASKS("%T", "%O"));  // Title, MPAA | empty, empty
         AddSortMethod(SortByTime, 180, LABEL_MASKS("%T", "%D"));  // Title, Duration | empty, empty
         AddSortMethod(SortByDateAdded, 570, LABEL_MASKS("%T", "%a", "%T", "%a"));  // Title, DateAdded | Title, DateAdded
+        AddSortMethod(SortByLastPlayed, 568, LABEL_MASKS("%T", "%p", "%T", "%p"));  // Title, #Last played | Title, #Last played
         AddSortMethod(SortByPlaycount, 567,
                       LABEL_MASKS("%T", "%V", "%T", "%V")); // Title, Playcount | Title, Playcount
 
@@ -259,14 +276,14 @@ CGUIViewStateWindowVideoNav::CGUIViewStateWindowVideoNav(const CFileItemList& it
       break;
       case NODE_TYPE_TITLE_MUSICVIDEOS:
       {
-        AddSortMethod(SortByLabel, sortAttributes, 551, LABEL_MASKS("%T - %A", "%Y"));  // Title, Artist, Year | empty, empty 
+        AddSortMethod(SortByLabel, sortAttributes, 551, LABEL_MASKS("%T - %A", "%Y"));  // Title, Artist, Year | empty, empty
         AddSortMethod(SortByAlbum, sortAttributes, 558, LABEL_MASKS("%B - %T - %A", "%Y"));  // Album, Title, Artist, Year | empty, empty
         AddSortMethod(SortByArtist, sortAttributes, 557, LABEL_MASKS("%A - %T", "%Y"));  // Artist - Title, Year | empty, empty
         AddSortMethod(SortByArtistThenYear, sortAttributes, 578, LABEL_MASKS("%A - %T", "%Y"));  // Artist, Title, Year| empty, empty
         AddSortMethod(SortByYear, 562, LABEL_MASKS("%T - %A", "%Y")); // Title, Artist, Year| empty, empty
-        AddSortMethod(SortByTime, 180, LABEL_MASKS("%T - %A", "%D"));  // Titel, Artist, Duration| empty, empty
+        AddSortMethod(SortByTime, 180, LABEL_MASKS("%T - %A", "%D"));  // Title, Artist, Duration| empty, empty
         AddSortMethod(SortByDateAdded, 570, LABEL_MASKS("%T - %A", "%a"));  // Title - Artist, DateAdded | empty, empty
-        AddSortMethod(SortByPlaycount, 567, LABEL_MASKS("%T - %A", "%V"));  // Titel - Artist, PlayCount
+        AddSortMethod(SortByPlaycount, 567, LABEL_MASKS("%T - %A", "%V"));  // Title - Artist, PlayCount
         AddSortMethod(SortByMPAA, 20074, LABEL_MASKS("%T - %A", "%O")); // Title - Artist, MPAARating
         AddSortMethod(SortByUserRating, 38018, LABEL_MASKS("%T - %A", "%r"));  // Title - Artist, UserRating
 
@@ -388,7 +405,7 @@ bool CGUIViewStateWindowVideoNav::AutoPlayNextItem()
 {
   CQueryParams params;
   CVideoDatabaseDirectory::GetQueryParams(m_items.GetPath(),params);
-  if (params.GetContentType() == VIDEODB_CONTENT_MUSICVIDEOS || params.GetContentType() == 6) // recently added musicvideos
+  if (static_cast<VideoDbContentType>(params.GetContentType()) == VideoDbContentType::MUSICVIDEOS)
     return CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_MUSICPLAYER_AUTOPLAYNEXTITEM);
 
   return CGUIViewStateWindowVideo::AutoPlayNextItem();
@@ -436,8 +453,15 @@ VECSOURCES& CGUIViewStateWindowVideoPlaylist::GetSources()
 
 CGUIViewStateVideoMovies::CGUIViewStateVideoMovies(const CFileItemList& items) : CGUIViewStateWindowVideo(items)
 {
-  AddSortMethod(SortBySortTitle, 556, LABEL_MASKS("%T", "%R", "%T", "%R"),  // Title, Rating | Title, Rating
-    CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING) ? SortAttributeIgnoreArticle : SortAttributeNone);
+  SortAttribute sortAttributes = SortAttributeNone;
+  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING))
+    sortAttributes = SortAttributeIgnoreArticle;
+
+  AddSortMethod(SortBySortTitle, sortAttributes, 556,
+                LABEL_MASKS("%T", "%R", "%T", "%R")); // Title, Rating | Title, Rating
+  AddSortMethod(SortByOriginalTitle, sortAttributes, 20376,
+                LABEL_MASKS("%T", "%R", "%T", "%R")); // Title, Rating | Title, Rating
   AddSortMethod(SortByYear, 562, LABEL_MASKS("%T", "%Y", "%T", "%Y"));  // Title, Year | Title, Year
   AddSortMethod(SortByRating, 563, LABEL_MASKS("%T", "%R", "%T", "%R"));  // Title, Rating | Title, Rating
   AddSortMethod(SortByUserRating, 38018, LABEL_MASKS("%T", "%r", "%T", "%r"));  // Title, Userrating | Title, Userrating
@@ -473,14 +497,14 @@ CGUIViewStateVideoMusicVideos::CGUIViewStateVideoMusicVideos(const CFileItemList
   if (settings->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING))
     sortAttributes = SortAttributeIgnoreArticle;
 
-  AddSortMethod(SortByLabel, sortAttributes, 551, LABEL_MASKS("%T - %A", "%Y"));  // Title, Artist, Year | empty, empty 
+  AddSortMethod(SortByLabel, sortAttributes, 551, LABEL_MASKS("%T - %A", "%Y"));  // Title, Artist, Year | empty, empty
   AddSortMethod(SortByAlbum, sortAttributes, 558, LABEL_MASKS("%B - %T - %A", "%Y"));  // Album, Title, Artist, Year | empty, empty
   AddSortMethod(SortByArtist, sortAttributes, 557, LABEL_MASKS("%A - %T", "%Y"));  // Artist - Title, Year | empty, empty
   AddSortMethod(SortByArtistThenYear, sortAttributes, 578, LABEL_MASKS("%A - %T", "%Y"));  // Artist, Title, Year| empty, empty
   AddSortMethod(SortByYear, 562, LABEL_MASKS("%T - %A", "%Y")); // Title, Artist, Year| empty, empty
-  AddSortMethod(SortByTime, 180, LABEL_MASKS("%T - %A", "%D"));  // Titel, Artist, Duration| empty, empty
+  AddSortMethod(SortByTime, 180, LABEL_MASKS("%T - %A", "%D"));  // Title, Artist, Duration| empty, empty
   AddSortMethod(SortByDateAdded, 570, LABEL_MASKS("%T - %A", "%a"));  // Title - Artist, DateAdded | empty, empty
-  AddSortMethod(SortByPlaycount, 567, LABEL_MASKS("%T - %A", "%V"));  // Titel - Artist, PlayCount
+  AddSortMethod(SortByPlaycount, 567, LABEL_MASKS("%T - %A", "%V"));  // Title - Artist, PlayCount
   AddSortMethod(SortByMPAA, 20074, LABEL_MASKS("%T - %A", "%O")); // Title - Artist, MPAARating
   AddSortMethod(SortByUserRating, 38018, LABEL_MASKS("%T - %A", "%r"));  // Title - Artist, UserRating
 
@@ -508,14 +532,23 @@ void CGUIViewStateVideoMusicVideos::SaveViewState()
 
 CGUIViewStateVideoTVShows::CGUIViewStateVideoTVShows(const CFileItemList& items) : CGUIViewStateWindowVideo(items)
 {
-  AddSortMethod(SortBySortTitle, 556, LABEL_MASKS("%T", "%M", "%T", "%M"),  // Title, #Episodes | Title, #Episodes
-    CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING) ? SortAttributeIgnoreArticle : SortAttributeNone);
+  SortAttribute sortAttributes = SortAttributeNone;
+  const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  if (settings->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING))
+    sortAttributes = SortAttributeIgnoreArticle;
 
-  AddSortMethod(SortByNumberOfEpisodes, 20360, LABEL_MASKS("%L", "%M", "%L", "%M"));  // Label, #Episodes | Label, #Episodes
-  AddSortMethod(SortByLastPlayed, 568, LABEL_MASKS("%T", "%p", "%T", "%p"));  // Title, #Last played | Title, #Last played
-  AddSortMethod(SortByDateAdded, 570, LABEL_MASKS("%T", "%a", "%T", "%a"));  // Title, DateAdded | Title, DateAdded
-  AddSortMethod(SortByYear, 562, LABEL_MASKS("%T", "%Y", "%T", "%Y"));  // Title, Year | Title, Year
-  AddSortMethod(SortByUserRating, 38018, LABEL_MASKS("%T", "%r", "%T", "%r"));  // Title, Userrating | Title, Userrating
+  AddSortMethod(SortBySortTitle, sortAttributes, 556,
+                LABEL_MASKS("%T", "%M", "%T", "%M")); // Title, #Episodes | Title, #Episodes
+  AddSortMethod(SortByNumberOfEpisodes, sortAttributes, 20360,
+                LABEL_MASKS("%L", "%M", "%L", "%M")); // Label, #Episodes | Label, #Episodes
+  AddSortMethod(SortByLastPlayed, sortAttributes, 568,
+                LABEL_MASKS("%T", "%p", "%T", "%p")); // Title, #Last played | Title, #Last played
+  AddSortMethod(SortByDateAdded, sortAttributes, 570,
+                LABEL_MASKS("%T", "%a", "%T", "%a")); // Title, DateAdded | Title, DateAdded
+  AddSortMethod(SortByYear, sortAttributes, 562,
+                LABEL_MASKS("%T", "%Y", "%T", "%Y")); // Title, Year | Title, Year
+  AddSortMethod(SortByUserRating, sortAttributes, 38018,
+                LABEL_MASKS("%T", "%r", "%T", "%r")); // Title, Userrating | Title, Userrating
 
   const CViewState *viewState = CViewStateSettings::GetInstance().Get("videonavtvshows");
   if (items.IsSmartPlayList() || items.IsLibraryFolder())
@@ -575,3 +608,31 @@ void CGUIViewStateVideoEpisodes::SaveViewState()
   SaveViewToDb(m_items.GetPath(), WINDOW_VIDEO_NAV, CViewStateSettings::GetInstance().Get("videonavepisodes"));
 }
 
+CGUIViewStateVideoPlaylist::CGUIViewStateVideoPlaylist(const CFileItemList& items)
+  : CGUIViewStateWindowVideo(items)
+{
+  SortAttribute sortAttributes = SortAttributeNone;
+  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING))
+    sortAttributes = SortAttributeIgnoreArticle;
+
+  AddSortMethod(SortByPlaylistOrder, 559, LABEL_MASKS("%L", "")); // Label, empty
+  AddSortMethod(SortByLabel, sortAttributes, 551,
+                LABEL_MASKS("%L", "%I", "%L", "")); // Label, Size | Label, empty
+  AddSortMethod(SortBySize, 553, LABEL_MASKS("%L", "%I", "%L", "%I")); // Label, Size | Label, Size
+  AddSortMethod(SortByDate, 552, LABEL_MASKS("%L", "%J", "%L", "%J")); // Label, Date | Label, Date
+  AddSortMethod(SortByFile, 561, LABEL_MASKS("%L", "%I", "%L", "")); // Label, Size | Label, empty
+
+  SetSortMethod(SortByPlaylistOrder);
+
+  const CViewState* viewState = CViewStateSettings::GetInstance().Get("videofiles");
+  SetViewAsControl(viewState->m_viewMode);
+  SetSortOrder(viewState->m_sortDescription.sortOrder);
+
+  LoadViewState(items.GetPath(), WINDOW_VIDEO_NAV);
+}
+
+void CGUIViewStateVideoPlaylist::SaveViewState()
+{
+  SaveViewToDb(m_items.GetPath(), WINDOW_VIDEO_NAV);
+}

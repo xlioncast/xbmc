@@ -36,7 +36,7 @@ public:
   void Init();
   void Deinit();
   /* Makes sense to be called after acquiring the lock */
-  bool IsSmbValid() const { return m_context != nullptr; };
+  bool IsSmbValid() const { return m_context != nullptr; }
   void CheckIfIdle();
   void SetActivityTime();
   void AddActiveConnection();
@@ -79,7 +79,7 @@ public:
   bool OpenForWrite(const CURL& url, bool bOverWrite = false) override;
   bool Delete(const CURL& url) override;
   bool Rename(const CURL& url, const CURL& urlnew) override;
-  int GetChunkSize() override { return 64*1024; }
+  int GetChunkSize() override;
   int IoControl(EIoControl request, void* param) override;
 
 protected:

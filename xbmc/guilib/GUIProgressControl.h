@@ -30,7 +30,7 @@ public:
                       const CTextureInfo& rightTexture, const CTextureInfo& overlayTexture,
                       bool reveal=false);
   ~CGUIProgressControl() override = default;
-  CGUIProgressControl *Clone() const override { return new CGUIProgressControl(*this); };
+  CGUIProgressControl* Clone() const override { return new CGUIProgressControl(*this); }
 
   void Process(unsigned int currentTime, CDirtyRegionList &dirtyregions) override;
   void Render() override;
@@ -43,14 +43,14 @@ public:
   void SetPosition(float posX, float posY) override;
   void SetPercentage(float fPercent);
   void SetInfo(int iInfo, int iInfo2 = 0);
-  int GetInfo() const {return m_iInfoCode;};
+  int GetInfo() const { return m_iInfoCode; }
 
   float GetPercentage() const;
   std::string GetDescription() const override;
   void UpdateInfo(const CGUIListItem *item = NULL) override;
   bool UpdateLayout(void);
 protected:
-  bool UpdateColors() override;
+  bool UpdateColors(const CGUIListItem* item) override;
   std::unique_ptr<CGUITexture> m_guiBackground;
   std::unique_ptr<CGUITexture> m_guiLeft;
   std::unique_ptr<CGUITexture> m_guiMid;

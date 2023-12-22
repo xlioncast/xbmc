@@ -13,7 +13,11 @@
 #include <map>
 
 #include <d3d11_4.h>
+
+extern "C"
+{
 #include <libavutil/pixfmt.h>
+}
 
 #define PLANE_Y 0
 #define PLANE_U 1
@@ -28,14 +32,14 @@ class CRendererShaders : public CRendererHQ
 public:
   ~CRendererShaders() = default;
 
-  bool Supports(ESCALINGMETHOD method) override;
+  bool Supports(ESCALINGMETHOD method) const override;
   bool Configure(const VideoPicture& picture, float fps, unsigned orientation) override;
 
   static CRendererBase* Create(CVideoSettings& videoSettings);
   static void GetWeight(std::map<RenderMethod, int>& weights, const VideoPicture& picture);
 
 protected:
-  explicit CRendererShaders(CVideoSettings& videoSettings) : CRendererHQ(videoSettings) {}
+  explicit CRendererShaders(CVideoSettings& videoSettings);
   void RenderImpl(CD3DTexture& target, CRect& sourceRect, CPoint(&destPoints)[4], uint32_t flags) override;
   void CheckVideoParameters() override;
   void UpdateVideoFilters() override;
@@ -44,6 +48,7 @@ protected:
 
 private:
   static AVColorPrimaries GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned int width, unsigned int height);
+  DXGI_FORMAT CalcIntermediateTargetFormat() const;
 
   AVColorPrimaries m_srcPrimaries = AVCOL_PRI_BT709;
   std::unique_ptr<CYUV2RGBShader> m_colorShader;

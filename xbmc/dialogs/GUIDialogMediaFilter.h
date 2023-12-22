@@ -36,7 +36,8 @@ public:
 
   static void ShowAndEditMediaFilter(const std::string &path, CSmartPlaylist &filter);
 
-  typedef struct {
+  struct Filter
+  {
     std::string mediaType;
     Field field;
     uint32_t label;
@@ -44,10 +45,10 @@ public:
     std::string controlType;
     std::string controlFormat;
     CDatabaseQueryRule::SEARCH_OPERATOR ruleOperator;
-    std::shared_ptr<CSetting> setting;
-    CSmartPlaylistRule *rule;
-    void *data;
-  } Filter;
+    std::shared_ptr<CSetting> setting = nullptr;
+    CSmartPlaylistRule* rule = nullptr;
+    void* data = nullptr;
+  };
 
 protected:
   // specializations of CGUIWindow
@@ -60,7 +61,7 @@ protected:
   // specialization of CGUIDialogSettingsBase
   bool AllowResettingSettings() const override { return false; }
   bool Save() override { return true; }
-  unsigned int GetDelayMs() const override { return 500; }
+  std::chrono::milliseconds GetDelayMs() const override { return std::chrono::milliseconds(500); }
 
   // specialization of CGUIDialogSettingsManualBase
   void SetupView() override;

@@ -86,7 +86,7 @@ IFile* CFileFactory::CreateLoader(const CURL& url)
   if (!CWakeOnAccess::GetInstance().WakeUpHost(url))
     return NULL;
 
-  if (!url.GetProtocol().empty() && CServiceBroker::IsBinaryAddonCacheUp())
+  if (!url.GetProtocol().empty() && CServiceBroker::IsAddonInterfaceUp())
   {
     for (const auto& vfsAddon : CServiceBroker::GetVFSAddonCache().GetAddonInstances())
     {
@@ -129,7 +129,7 @@ IFile* CFileFactory::CreateLoader(const CURL& url)
     return new CWin32File();
   }
 #endif // TARGET_WINDOWS
-#if defined(HAS_DVD_DRIVE)
+#if defined(HAS_OPTICAL_DRIVE)
   else if (url.IsProtocol("cdda")) return new CFileCDDA();
 #endif
 #if defined(HAS_ISO9660PP)
@@ -174,6 +174,7 @@ IFile* CFileFactory::CreateLoader(const CURL& url)
   else if (url.IsProtocol("upnp")) return new CUPnPFile();
 #endif
 
-  CLog::Log(LOGWARNING, "%s - unsupported protocol(%s) in %s", __FUNCTION__, url.GetProtocol().c_str(), url.GetRedacted().c_str());
+  CLog::Log(LOGWARNING, "{} - unsupported protocol({}) in {}", __FUNCTION__, url.GetProtocol(),
+            url.GetRedacted());
   return NULL;
 }

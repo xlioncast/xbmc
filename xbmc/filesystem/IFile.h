@@ -46,8 +46,8 @@ public:
   virtual ~IFile();
 
   virtual bool Open(const CURL& url) = 0;
-  virtual bool OpenForWrite(const CURL& url, bool bOverWrite = false) { return false; };
-  virtual bool ReOpen(const CURL& url) { return false; };
+  virtual bool OpenForWrite(const CURL& url, bool bOverWrite = false) { return false; }
+  virtual bool ReOpen(const CURL& url) { return false; }
   virtual bool Exists(const CURL& url) = 0;
   /**
    * Fills struct __stat64 with information about file specified by url.
@@ -98,16 +98,16 @@ public:
   virtual int64_t GetPosition() = 0;
   virtual int64_t GetLength() = 0;
   virtual void Flush() { }
-  virtual int Truncate(int64_t size) { return -1;};
+  virtual int Truncate(int64_t size) { return -1; }
 
-  /* Returns the minium size that can be read from input stream.   *
+  /* Returns the minimum size that can be read from input stream.  *
    * For example cdrom access where access could be sector based.  *
    * This will cause file system to buffer read requests, to       *
    * to meet the requirement of CFile.                             *
    * It can also be used to indicate a file system is non buffered *
    * but accepts any read size, have it return the value 1         */
   virtual int  GetChunkSize() {return 0;}
-  virtual double GetDownloadSpeed(){ return 0.0f; };
+  virtual double GetDownloadSpeed() { return 0.0; }
 
   virtual bool Delete(const CURL& url) { return false; }
   virtual bool Rename(const CURL& url, const CURL& urlnew) { return false; }

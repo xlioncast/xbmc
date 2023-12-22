@@ -8,7 +8,9 @@
 
 #include "Win32File.h"
 
-#include "utils/auto_buffer.h"
+#include "ServiceBroker.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/log.h"
 
 #include "platform/win32/CharsetConverter.h"
@@ -21,9 +23,7 @@
 #include <intsafe.h>
 #include <sys/stat.h>
 
-
 using namespace XFILE;
-
 
 CWin32File::CWin32File() : m_smbFile(false)
 {
@@ -40,7 +40,6 @@ CWin32File::CWin32File(bool asSmbFile) : m_smbFile(asSmbFile)
   m_allowWrite = false;
   m_lastSMBFileErr = ERROR_SUCCESS;
 }
-
 
 CWin32File::~CWin32File()
 {
@@ -143,7 +142,7 @@ bool CWin32File::OpenForWrite(const CURL& url, bool bOverWrite /*= false*/)
       }
       if (!hiddenSet)
       {
-        CLog::LogF(LOGWARNING, "Can't set hidden attribute for file \"%ls\"",
+        CLog::LogF(LOGWARNING, "Can't set hidden attribute for file \"{}\"",
                    KODI::PLATFORM::WINDOWS::FromW(pathnameW));
       }
     }
@@ -177,9 +176,9 @@ ssize_t CWin32File::Read(void* lpBuf, size_t uiBufSize)
 
   if (uiBufSize == 0)
   { // allow "test" read with zero size
-    XUTILS::auto_buffer dummyBuf(255);
+    char dummyBuf = 0;
     DWORD bytesRead = 0;
-    if (!ReadFile(m_hFile, dummyBuf.get(), 0, &bytesRead, NULL))
+    if (!ReadFile(m_hFile, reinterpret_cast<LPVOID>(&dummyBuf), 0, &bytesRead, NULL))
       return -1;
 
     assert(bytesRead == 0);
@@ -238,10 +237,9 @@ ssize_t CWin32File::Write(const void* lpBuf, size_t uiBufSize)
 
   if (uiBufSize == 0)
   { // allow "test" write with zero size
-    XUTILS::auto_buffer dummyBuf(255);
-    dummyBuf.get()[0] = 0;
+    char dummyBuf = 0;
     DWORD bytesWritten = 0;
-    if (!WriteFile(m_hFile, dummyBuf.get(), 0, &bytesWritten, NULL))
+    if (!WriteFile(m_hFile, reinterpret_cast<LPVOID>(&dummyBuf), 0, &bytesWritten, NULL))
       return -1;
 
     assert(bytesWritten == 0);
@@ -486,6 +484,8 @@ int CWin32File::Stat(const CURL& url, struct __stat64* statData)
 
   FindClose(hSearch);
 
+  *statData = {};
+
   /* set st_gid */
   statData->st_gid = 0; // UNIX group ID is always zero on Win32
 
@@ -577,10 +577,10 @@ int CWin32File::Stat(const CURL& url, struct __stat64* statData)
     if (lastDot != std::wstring::npos && pathnameW.rfind(L'\\') < lastDot)
     { // file has some extension
       const std::wstring fileExt(pathnameW, lastDot);
-      XUTILS::auto_buffer buf(32767 * sizeof(wchar_t)); // maximum possible size
-      const DWORD envRes = GetEnvironmentVariableW(L"PATHEXT", (wchar_t*)buf.get(), buf.size() / sizeof(wchar_t));
+      std::vector<wchar_t> buf(32767); // maximum possible size
+      const DWORD envRes = GetEnvironmentVariableW(L"PATHEXT", buf.data(), buf.size());
       std::vector<std::wstring> listExts;
-      if (envRes == 0 || envRes > (buf.size() / sizeof(wchar_t)))
+      if (envRes == 0 || envRes > buf.size())
       {
         buf.clear();
         static const wchar_t* extArr[] = { L".exe", L".bat", L".cmd", L".com" };
@@ -588,7 +588,7 @@ int CWin32File::Stat(const CURL& url, struct __stat64* statData)
       }
       else
       {
-        std::wstring envPathextW((wchar_t*)buf.get(), envRes);
+        std::wstring envPathextW(buf.data(), envRes);
         buf.clear();
         size_t posExt = envPathextW.find_first_not_of(L';'); // skip ';' at the start
         while (posExt != std::wstring::npos)
@@ -625,6 +625,8 @@ int CWin32File::Stat(struct __stat64* statData)
 
   if (m_hFile == INVALID_HANDLE_VALUE)
     return -1;
+
+  *statData = {};
 
   /* set st_gid */
   statData->st_gid = 0; // UNIX group ID is always zero on Win32
@@ -701,11 +703,12 @@ int CWin32File::Stat(struct __stat64* statData)
 #ifdef WIN32_USE_FILE_STAT_MAX_INFO
     // set _S_IEXEC if file has executable extension
     std::wstring pathnameW;
-    XUTILS::auto_buffer nameInfoBuf(sizeof(FILE_NAME_INFO) + sizeof(wchar_t) * MAX_PATH * 2);
-    if (GetFileInformationByHandleEx(m_hFile, FileNameInfo, nameInfoBuf.get(), nameInfoBuf.size()) != 0)
+    std::vector<char> nameInfoBuf(sizeof(FILE_NAME_INFO) + sizeof(wchar_t) * MAX_PATH * 2);
+    if (GetFileInformationByHandleEx(m_hFile, FileNameInfo, nameInfoBuf.data(),
+                                     nameInfoBuf.size()) != 0)
     {
       // real path and name without drive
-      const PFILE_NAME_INFO pNameInfo = PFILE_NAME_INFO(nameInfoBuf.get());
+      const PFILE_NAME_INFO pNameInfo = PFILE_NAME_INFO(nameInfoBuf.data());
       pathnameW.assign(pNameInfo->FileName, pNameInfo->FileNameLength / sizeof(wchar_t));
       nameInfoBuf.clear();
     }
@@ -718,10 +721,10 @@ int CWin32File::Stat(struct __stat64* statData)
         (lastSlash == std::wstring::npos || lastSlash<lastDot))
     { // file has some extension
       const std::wstring fileExt(pathnameW, lastDot);
-      XUTILS::auto_buffer buf(32767 * sizeof(wchar_t)); // maximum possible size
-      const DWORD envRes = GetEnvironmentVariableW(L"PATHEXT", (wchar_t*)buf.get(), buf.size() / sizeof(wchar_t));
+      std::vector<wchar_t> buf(32767); // maximum possible size
+      const DWORD envRes = GetEnvironmentVariableW(L"PATHEXT", buf.data(), buf.size());
       std::vector<std::wstring> listExts;
-      if (envRes == 0 || envRes > (buf.size() / sizeof(wchar_t)))
+      if (envRes == 0 || envRes > buf.size())
       {
         buf.clear();
         static const wchar_t* extArr[] = { L".exe", L".bat", L".cmd", L".com" };
@@ -729,7 +732,7 @@ int CWin32File::Stat(struct __stat64* statData)
       }
       else
       {
-        std::wstring envPathextW((wchar_t*)buf.get(), envRes);
+        std::wstring envPathextW((buf.data(), envRes);
         buf.clear();
         size_t posExt = envPathextW.find_first_not_of(L';'); // skip ';' at the start
         while (posExt != std::wstring::npos)
@@ -755,6 +758,18 @@ int CWin32File::Stat(struct __stat64* statData)
   statData->st_mode |= (statData->st_mode & (_S_IREAD | _S_IWRITE | _S_IEXEC)) >> 3;
   // copy user RWX rights to other rights
   statData->st_mode |= (statData->st_mode & (_S_IREAD | _S_IWRITE | _S_IEXEC)) >> 6;
+
+  return 0;
+}
+
+int CWin32File::GetChunkSize()
+{
+  if (m_smbFile)
+  {
+    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+
+    return settings ? (settings->GetInt(CSettings::SETTING_SMB_CHUNKSIZE) * 1024) : (128 * 1024);
+  }
 
   return 0;
 }

@@ -69,7 +69,7 @@ bool CRendererMediaCodecSurface::Configure(const VideoPicture &picture, float fp
 CRenderInfo CRendererMediaCodecSurface::GetRenderInfo()
 {
   CRenderInfo info;
-  info.max_buffer_size = info.optimal_buffer_size = 4;
+  info.max_buffer_size = 4;
   return info;
 }
 
@@ -101,7 +101,7 @@ void CRendererMediaCodecSurface::ReleaseVideoBuffer(int idx, bool render)
     if (mcvb)
     {
       if (render && m_bConfigured)
-        mcvb->RenderUpdate(m_surfDestRect, CXBMCApp::GetNextFrameTime());
+        mcvb->RenderUpdate(m_surfDestRect, CXBMCApp::Get().GetNextFrameTime());
       else
         mcvb->ReleaseOutputBuffer(render, 0);
     }
@@ -115,7 +115,7 @@ void CRendererMediaCodecSurface::ReleaseBuffer(int idx)
   ReleaseVideoBuffer(idx, false);
 }
 
-bool CRendererMediaCodecSurface::Supports(ERENDERFEATURE feature)
+bool CRendererMediaCodecSurface::Supports(ERENDERFEATURE feature) const
 {
   if (feature == RENDERFEATURE_ZOOM || feature == RENDERFEATURE_STRETCH ||
       feature == RENDERFEATURE_PIXEL_RATIO || feature == RENDERFEATURE_VERTICAL_SHIFT ||
@@ -157,9 +157,9 @@ void CRendererMediaCodecSurface::RenderUpdate(int index, int index2, bool clear,
       break;
     case RENDER_STEREO_MODE_MONO:
       if (CONF_FLAGS_STEREO_MODE_MASK(m_iFlags) == CONF_FLAGS_STEREO_MODE_TAB)
-        m_surfDestRect.y2 = m_surfDestRect.y2 * 2.0;
+        m_surfDestRect.y2 = m_surfDestRect.y2 * 2.0f;
       else
-        m_surfDestRect.x2 = m_surfDestRect.x2 * 2.0;
+        m_surfDestRect.x2 = m_surfDestRect.x2 * 2.0f;
       break;
     default:
       break;
@@ -182,8 +182,10 @@ void CRendererMediaCodecSurface::ReorderDrawPoints()
     case 90:
     case 270:
     {
-      double scale = (double)m_surfDestRect.Height() / m_surfDestRect.Width();
-      int diff = (int) ((m_surfDestRect.Height()*scale - m_surfDestRect.Width()) / 2);
+      double scale = static_cast<double>(m_surfDestRect.Height() / m_surfDestRect.Width());
+      int diff = static_cast<int>(static_cast<double>(m_surfDestRect.Height()) * scale -
+                                  static_cast<double>(m_surfDestRect.Width())) /
+                 2;
       m_surfDestRect = CRect(m_surfDestRect.x1 - diff, m_surfDestRect.y1, m_surfDestRect.x2 + diff, m_surfDestRect.y2);
     }
     default:

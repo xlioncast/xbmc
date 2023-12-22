@@ -8,24 +8,29 @@
 
 #pragma once
 
-#include "utils/TransformMatrix.h"
+#include "ConversionMatrix.h"
 #include "ShaderFormats.h"
-
+#include "cores/VideoSettings.h"
 #include "guilib/Shader.h"
+#include "utils/TransformMatrix.h"
 
 extern "C" {
 #include <libavutil/mastering_display_metadata.h>
 #include <libavutil/pixfmt.h>
 }
 
-class CConvertMatrix;
-
 namespace Shaders {
+namespace GLES
+{
 
-  class BaseYUV2RGBGLSLShader : public CGLSLShaderProgram
-  {
+class BaseYUV2RGBGLSLShader : public CGLSLShaderProgram
+{
   public:
-    BaseYUV2RGBGLSLShader(EShaderFormat format, AVColorPrimaries dst, AVColorPrimaries src, bool toneMap);
+    BaseYUV2RGBGLSLShader(EShaderFormat format,
+                          AVColorPrimaries dst,
+                          AVColorPrimaries src,
+                          bool toneMap,
+                          ETONEMAPMETHOD toneMapMethod);
     ~BaseYUV2RGBGLSLShader() override;
     void SetField(int field) { m_field = field; }
     void SetWidth(int w) { m_width = w; }
@@ -35,8 +40,10 @@ namespace Shaders {
     void SetBlack(float black) { m_black = black; }
     void SetContrast(float contrast) { m_contrast = contrast; }
     void SetConvertFullColorRange(bool convertFullRange) { m_convertFullRange = convertFullRange; }
-    void SetDisplayMetadata(bool hasDisplayMetadata, AVMasteringDisplayMetadata displayMetadata,
-                            bool hasLightMetadata, AVContentLightMetadata lightMetadata);
+    void SetDisplayMetadata(bool hasDisplayMetadata,
+                            const AVMasteringDisplayMetadata& displayMetadata,
+                            bool hasLightMetadata,
+                            AVContentLightMetadata lightMetadata);
     void SetToneMapParam(float param) { m_toneMappingParam = param; }
 
     GLint GetVertexLoc() { return m_hVertex; }
@@ -62,14 +69,17 @@ namespace Shaders {
     bool m_hasLightMetadata{false};
     AVContentLightMetadata m_lightMetadata;
     bool m_toneMapping{false};
+    ETONEMAPMETHOD m_toneMappingMethod{VS_TONEMAPMETHOD_REINHARD};
     float m_toneMappingParam{1.0};
+
+    bool m_colorConversion{false};
 
     float m_black;
     float m_contrast;
 
     std::string m_defines;
 
-    std::shared_ptr<CConvertMatrix> m_pConvMatrix;
+    CConvertMatrix m_convMatrix;
 
     // shader attribute handles
     GLint m_hYTex{-1};
@@ -82,6 +92,7 @@ namespace Shaders {
     GLint m_hPrimMat{-1};
     GLint m_hToneP1{-1};
     GLint m_hCoefsDst{-1};
+    GLint m_hLuminance = -1;
 
     GLint m_hVertex{-1};
     GLint m_hYcoord{-1};
@@ -101,19 +112,28 @@ namespace Shaders {
   class YUV2RGBProgressiveShader : public BaseYUV2RGBGLSLShader
   {
   public:
-    YUV2RGBProgressiveShader(EShaderFormat format, AVColorPrimaries dstPrimaries, AVColorPrimaries srcPrimaries, bool toneMap);
+    YUV2RGBProgressiveShader(EShaderFormat format,
+                             AVColorPrimaries dstPrimaries,
+                             AVColorPrimaries srcPrimaries,
+                             bool toneMap,
+                             ETONEMAPMETHOD toneMapMethod);
   };
 
   class YUV2RGBBobShader : public BaseYUV2RGBGLSLShader
   {
   public:
-    YUV2RGBBobShader(EShaderFormat format, AVColorPrimaries dstPrimaries, AVColorPrimaries srcPrimaries, bool toneMap);
+    YUV2RGBBobShader(EShaderFormat format,
+                     AVColorPrimaries dstPrimaries,
+                     AVColorPrimaries srcPrimaries,
+                     bool toneMap,
+                     ETONEMAPMETHOD toneMapMethod);
     void OnCompiledAndLinked() override;
     bool OnEnabled() override;
 
-    GLint m_hStepX;
-    GLint m_hStepY;
-    GLint m_hField;
+    GLint m_hStepX = -1;
+    GLint m_hStepY = -1;
+    GLint m_hField = -1;
   };
 
+  } // namespace GLES
 } // end namespace

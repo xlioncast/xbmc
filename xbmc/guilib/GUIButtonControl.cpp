@@ -159,10 +159,14 @@ void CGUIButtonControl::ProcessText(unsigned int currentTime)
   CRect label2RenderRect = m_label2.GetRenderRect();
 
   float renderWidth = GetWidth();
-  bool changed = m_label.SetMaxRect(m_posX, m_posY, renderWidth, m_height);
+  float renderTextWidth = renderWidth;
+  if (m_labelMaxWidth > 0 && m_labelMaxWidth < renderWidth)
+    renderTextWidth = m_labelMaxWidth;
+
+  bool changed = m_label.SetMaxRect(m_posX, m_posY, renderTextWidth, m_height);
   changed |= m_label.SetText(m_info.GetLabel(m_parentID));
   changed |= m_label.SetScrolling(HasFocus());
-  changed |= m_label2.SetMaxRect(m_posX, m_posY, renderWidth, m_height);
+  changed |= m_label2.SetMaxRect(m_posX, m_posY, renderTextWidth, m_height);
   changed |= m_label2.SetText(m_info2.GetLabel(m_parentID));
 
   // text changed - images need resizing
@@ -172,7 +176,7 @@ void CGUIButtonControl::ProcessText(unsigned int currentTime)
   // auto-width - adjust hitrect
   if (m_minWidth && m_width != renderWidth)
   {
-    CRect rect(m_posX, m_posY, renderWidth, m_height);
+    CRect rect{m_posX, m_posY, m_posX + renderWidth, m_posY + m_height};
     SetHitRect(rect, m_hitColor);
   }
 
@@ -312,9 +316,9 @@ void CGUIButtonControl::SetAlpha(unsigned char alpha)
   m_alpha = alpha;
 }
 
-bool CGUIButtonControl::UpdateColors()
+bool CGUIButtonControl::UpdateColors(const CGUIListItem* item)
 {
-  bool changed = CGUIControl::UpdateColors();
+  bool changed = CGUIControl::UpdateColors(nullptr);
   changed |= m_label.UpdateColors();
   changed |= m_label2.UpdateColors();
   changed |= m_imgFocus->SetDiffuseColor(m_diffuseColor);
@@ -353,7 +357,11 @@ std::string CGUIButtonControl::GetLabel2() const
   return strLabel;
 }
 
-void CGUIButtonControl::PythonSetLabel(const std::string &strFont, const std::string &strText, UTILS::Color textColor, UTILS::Color shadowColor, UTILS::Color focusedColor)
+void CGUIButtonControl::PythonSetLabel(const std::string& strFont,
+                                       const std::string& strText,
+                                       UTILS::COLOR::Color textColor,
+                                       UTILS::COLOR::Color shadowColor,
+                                       UTILS::COLOR::Color focusedColor)
 {
   m_label.GetLabelInfo().font = g_fontManager.GetFont(strFont);
   m_label.GetLabelInfo().textColor = textColor;
@@ -362,7 +370,7 @@ void CGUIButtonControl::PythonSetLabel(const std::string &strFont, const std::st
   SetLabel(strText);
 }
 
-void CGUIButtonControl::PythonSetDisabledColor(UTILS::Color disabledColor)
+void CGUIButtonControl::PythonSetDisabledColor(UTILS::COLOR::Color disabledColor)
 {
   m_label.GetLabelInfo().disabledColor = disabledColor;
 }

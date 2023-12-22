@@ -1,6 +1,6 @@
 -include ../../Makefile.include
 include DAV1D-VERSION
-DEPS = Makefile DAV1D-VERSION
+DEPS = Makefile DAV1D-VERSION ../../download-files.include
 
 ifeq ($(CROSS_COMPILING), yes)
   DEPS += ../../Makefile.include
@@ -12,13 +12,17 @@ else
   PREFIX ?= $(ROOT_DIR)/dav1d-install
   BASE_URL ?= http://mirrors.kodi.tv/build-deps/sources
   AUTORECONF := autoreconf
-  RETRIEVE_TOOL := curl -Ls --retry 10 --retry-delay 3 -o $(ARCHIVE)
-  ARCHIVE_TOOL := tar --strip-components=1 -xf
+  RETRIEVE_TOOL := curl
+  RETRIEVE_TOOL_FLAGS := -LsS --create-dirs --retry 10 --retry-connrefused -o
+  ARCHIVE_TOOL := tar
+  ARCHIVE_TOOL_FLAGS := --strip-components=1 -xf
 
   ifeq ($(PLATFORM),)
     PLATFORM = native
     TARBALLS_LOCATION = $(ROOT_DIR)
-    DAV1D_INSTALL_PREFIX = --prefix $(PREFIX)
+    HASH_TOOL = sha512sum
+    HASH_TOOL_FLAGS = -c --status
+    DAV1D_INSTALL_PREFIX = --prefix $(PREFIX) --libdir $(PREFIX)/lib
     MESON = meson
     NINJA = ninja
   endif
@@ -51,16 +55,12 @@ export CC CXX CFLAGS CXXFLAGS
 endif
 export PKG_CONFIG_LIBDIR=$(PREFIX)/lib/pkgconfig
 
-LIBDYLIB=$(PLATFORM)/build/src/lib$(LIBNAME).a
+LIBDYLIB=$(PLATFORM)/build/src/$(BYPRODUCT)
 
+include ../../download-files.include
 all: .installed-$(PLATFORM)
 
-download: $(TARBALLS_LOCATION)/$(ARCHIVE)
-
-$(TARBALLS_LOCATION)/$(ARCHIVE):
-	cd $(TARBALLS_LOCATION); $(RETRIEVE_TOOL) $(RETRIEVE_TOOL_FLAGS) $(BASE_URL)/$(ARCHIVE)
-
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); rm -rf build; mkdir -p build

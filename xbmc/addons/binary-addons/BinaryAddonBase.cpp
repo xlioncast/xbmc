@@ -8,8 +8,12 @@
 
 #include "BinaryAddonBase.h"
 
-#include "threads/SingleLock.h"
+#include "addons/addoninfo/AddonInfo.h"
+#include "addons/binary-addons/AddonDll.h"
+#include "addons/binary-addons/AddonInstanceHandler.h"
 #include "utils/log.h"
+
+#include <mutex>
 
 using namespace ADDON;
 
@@ -22,11 +26,12 @@ AddonDllPtr CBinaryAddonBase::GetAddon(IAddonInstanceHandler* handler)
 {
   if (handler == nullptr)
   {
-    CLog::Log(LOGERROR, "CBinaryAddonBase::%s: for Id '%s' called with empty instance handler", __FUNCTION__, ID().c_str());
+    CLog::Log(LOGERROR, "CBinaryAddonBase::{}: for Id '{}' called with empty instance handler",
+              __FUNCTION__, ID());
     return nullptr;
   }
 
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   // If no 'm_activeAddon' is defined create it new.
   if (m_activeAddon == nullptr)
@@ -42,11 +47,12 @@ void CBinaryAddonBase::ReleaseAddon(IAddonInstanceHandler* handler)
 {
   if (handler == nullptr)
   {
-    CLog::Log(LOGERROR, "CBinaryAddonBase::%s: for Id '%s' called with empty instance handler", __FUNCTION__, ID().c_str());
+    CLog::Log(LOGERROR, "CBinaryAddonBase::{}: for Id '{}' called with empty instance handler",
+              __FUNCTION__, ID());
     return;
   }
 
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
 
   auto presentHandler = m_activeAddonHandlers.find(handler);
   if (presentHandler == m_activeAddonHandlers.end())
@@ -54,7 +60,7 @@ void CBinaryAddonBase::ReleaseAddon(IAddonInstanceHandler* handler)
 
   m_activeAddonHandlers.erase(presentHandler);
 
-  // if no handler is present anymore reset and delete the add-on class on informations
+  // if no handler is present anymore reset and delete the add-on class on information
   if (m_activeAddonHandlers.empty())
   {
     m_activeAddon.reset();
@@ -63,13 +69,13 @@ void CBinaryAddonBase::ReleaseAddon(IAddonInstanceHandler* handler)
 
 size_t CBinaryAddonBase::UsedInstanceCount() const
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   return m_activeAddonHandlers.size();
 }
 
 AddonDllPtr CBinaryAddonBase::GetActiveAddon()
 {
-  CSingleLock lock(m_critSection);
+  std::unique_lock<CCriticalSection> lock(m_critSection);
   return m_activeAddon;
 }
 

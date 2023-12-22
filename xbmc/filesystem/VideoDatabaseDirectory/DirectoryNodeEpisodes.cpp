@@ -8,6 +8,7 @@
 
 #include "DirectoryNodeEpisodes.h"
 
+#include "FileItem.h"
 #include "QueryParams.h"
 #include "video/VideoDatabase.h"
 
@@ -32,7 +33,13 @@ bool CDirectoryNodeEpisodes::GetContent(CFileItemList& items) const
   if (season == -2)
     season = -1;
 
-  bool bSuccess=videodatabase.GetEpisodesNav(BuildPath(), items, params.GetGenreId(), params.GetYear(), params.GetActorId(), params.GetDirectorId(), params.GetTvShowId(), season);
+  int details = items.HasProperty("set_videodb_details")
+                    ? items.GetProperty("set_videodb_details").asInteger32()
+                    : VideoDbDetailsNone;
+
+  bool bSuccess = videodatabase.GetEpisodesNav(
+      BuildPath(), items, params.GetGenreId(), params.GetYear(), params.GetActorId(),
+      params.GetDirectorId(), params.GetTvShowId(), season, SortDescription(), details);
 
   videodatabase.Close();
 

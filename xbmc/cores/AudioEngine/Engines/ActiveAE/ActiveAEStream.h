@@ -35,22 +35,22 @@ public:
     m_count++;
   }
 
-  void Flush(int interval = 100)
+  void Flush(std::chrono::milliseconds interval = std::chrono::milliseconds(100))
   {
-    m_buffer = 0.0f;
+    m_buffer = 0.0;
     m_lastError = 0.0;
     m_count  = 0;
     m_timer.Set(interval);
   }
 
-  void SetErrorInterval(int interval = 100)
+  void SetErrorInterval(std::chrono::milliseconds interval = std::chrono::milliseconds(100))
   {
-    m_buffer = 0.0f;
+    m_buffer = 0.0;
     m_count = 0;
     m_timer.Set(interval);
   }
 
-  bool Get(double& error, int interval = 100)
+  bool Get(double& error, std::chrono::milliseconds interval = std::chrono::milliseconds(100))
   {
     if(m_timer.IsTimePast())
     {
@@ -68,7 +68,7 @@ public:
 
   double GetLastError(unsigned int &time)
   {
-    time = m_timer.GetStartTime();
+    time = m_timer.GetStartTime().time_since_epoch().count();
     return m_lastError;
   }
 
@@ -88,7 +88,7 @@ protected:
   double m_buffer;
   double m_lastError;
   int m_count;
-  XbmcThreads::EndTime m_timer;
+  XbmcThreads::EndTime<> m_timer;
 };
 
 class CActiveAEStreamBuffers
@@ -111,16 +111,16 @@ public:
   bool DoesNormalize();
   void ForceResampler(bool force);
   bool HasWork();
-  CActiveAEBufferPool *GetResampleBuffers();
-  CActiveAEBufferPool *GetAtempoBuffers();
+  std::unique_ptr<CActiveAEBufferPool> GetResampleBuffers();
+  std::unique_ptr<CActiveAEBufferPool> GetAtempoBuffers();
 
   AEAudioFormat m_inputFormat;
   std::deque<CSampleBuffer*> m_outputSamples;
   std::deque<CSampleBuffer*> m_inputSamples;
 
 protected:
-  CActiveAEBufferPoolResample *m_resampleBuffers;
-  CActiveAEBufferPoolAtempo *m_atempoBuffers;
+  std::unique_ptr<CActiveAEBufferPoolResample> m_resampleBuffers;
+  std::unique_ptr<CActiveAEBufferPoolAtempo> m_atempoBuffers;
 
 private:
   CActiveAEStreamBuffers(const CActiveAEStreamBuffers&) = delete;
@@ -133,7 +133,7 @@ protected:
   friend class CActiveAE;
   friend class CEngineStats;
   CActiveAEStream(AEAudioFormat *format, unsigned int streamid, CActiveAE *ae);
-  ~CActiveAEStream() override;
+  ~CActiveAEStream() override = default;
   void FadingFinished();
   void IncFreeBuffers();
   void DecFreeBuffers();
@@ -141,7 +141,7 @@ protected:
   void InitRemapper();
   void RemapBuffer();
   double CalcResampleRatio(double error);
-  int GetErrorInterval();
+  std::chrono::milliseconds GetErrorInterval();
 
 public:
   unsigned int GetSpace() override;
@@ -203,20 +203,19 @@ protected:
   IAEStream *m_streamSlave;
   CCriticalSection m_streamLock;
   CCriticalSection m_statsLock;
-  uint8_t *m_leftoverBuffer;
   int m_leftoverBytes;
   CSampleBuffer *m_currentBuffer;
-  CSoundPacket *m_remapBuffer;
-  IAEResample *m_remapper;
+  std::unique_ptr<CSoundPacket> m_remapBuffer;
+  std::unique_ptr<IAEResample> m_remapper;
   double m_lastPts;
   double m_lastPtsJump;
-  std::atomic_int m_errorInterval;
+  std::chrono::milliseconds m_errorInterval{1000};
 
   // only accessed by engine
-  CActiveAEBufferPool *m_inputBuffers;
-  CActiveAEStreamBuffers *m_processingBuffers;
+  std::unique_ptr<CActiveAEBufferPool> m_inputBuffers;
+  std::unique_ptr<CActiveAEStreamBuffers> m_processingBuffers;
   std::deque<CSampleBuffer*> m_processingSamples;
-  CActiveAEDataProtocol *m_streamPort;
+  std::unique_ptr<CActiveAEDataProtocol> m_streamPort;
   CEvent m_inMsgEvent;
   bool m_drain;
   bool m_paused;

@@ -1,9 +1,4 @@
-set(SOURCES Application.cpp
-            AppInboundProtocol.cpp
-            ApplicationPlayer.cpp
-            ApplicationStackHelper.cpp
-            AppParamParser.cpp
-            AutoSwitch.cpp
+set(SOURCES AutoSwitch.cpp
             BackgroundInfoLoader.cpp
             ContextMenuItem.cpp
             ContextMenuManager.cpp
@@ -35,15 +30,9 @@ set(SOURCES Application.cpp
             ThumbLoader.cpp
             URL.cpp
             Util.cpp
-            XBApplicationEx.cpp
             XBDateTime.cpp)
 
-set(HEADERS AppParamParser.h
-            Application.h
-            AppInboundProtocol.h
-            ApplicationPlayer.h
-            ApplicationStackHelper.h
-            AutoSwitch.h
+set(HEADERS AutoSwitch.h
             BackgroundInfoLoader.h
             CompileInfo.h
             ContextMenuItem.h
@@ -83,9 +72,7 @@ set(HEADERS AppParamParser.h
             ThumbLoader.h
             URL.h
             Util.h
-            XBApplicationEx.h
             XBDateTime.h
-            system.h
             system_egl.h
             system_gl.h)
 
@@ -95,9 +82,6 @@ if(ENABLE_OPTICAL)
 endif()
 
 core_add_library(xbmc)
-if(CAP_FOUND)
-  target_compile_definitions(${CORE_LIBRARY} PRIVATE -DHAVE_LIBCAP=1)
-endif()
 
 if(CORE_SYSTEM_NAME STREQUAL windowsstore)
   set_target_properties(${CORE_LIBRARY} PROPERTIES STATIC_LIBRARY_FLAGS "/ignore:4264")

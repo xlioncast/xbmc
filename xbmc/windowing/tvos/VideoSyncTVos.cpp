@@ -15,13 +15,12 @@
 #include "windowing/GraphicContext.h"
 #import "windowing/tvos/WinSystemTVOS.h"
 
-bool CVideoSyncTVos::Setup(PUPDATECLOCK func)
+bool CVideoSyncTVos::Setup()
 {
   CLog::Log(LOGDEBUG, "CVideoSyncTVos::{} setting up TVOS", __FUNCTION__);
 
   //init the vblank timestamp
   m_LastVBlankTime = CurrentHostCounter();
-  UpdateClock = func;
   m_abortEvent.Reset();
 
   bool setupOk = InitDisplayLink();
@@ -66,13 +65,13 @@ void CVideoSyncTVos::TVosVblankHandler()
   //calculate how many vblanks happened
   double VBlankTime =
       static_cast<double>(nowtime - m_LastVBlankTime) / static_cast<double>(CurrentHostFrequency());
-  int NrVBlanks = MathUtils::round_int(VBlankTime * m_fps);
+  int NrVBlanks = MathUtils::round_int(VBlankTime * static_cast<double>(m_fps));
 
   //save the timestamp of this vblank so we can calculate how many happened next time
   m_LastVBlankTime = nowtime;
 
   //update the vblank timestamp, update the clock and send a signal that we got a vblank
-  UpdateClock(NrVBlanks, nowtime, m_refClock);
+  m_refClock->UpdateClock(NrVBlanks, nowtime);
 }
 
 bool CVideoSyncTVos::InitDisplayLink()

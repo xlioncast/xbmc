@@ -8,13 +8,16 @@
 
 #pragma once
 
+#include "Texture.h"
+
+#include <cstdint>
 #include <ctime>
-#include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
-class CTexture;
 class CXBTFReader;
 class CXBTFFrame;
 
@@ -27,25 +30,42 @@ public:
 
   void SetThemeBundle(bool themeBundle);
   bool HasFile(const std::string& Filename);
-  void GetTexturesFromPath(const std::string &path, std::vector<std::string> &textures);
-  static std::string Normalize(const std::string &name);
+  std::vector<std::string> GetTexturesFromPath(const std::string& path);
+  static std::string Normalize(std::string name);
 
-  bool LoadTexture(const std::string& Filename, CTexture** ppTexture, int& width, int& height);
+  struct Texture
+  {
+    std::unique_ptr<CTexture> texture;
+    int width;
+    int height;
+  };
 
-  int LoadAnim(const std::string& Filename,
-               CTexture*** ppTextures,
-               int& width,
-               int& height,
-               int& nLoops,
-               int** ppDelays);
+  /*!
+   * \brief See CTextureBundle::LoadTexture
+   */
+  std::optional<Texture> LoadTexture(const std::string& filename);
 
-  static uint8_t* UnpackFrame(const CXBTFReader& reader, const CXBTFFrame& frame);
+  struct Animation
+  {
+    std::vector<std::pair<std::unique_ptr<CTexture>, int>> textures;
+    int width;
+    int height;
+    int loops;
+  };
+
+  /*!
+   * \brief See CTextureBundle::LoadAnim
+   */
+  std::optional<Animation> LoadAnim(const std::string& filename);
+
+  //! @todo Change return to std::optional<std::vector<uint8_t>>> when c++17 is allowed
+  static std::vector<uint8_t> UnpackFrame(const CXBTFReader& reader, const CXBTFFrame& frame);
 
   void CloseBundle();
 
 private:
   bool OpenBundle();
-  bool ConvertFrameToTexture(const std::string& name, CXBTFFrame& frame, CTexture** ppTexture);
+  std::unique_ptr<CTexture> ConvertFrameToTexture(const std::string& name, const CXBTFFrame& frame);
 
   time_t m_TimeStamp;
 

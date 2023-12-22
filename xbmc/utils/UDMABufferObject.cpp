@@ -12,9 +12,13 @@
 #include "utils/log.h"
 
 #include <drm_fourcc.h>
+#include <fcntl.h>
 #include <linux/udmabuf.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <unistd.h>
+
+#include "PlatformDefs.h"
 
 namespace
 {
@@ -125,11 +129,10 @@ bool CUDMABufferObject::CreateBufferObject(uint64_t size)
     }
   }
 
-  struct udmabuf_create_item create = {
-      .memfd = static_cast<uint32_t>(m_memfd),
-      .offset = 0,
-      .size = m_size,
-  };
+  struct udmabuf_create_item create{};
+  create.memfd = static_cast<uint32_t>(m_memfd);
+  create.offset = 0;
+  create.size = m_size;
 
   m_fd = ioctl(m_udmafd, UDMABUF_CREATE, &create);
   if (m_fd < 0)

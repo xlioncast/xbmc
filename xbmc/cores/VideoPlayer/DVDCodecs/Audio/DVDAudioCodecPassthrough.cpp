@@ -7,22 +7,28 @@
  */
 
 #include "DVDAudioCodecPassthrough.h"
+
 #include "DVDCodecs/DVDCodecs.h"
 #include "DVDStreamInfo.h"
 #include "utils/log.h"
 
 #include <algorithm>
 
-extern "C" {
+extern "C"
+{
 #include <libavcodec/avcodec.h>
 }
 
-#define TRUEHD_BUF_SIZE 61440
+namespace
+{
+constexpr auto TRUEHD_BUF_SIZE = 61440;
+}
 
 CDVDAudioCodecPassthrough::CDVDAudioCodecPassthrough(CProcessInfo &processInfo, CAEStreamInfo::DataType streamType) :
   CDVDAudioCodec(processInfo)
 {
   m_format.m_streamInfo.m_type = streamType;
+  m_deviceIsRAW = processInfo.WantsRawPassthrough();
 }
 
 CDVDAudioCodecPassthrough::~CDVDAudioCodecPassthrough(void)
@@ -57,8 +63,10 @@ bool CDVDAudioCodecPassthrough::Open(CDVDStreamInfo &hints, CDVDCodecOptions &op
       break;
 
     case CAEStreamInfo::STREAM_TYPE_TRUEHD:
-      m_trueHDBuffer.reset(new uint8_t[TRUEHD_BUF_SIZE]);
       m_codecName = "pt-truehd";
+
+      CLog::Log(LOGDEBUG, "CDVDAudioCodecPassthrough::{} - passthrough output device is {}",
+                __func__, m_deviceIsRAW ? "RAW" : "IEC");
       break;
 
     default:
@@ -90,7 +98,6 @@ void CDVDAudioCodecPassthrough::Dispose()
 
 bool CDVDAudioCodecPassthrough::AddData(const DemuxPacket &packet)
 {
-  int used = 0;
   if (m_backlogSize)
   {
     m_dataSize = m_bufferSize;
@@ -132,73 +139,71 @@ bool CDVDAudioCodecPassthrough::AddData(const DemuxPacket &packet)
       return true;
 
     m_dataSize = m_bufferSize;
-    used = m_parser.AddData(pData, iSize, &m_buffer, &m_dataSize);
+    int used = m_parser.AddData(pData, iSize, &m_buffer, &m_dataSize);
     m_bufferSize = std::max(m_bufferSize, m_dataSize);
 
     if (used != iSize)
     {
       if (m_backlogBufferSize < static_cast<unsigned int>(iSize - used))
       {
-        m_backlogBufferSize = std::max(61440, iSize - used);
+        m_backlogBufferSize = std::max(TRUEHD_BUF_SIZE, iSize - used);
         m_backlogBuffer = static_cast<uint8_t*>(realloc(m_backlogBuffer, m_backlogBufferSize));
       }
       m_backlogSize = iSize - used;
       memcpy(m_backlogBuffer, pData + used, m_backlogSize);
-      used = iSize;
     }
   }
   else if (pData)
   {
     if (m_backlogBufferSize < (m_backlogSize + iSize))
     {
-      m_backlogBufferSize = std::max(61440, static_cast<int>(m_backlogSize + iSize));
+      m_backlogBufferSize = std::max(TRUEHD_BUF_SIZE, static_cast<int>(m_backlogSize + iSize));
       m_backlogBuffer = static_cast<uint8_t*>(realloc(m_backlogBuffer, m_backlogBufferSize));
     }
     memcpy(m_backlogBuffer + m_backlogSize, pData, iSize);
     m_backlogSize += iSize;
-    used = iSize;
   }
 
   if (!m_dataSize)
     return true;
 
-  if (m_dataSize)
+  m_format.m_dataFormat = AE_FMT_RAW;
+  m_format.m_streamInfo = m_parser.GetStreamInfo();
+  m_format.m_sampleRate = m_parser.GetSampleRate();
+  m_format.m_frameSize = 1;
+  CAEChannelInfo layout;
+  for (unsigned int i = 0; i < m_parser.GetChannels(); i++)
   {
-    m_format.m_dataFormat = AE_FMT_RAW;
-    m_format.m_streamInfo = m_parser.GetStreamInfo();
-    m_format.m_sampleRate = m_parser.GetSampleRate();
-    m_format.m_frameSize = 1;
-    CAEChannelInfo layout;
-    for (unsigned int i=0; i<m_parser.GetChannels(); i++)
-    {
-      layout += AE_CH_RAW;
-    }
-    m_format.m_channelLayout = layout;
+    layout += AE_CH_RAW;
   }
+  m_format.m_channelLayout = layout;
 
   if (m_format.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_TRUEHD)
   {
-    if (!m_trueHDoffset)
-      memset(m_trueHDBuffer.get(), 0, TRUEHD_BUF_SIZE);
-
-    if (m_dataSize > 2560 - 2)
+    if (m_trueHDBuffer.empty())
     {
-      CLog::Log(LOGERROR,
-                "CDVDAudioCodecPassthrough::AddData - truncating TrueHD frame of %u bytes",
-                m_dataSize);
-      m_dataSize = 2560 - 2;
-    }
-    memcpy(&(m_trueHDBuffer.get())[m_trueHDoffset], m_buffer, m_dataSize);
-    uint8_t highByte = (m_dataSize >> 8) & 0xFF;
-    uint8_t lowByte = m_dataSize & 0xFF;
-    m_trueHDBuffer[m_trueHDoffset+2560-2] = highByte;
-    m_trueHDBuffer[m_trueHDoffset+2560-1] = lowByte;
-    m_trueHDoffset += 2560;
-
-    if (m_trueHDoffset / 2560 == 24)
-    {
-      m_dataSize = m_trueHDoffset;
+      m_trueHDBuffer.resize(TRUEHD_BUF_SIZE);
       m_trueHDoffset = 0;
+    }
+
+    if (m_trueHDoffset == 0)
+      m_trueHDframes = 0;
+
+    memcpy(m_trueHDBuffer.data() + m_trueHDoffset, m_buffer, m_dataSize);
+    m_trueHDoffset += m_dataSize;
+
+    m_trueHDframes++;
+
+    // Only 12 audio units are packed in the buffer to avoid overflows and reduce latency.
+    // Compensates for the small increased latency in CAEBitstreamPacker::PackTrueHD (IEC)
+    // Android IEC packer (RAW) needs 24 audio units.
+    const unsigned int nFrames = m_deviceIsRAW ? 24 : 12;
+
+    if (m_trueHDframes == nFrames)
+    {
+      m_dataSize = TRUEHD_BUF_SIZE;
+      m_trueHDoffset = 0;
+      m_trueHDframes = 0;
     }
     else
       m_dataSize = 0;
@@ -230,7 +235,7 @@ int CDVDAudioCodecPassthrough::GetData(uint8_t** dst)
     AddData(DemuxPacket());
 
   if (m_format.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_TRUEHD)
-    *dst = m_trueHDBuffer.get();
+    *dst = m_trueHDBuffer.data();
   else
     *dst = m_buffer;
 

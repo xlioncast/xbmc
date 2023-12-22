@@ -15,41 +15,55 @@
 
 namespace Shaders {
 
-  class BaseVideoFilterShader : public CGLSLShaderProgram
+namespace GLES
+{
+class BaseVideoFilterShader : public CGLSLShaderProgram
+{
+public:
+  BaseVideoFilterShader();
+  void OnCompiledAndLinked() override;
+  bool OnEnabled() override;
+  virtual void SetSourceTexture(GLint ytex) { m_sourceTexUnit = ytex; }
+  virtual void SetWidth(int w)
   {
-  public:
-    BaseVideoFilterShader();
-    void OnCompiledAndLinked() override;
-    bool OnEnabled() override;
-    virtual void SetSourceTexture(GLint ytex) { m_sourceTexUnit = ytex; }
-    virtual void SetWidth(int w) { m_width  = w; m_stepX = w>0?1.0f/w:0; }
-    virtual void SetHeight(int h) { m_height = h; m_stepY = h>0?1.0f/h:0; }
-    virtual bool GetTextureFilter(GLint& filter) { return false; }
-    virtual GLint GetVertexLoc() { return m_hVertex; }
-    virtual GLint GetcoordLoc() { return m_hcoord; }
-    virtual void SetMatrices(const GLfloat *p, const GLfloat *m) { m_proj = p; m_model = m; }
-    virtual void SetAlpha(GLfloat alpha)             { m_alpha = alpha; }
+    m_width = w;
+    m_stepX = w > 0 ? 1.0f / w : 0;
+  }
+  virtual void SetHeight(int h)
+  {
+    m_height = h;
+    m_stepY = h > 0 ? 1.0f / h : 0;
+  }
+  virtual bool GetTextureFilter(GLint& filter) { return false; }
+  virtual GLint GetVertexLoc() { return m_hVertex; }
+  virtual GLint GetcoordLoc() { return m_hcoord; }
+  virtual void SetMatrices(const GLfloat* p, const GLfloat* m)
+  {
+    m_proj = p;
+    m_model = m;
+  }
+  virtual void SetAlpha(GLfloat alpha) { m_alpha = alpha; }
 
-  protected:
-    int m_width;
-    int m_height;
-    float m_stepX;
-    float m_stepY;
-    GLint m_sourceTexUnit;
+protected:
+  int m_width;
+  int m_height;
+  float m_stepX;
+  float m_stepY;
+  GLint m_sourceTexUnit = 0;
 
-    // shader attribute handles
-    GLint m_hSourceTex;
-    GLint m_hStepXY;
+  // shader attribute handles
+  GLint m_hSourceTex = 0;
+  GLint m_hStepXY = 0;
 
-    GLint m_hVertex;
-    GLint m_hcoord;
-    GLint m_hProj;
-    GLint m_hModel;
-    GLint m_hAlpha;
+  GLint m_hVertex = -1;
+  GLint m_hcoord = -1;
+  GLint m_hProj = -1;
+  GLint m_hModel = -1;
+  GLint m_hAlpha = -1;
 
-    const GLfloat *m_proj;
-    const GLfloat *m_model;
-    GLfloat  m_alpha;
+  const GLfloat* m_proj;
+  const GLfloat* m_model;
+  GLfloat m_alpha = -1;
   };
 
   class ConvolutionFilterShader : public BaseVideoFilterShader
@@ -66,10 +80,10 @@ namespace Shaders {
 
   protected:
     // kernel textures
-    GLuint m_kernelTex1;
+    GLuint m_kernelTex1 = 0;
 
     // shader handles to kernel textures
-    GLint m_hKernTex;
+    GLint m_hKernTex = -1;
 
     ESCALINGMETHOD m_method;
     bool m_floattex; //if float textures are supported
@@ -83,5 +97,6 @@ namespace Shaders {
       bool OnEnabled() override;
   };
 
+  } // namespace GLES
 } // end namespace
 

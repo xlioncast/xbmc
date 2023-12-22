@@ -14,14 +14,17 @@
 #include "dialogs/GUIDialogProgress.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
+#include "music/infoscanner/MusicInfoScanner.h"
 #include "music/jobs/MusicLibraryCleaningJob.h"
 #include "music/jobs/MusicLibraryExportJob.h"
 #include "music/jobs/MusicLibraryImportJob.h"
 #include "music/jobs/MusicLibraryJob.h"
 #include "music/jobs/MusicLibraryScanningJob.h"
-#include "threads/SingleLock.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/Variant.h"
 
+#include <mutex>
 #include <utility>
 
 CMusicLibraryQueue::CMusicLibraryQueue()
@@ -31,7 +34,7 @@ CMusicLibraryQueue::CMusicLibraryQueue()
 
 CMusicLibraryQueue::~CMusicLibraryQueue()
 {
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   m_jobs.clear();
 }
 
@@ -117,8 +120,21 @@ void CMusicLibraryQueue::ImportLibrary(const std::string& xmlFile, bool showDial
   }
 }
 
-void CMusicLibraryQueue::ScanLibrary(const std::string& strDirectory, int flags /* = 0 */, bool showProgress /* = true */)
+void CMusicLibraryQueue::ScanLibrary(const std::string& strDirectory,
+                                     int flags /* = 0 */,
+                                     bool showProgress /* = true */)
 {
+  if (flags == MUSIC_INFO::CMusicInfoScanner::SCAN_NORMAL)
+  {
+    if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+            CSettings::SETTING_MUSICLIBRARY_DOWNLOADINFO))
+      flags |= MUSIC_INFO::CMusicInfoScanner::SCAN_ONLINE;
+  }
+
+  if (!showProgress || CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+                           CSettings::SETTING_MUSICLIBRARY_BACKGROUNDUPDATE))
+    flags |= MUSIC_INFO::CMusicInfoScanner::SCAN_BACKGROUND;
+
   AddJob(new CMusicLibraryScanningJob(strDirectory, flags, showProgress));
 }
 
@@ -159,7 +175,7 @@ bool CMusicLibraryQueue::IsScanningLibrary() const
 
 void CMusicLibraryQueue::StopLibraryScanning()
 {
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   MusicLibraryJobMap::const_iterator scanningJobs = m_jobs.find("MusicLibraryScanningJob");
   if (scanningJobs == m_jobs.end())
     return;
@@ -197,37 +213,12 @@ void CMusicLibraryQueue::CleanLibrary(bool showDialog /* = false */)
     progress->Wait(20);
 }
 
-void CMusicLibraryQueue::CleanLibraryModal()
-{
-  // We can't perform a modal library cleaning if other jobs are running
-  if (IsRunning())
-    return;
-
-  CGUIDialogProgress* progress = nullptr;
-  progress = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogProgress>(WINDOW_DIALOG_PROGRESS);
-  if (progress)
-  {
-    progress->SetHeading(CVariant{ 700 });
-    progress->SetPercentage(0);
-    progress->Open();
-    progress->ShowProgressBar(true);
-  }
-
-  m_modal = true;
-  m_cleaning = true;
-  CMusicLibraryCleaningJob cleaningJob(progress);
-  cleaningJob.DoWork();
-  m_cleaning = false;
-  m_modal = false;
-  Refresh();
-}
-
 void CMusicLibraryQueue::AddJob(CMusicLibraryJob *job)
 {
   if (job == NULL)
     return;
 
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   if (!CJobQueue::AddJob(job))
     return;
 
@@ -249,7 +240,7 @@ void CMusicLibraryQueue::CancelJob(CMusicLibraryJob *job)
   if (job == NULL)
     return;
 
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   // remember the job type needed later because the job might be deleted
   // in the call to CJobQueue::CancelJob()
   std::string jobType;
@@ -271,7 +262,7 @@ void CMusicLibraryQueue::CancelJob(CMusicLibraryJob *job)
 
 void CMusicLibraryQueue::CancelAllJobs()
 {
-  CSingleLock lock(m_critical);
+  std::unique_lock<CCriticalSection> lock(m_critical);
   CJobQueue::CancelJobs();
 
   // remove all scanning jobs
@@ -299,7 +290,7 @@ void CMusicLibraryQueue::OnJobComplete(unsigned int jobID, bool success, CJob *j
   }
 
   {
-    CSingleLock lock(m_critical);
+    std::unique_lock<CCriticalSection> lock(m_critical);
     // remove the job from our list of queued/running jobs
     MusicLibraryJobMap::iterator jobsIt = m_jobs.find(job->GetType());
     if (jobsIt != m_jobs.end())

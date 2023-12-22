@@ -15,6 +15,7 @@
 #include "pvr/EPG.h"
 #include "pvr/General.h"
 #include "pvr/MenuHook.h"
+#include "pvr/Providers.h"
 #include "pvr/Recordings.h"
 #include "pvr/Stream.h"
 #include "pvr/Timers.h"
@@ -153,7 +154,15 @@ namespace addon
 //------------------------------------------------------------------------------
 
 //##############################################################################
-/// @defgroup cpp_kodi_addon_pvr_Defs_Menuhook 7. Menuhook
+/// @defgroup cpp_kodi_addon_pvr_Defs_Provider 7. Provider
+/// @ingroup cpp_kodi_addon_pvr_Defs
+/// @brief **Representation of a provider**\n
+/// For list of all providers from the backend.
+///
+//------------------------------------------------------------------------------
+
+//##############################################################################
+/// @defgroup cpp_kodi_addon_pvr_Defs_Menuhook 8. Menuhook
 /// @ingroup cpp_kodi_addon_pvr_Defs
 /// @brief **PVR Context menu data**\n
 /// Define data for the context menus available to the user
@@ -161,7 +170,7 @@ namespace addon
 //------------------------------------------------------------------------------
 
 //##############################################################################
-/// @defgroup cpp_kodi_addon_pvr_Defs_EDLEntry 8. Edit decision list (EDL)
+/// @defgroup cpp_kodi_addon_pvr_Defs_EDLEntry 9. Edit decision list (EDL)
 /// @ingroup cpp_kodi_addon_pvr_Defs
 /// @brief **An edit decision list or EDL is used in the post-production process
 /// of film editing and video editing**\n
@@ -171,7 +180,7 @@ namespace addon
 //------------------------------------------------------------------------------
 
 //##############################################################################
-/// @defgroup cpp_kodi_addon_pvr_Defs_Stream 9. Inputstream
+/// @defgroup cpp_kodi_addon_pvr_Defs_Stream 10. Inputstream
 /// @ingroup cpp_kodi_addon_pvr_Defs
 /// @brief **Inputstream**\n
 /// This includes classes and values that are used in the PVR inputstream.
@@ -272,12 +281,14 @@ namespace addon
 /// class CMyPVRClient : public ::kodi::addon::CInstancePVRClient
 /// {
 /// public:
-///   CMyPVRClient(KODI_HANDLE instance, const std::string& kodiVersion);
+///   CMyPVRClient(const kodi::addon::IInstanceInfo& instance);
 ///
 ///   PVR_ERROR GetCapabilities(kodi::addon::PVRCapabilities& capabilities) override;
 ///   PVR_ERROR GetBackendName(std::string& name) override;
 ///   PVR_ERROR GetBackendVersion(std::string& version) override;
 ///
+///   PVR_ERROR GetProvidersAmount(int& amount) override;
+///   PVR_ERROR GetProviders(std::vector<kodi::addon::PVRProvider>& providers) override;
 ///   PVR_ERROR GetChannelsAmount(int& amount) override;
 ///   PVR_ERROR GetChannels(bool radio, std::vector<kodi::addon::PVRChannel>& channels) override;
 ///   PVR_ERROR GetChannelStreamProperties(const kodi::addon::PVRChannel&	channel,
@@ -287,8 +298,8 @@ namespace addon
 ///   std::vector<kodi::addon::PVRChannel> m_myChannels;
 /// };
 ///
-/// CMyPVRClient::CMyPVRClient(KODI_HANDLE instance, const std::string& kodiVersion)
-///   : CInstancePVRClient(instance, kodiVersion)
+/// CMyPVRClient::CMyPVRClient(const kodi::addon::IInstanceInfo& instance)
+///   : CInstancePVRClient(instance)
 /// {
 ///   kodi::addon::PVRChannel channel;
 ///   channel.SetUniqueId(123);
@@ -312,6 +323,18 @@ namespace addon
 /// PVR_ERROR CMyPVRClient::GetBackendVersion(std::string& version)
 /// {
 ///   version = "1.0.0";
+///   return PVR_ERROR_NO_ERROR;
+/// }
+///
+/// PVR_ERROR CMyInstance::GetProvidersAmount(int& amount)
+/// {
+///   amount = m_myProviders.size();
+///   return PVR_ERROR_NO_ERROR;
+/// }
+///
+/// PVR_ERROR CMyPVRClient::GetProviders(std::vector<kodi::addon::PVRProvider>& providers)
+/// {
+///   providers = m_myProviders;
 ///   return PVR_ERROR_NO_ERROR;
 /// }
 ///
@@ -347,25 +370,19 @@ namespace addon
 /// {
 /// public:
 ///   CMyAddon() = default;
-///   ADDON_STATUS CreateInstance(int instanceType,
-///                               const std::string& instanceID,
-///                               KODI_HANDLE instance,
-///                               const std::string& version,
-///                               KODI_HANDLE& addonInstance) override;
+///   ADDON_STATUS CreateInstance(const kodi::addon::IInstanceInfo& instance,
+///                               KODI_ADDON_INSTANCE_HDL& hdl) override;
 /// };
 ///
 /// // If you use only one instance in your add-on, can be instanceType and
 /// // instanceID ignored
-/// ADDON_STATUS CMyAddon::CreateInstance(int instanceType,
-///                                       const std::string& instanceID,
-///                                       KODI_HANDLE instance,
-///                                       const std::string& version,
-///                                       KODI_HANDLE& addonInstance)
+/// ADDON_STATUS CMyAddon::CreateInstance(const kodi::addon::IInstanceInfo& instance,
+///                                       KODI_ADDON_INSTANCE_HDL& hdl)
 /// {
-///   if (instanceType == ADDON_INSTANCE_PVR)
+///   if (instance.IsType(ADDON_INSTANCE_PVR))
 ///   {
 ///     kodi::Log(ADDON_LOG_INFO, "Creating my PVR client instance");
-///     addonInstance = new CMyPVRClient(instance, version);
+///     hdl = new CMyPVRClient(instance, version);
 ///     return ADDON_STATUS_OK;
 ///   }
 ///   else if (...)
@@ -381,7 +398,7 @@ namespace addon
 /// The destruction of the example class `CMyPVRClient` is called from
 /// Kodi's header. Manually deleting the add-on instance is not required.
 ///
-class ATTRIBUTE_HIDDEN CInstancePVRClient : public IAddonInstance
+class ATTR_DLL_LOCAL CInstancePVRClient : public IAddonInstance
 {
 public:
   //============================================================================
@@ -420,7 +437,7 @@ public:
   /// #include <kodi/addon-instance/PVR.h>
   /// ...
   ///
-  /// class ATTRIBUTE_HIDDEN CPVRExample
+  /// class ATTR_DLL_LOCAL CPVRExample
   ///   : public kodi::addon::CAddonBase,
   ///     public kodi::addon::CInstancePVRClient
   /// {
@@ -439,14 +456,14 @@ public:
   /// ADDONCREATOR(CPVRExample)
   /// ~~~~~~~~~~~~~
   ///
-  CInstancePVRClient() : IAddonInstance(ADDON_INSTANCE_PVR, GetKodiTypeVersion(ADDON_INSTANCE_PVR))
+  CInstancePVRClient() : IAddonInstance(IInstanceInfo(CPrivateBase::m_interface->firstKodiInstance))
   {
-    if (CAddonBase::m_interface->globalSingleInstance != nullptr)
+    if (CPrivateBase::m_interface->globalSingleInstance != nullptr)
       throw std::logic_error("kodi::addon::CInstancePVRClient: Creation of more as one in single "
                              "instance way is not allowed!");
 
-    SetAddonStruct(CAddonBase::m_interface->firstKodiInstance, m_kodiVersion);
-    CAddonBase::m_interface->globalSingleInstance = this;
+    SetAddonStruct(CPrivateBase::m_interface->firstKodiInstance);
+    CPrivateBase::m_interface->globalSingleInstance = this;
   }
   //----------------------------------------------------------------------------
 
@@ -456,10 +473,6 @@ public:
   ///
   /// @param[in] instance The instance value given to
   ///                     <b>`kodi::addon::CAddonBase::CreateInstance(...)`</b>.
-  /// @param[in] kodiVersion [opt] Version used in Kodi for this instance, to
-  ///                        allow compatibility to older Kodi versions.
-  ///
-  /// @note Recommended to set <b>`kodiVersion`</b>.
   ///
   ///
   /// --------------------------------------------------------------------------
@@ -469,8 +482,8 @@ public:
   /// class CMyPVRClient : public ::kodi::addon::CInstancePVRClient
   /// {
   /// public:
-  ///   CMyPVRClient(KODI_HANDLE instance, const std::string& kodiVersion)
-  ///     : CInstancePVRClient(instance, kodiVersion)
+  ///   CMyPVRClient(const kodi::addon::IInstanceInfo& instance)
+  ///     : CInstancePVRClient(instance)
   ///   {
   ///      ...
   ///   }
@@ -478,27 +491,22 @@ public:
   ///   ...
   /// };
   ///
-  /// ADDON_STATUS CMyAddon::CreateInstance(int instanceType,
-  ///                                       const std::string& instanceID,
-  ///                                       KODI_HANDLE instance,
-  ///                                       const std::string& version,
-  ///                                       KODI_HANDLE& addonInstance)
+  /// ADDON_STATUS CMyAddon::CreateInstance(const kodi::addon::IInstanceInfo& instance,
+  ///                                       KODI_ADDON_INSTANCE_HDL& hdl)
   /// {
   ///   kodi::Log(ADDON_LOG_INFO, "Creating my PVR client instance");
-  ///   addonInstance = new CMyPVRClient(instance, version);
+  ///   hdl = new CMyPVRClient(instance);
   ///   return ADDON_STATUS_OK;
   /// }
   /// ~~~~~~~~~~~~~
   ///
-  explicit CInstancePVRClient(KODI_HANDLE instance, const std::string& kodiVersion = "")
-    : IAddonInstance(ADDON_INSTANCE_PVR,
-                     !kodiVersion.empty() ? kodiVersion : GetKodiTypeVersion(ADDON_INSTANCE_PVR))
+  explicit CInstancePVRClient(const IInstanceInfo& instance) : IAddonInstance(instance)
   {
-    if (CAddonBase::m_interface->globalSingleInstance != nullptr)
+    if (CPrivateBase::m_interface->globalSingleInstance != nullptr)
       throw std::logic_error("kodi::addon::CInstancePVRClient: Creation of multiple together with "
                              "single instance way is not allowed!");
 
-    SetAddonStruct(instance, m_kodiVersion);
+    SetAddonStruct(instance);
   }
   //----------------------------------------------------------------------------
 
@@ -827,6 +835,73 @@ public:
   ///@{
 
   //============================================================================
+  /// @brief The total amount of providers on the backend
+  ///
+  /// @param[out] amount The total amount of providers on the backend
+  /// @return @ref PVR_ERROR_NO_ERROR if the amount has been fetched successfully.
+  ///
+  /// @remarks Optional, and only used if @ref PVRCapabilities::SetSupportsProviders
+  ///          "supportsProviders" is set to true.
+  ///
+  virtual PVR_ERROR GetProvidersAmount(int& amount) { return PVR_ERROR_NOT_IMPLEMENTED; }
+  //----------------------------------------------------------------------------
+
+  //============================================================================
+  /// @brief Request the list of all providers from the backend.
+  ///
+  /// @param[out] results The channels defined with
+  ///                     @ref cpp_kodi_addon_pvr_Defs_PVRProvider and
+  ///                     available at the addon, then transferred with
+  ///                     @ref cpp_kodi_addon_pvr_Defs_PVRProvidersResultSet.
+  /// @return @ref PVR_ERROR_NO_ERROR if the list has been fetched successfully.
+  ///
+  /// @remarks Optional, and only used if @ref PVRCapabilities::SetSupportsProviders
+  ///          "supportsProviders" is set to true.
+  ///
+  /// --------------------------------------------------------------------------
+  ///
+  /// @copydetails cpp_kodi_addon_pvr_Defs_PVRProvider_Help
+  ///
+  ///---------------------------------------------------------------------------
+  ///
+  /// **Example:**
+  /// ~~~~~~~~~~~~~{.cpp}
+  /// ...
+  /// PVR_ERROR CMyPVRInstance::GetProviders(kodi::addon::PVRProvidersResultSet& results)
+  /// {
+  ///   // Minimal demo example, in reality bigger and loop to transfer all
+  ///   kodi::addon::PVRProvider provider;
+  ///   provider.SetUniqueId(123);
+  ///   provider.SetProviderName("My provider name");
+  ///   provider.SetProviderType(PVR_PROVIDER_TYPE_SATELLITE);
+  ///   ...
+  ///
+  ///   // Give it now to Kodi
+  ///   results.Add(provider);
+  ///   return PVR_ERROR_NO_ERROR;
+  /// }
+  /// ...
+  /// ~~~~~~~~~~~~~
+  ///
+  virtual PVR_ERROR GetProviders(kodi::addon::PVRProvidersResultSet& results)
+  {
+    return PVR_ERROR_NOT_IMPLEMENTED;
+  }
+  //----------------------------------------------------------------------------
+
+  //============================================================================
+  /// @brief **Callback to Kodi Function**\n
+  /// Request Kodi to update it's list of providers.
+  ///
+  /// @remarks Only called from addon itself.
+  ///
+  inline void TriggerProvidersUpdate()
+  {
+    m_instanceData->toKodi->TriggerProvidersUpdate(m_instanceData->toKodi->kodiInstance);
+  }
+  //----------------------------------------------------------------------------
+
+  //============================================================================
   /// @brief The total amount of channels on the backend
   ///
   /// @param[out] amount The total amount of channels on the backend
@@ -955,7 +1030,7 @@ public:
   /// #include <kodi/addon-instance/PVR.h>
   /// ...
   ///
-  /// class ATTRIBUTE_HIDDEN CPVRExample
+  /// class ATTR_DLL_LOCAL CPVRExample
   ///   : public kodi::addon::CAddonBase,
   ///     public kodi::addon::CInstancePVRClient
   /// {
@@ -2653,104 +2728,106 @@ public:
   //--==----==----==----==----==----==----==----==----==----==----==----==----==
 
 private:
-  void SetAddonStruct(KODI_HANDLE instance, const std::string& kodiVersion)
+  void SetAddonStruct(KODI_ADDON_INSTANCE_STRUCT* instance)
   {
-    if (instance == nullptr)
-      throw std::logic_error("kodi::addon::CInstancePVRClient: Creation with empty addon "
-                             "structure not allowed, table must be given from Kodi!");
+    instance->hdl = this;
 
-    m_instanceData = static_cast<AddonInstance_PVR*>(instance);
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->GetCapabilities = ADDON_GetCapabilities;
+    instance->pvr->toAddon->GetConnectionString = ADDON_GetConnectionString;
+    instance->pvr->toAddon->GetBackendName = ADDON_GetBackendName;
+    instance->pvr->toAddon->GetBackendVersion = ADDON_GetBackendVersion;
+    instance->pvr->toAddon->GetBackendHostname = ADDON_GetBackendHostname;
+    instance->pvr->toAddon->GetDriveSpace = ADDON_GetDriveSpace;
+    instance->pvr->toAddon->CallSettingsMenuHook = ADDON_CallSettingsMenuHook;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->GetChannelsAmount = ADDON_GetChannelsAmount;
+    instance->pvr->toAddon->GetChannels = ADDON_GetChannels;
+    instance->pvr->toAddon->GetChannelStreamProperties = ADDON_GetChannelStreamProperties;
+    instance->pvr->toAddon->GetSignalStatus = ADDON_GetSignalStatus;
+    instance->pvr->toAddon->GetDescrambleInfo = ADDON_GetDescrambleInfo;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->GetProvidersAmount = ADDON_GetProvidersAmount;
+    instance->pvr->toAddon->GetProviders = ADDON_GetProviders;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->GetChannelGroupsAmount = ADDON_GetChannelGroupsAmount;
+    instance->pvr->toAddon->GetChannelGroups = ADDON_GetChannelGroups;
+    instance->pvr->toAddon->GetChannelGroupMembers = ADDON_GetChannelGroupMembers;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->DeleteChannel = ADDON_DeleteChannel;
+    instance->pvr->toAddon->RenameChannel = ADDON_RenameChannel;
+    instance->pvr->toAddon->OpenDialogChannelSettings = ADDON_OpenDialogChannelSettings;
+    instance->pvr->toAddon->OpenDialogChannelAdd = ADDON_OpenDialogChannelAdd;
+    instance->pvr->toAddon->OpenDialogChannelScan = ADDON_OpenDialogChannelScan;
+    instance->pvr->toAddon->CallChannelMenuHook = ADDON_CallChannelMenuHook;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->GetEPGForChannel = ADDON_GetEPGForChannel;
+    instance->pvr->toAddon->IsEPGTagRecordable = ADDON_IsEPGTagRecordable;
+    instance->pvr->toAddon->IsEPGTagPlayable = ADDON_IsEPGTagPlayable;
+    instance->pvr->toAddon->GetEPGTagEdl = ADDON_GetEPGTagEdl;
+    instance->pvr->toAddon->GetEPGTagStreamProperties = ADDON_GetEPGTagStreamProperties;
+    instance->pvr->toAddon->SetEPGMaxPastDays = ADDON_SetEPGMaxPastDays;
+    instance->pvr->toAddon->SetEPGMaxFutureDays = ADDON_SetEPGMaxFutureDays;
+    instance->pvr->toAddon->CallEPGMenuHook = ADDON_CallEPGMenuHook;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->GetRecordingsAmount = ADDON_GetRecordingsAmount;
+    instance->pvr->toAddon->GetRecordings = ADDON_GetRecordings;
+    instance->pvr->toAddon->DeleteRecording = ADDON_DeleteRecording;
+    instance->pvr->toAddon->UndeleteRecording = ADDON_UndeleteRecording;
+    instance->pvr->toAddon->DeleteAllRecordingsFromTrash = ADDON_DeleteAllRecordingsFromTrash;
+    instance->pvr->toAddon->RenameRecording = ADDON_RenameRecording;
+    instance->pvr->toAddon->SetRecordingLifetime = ADDON_SetRecordingLifetime;
+    instance->pvr->toAddon->SetRecordingPlayCount = ADDON_SetRecordingPlayCount;
+    instance->pvr->toAddon->SetRecordingLastPlayedPosition = ADDON_SetRecordingLastPlayedPosition;
+    instance->pvr->toAddon->GetRecordingLastPlayedPosition = ADDON_GetRecordingLastPlayedPosition;
+    instance->pvr->toAddon->GetRecordingEdl = ADDON_GetRecordingEdl;
+    instance->pvr->toAddon->GetRecordingSize = ADDON_GetRecordingSize;
+    instance->pvr->toAddon->GetRecordingStreamProperties = ADDON_GetRecordingStreamProperties;
+    instance->pvr->toAddon->CallRecordingMenuHook = ADDON_CallRecordingMenuHook;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->GetTimerTypes = ADDON_GetTimerTypes;
+    instance->pvr->toAddon->GetTimersAmount = ADDON_GetTimersAmount;
+    instance->pvr->toAddon->GetTimers = ADDON_GetTimers;
+    instance->pvr->toAddon->AddTimer = ADDON_AddTimer;
+    instance->pvr->toAddon->DeleteTimer = ADDON_DeleteTimer;
+    instance->pvr->toAddon->UpdateTimer = ADDON_UpdateTimer;
+    instance->pvr->toAddon->CallTimerMenuHook = ADDON_CallTimerMenuHook;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->OnSystemSleep = ADDON_OnSystemSleep;
+    instance->pvr->toAddon->OnSystemWake = ADDON_OnSystemWake;
+    instance->pvr->toAddon->OnPowerSavingActivated = ADDON_OnPowerSavingActivated;
+    instance->pvr->toAddon->OnPowerSavingDeactivated = ADDON_OnPowerSavingDeactivated;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->OpenLiveStream = ADDON_OpenLiveStream;
+    instance->pvr->toAddon->CloseLiveStream = ADDON_CloseLiveStream;
+    instance->pvr->toAddon->ReadLiveStream = ADDON_ReadLiveStream;
+    instance->pvr->toAddon->SeekLiveStream = ADDON_SeekLiveStream;
+    instance->pvr->toAddon->LengthLiveStream = ADDON_LengthLiveStream;
+    instance->pvr->toAddon->GetStreamProperties = ADDON_GetStreamProperties;
+    instance->pvr->toAddon->GetStreamReadChunkSize = ADDON_GetStreamReadChunkSize;
+    instance->pvr->toAddon->IsRealTimeStream = ADDON_IsRealTimeStream;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->OpenRecordedStream = ADDON_OpenRecordedStream;
+    instance->pvr->toAddon->CloseRecordedStream = ADDON_CloseRecordedStream;
+    instance->pvr->toAddon->ReadRecordedStream = ADDON_ReadRecordedStream;
+    instance->pvr->toAddon->SeekRecordedStream = ADDON_SeekRecordedStream;
+    instance->pvr->toAddon->LengthRecordedStream = ADDON_LengthRecordedStream;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->DemuxReset = ADDON_DemuxReset;
+    instance->pvr->toAddon->DemuxAbort = ADDON_DemuxAbort;
+    instance->pvr->toAddon->DemuxFlush = ADDON_DemuxFlush;
+    instance->pvr->toAddon->DemuxRead = ADDON_DemuxRead;
+    //--==----==----==----==----==----==----==----==----==----==----==----==----==
+    instance->pvr->toAddon->CanPauseStream = ADDON_CanPauseStream;
+    instance->pvr->toAddon->PauseStream = ADDON_PauseStream;
+    instance->pvr->toAddon->CanSeekStream = ADDON_CanSeekStream;
+    instance->pvr->toAddon->SeekTime = ADDON_SeekTime;
+    instance->pvr->toAddon->SetSpeed = ADDON_SetSpeed;
+    instance->pvr->toAddon->FillBuffer = ADDON_FillBuffer;
+    instance->pvr->toAddon->GetStreamTimes = ADDON_GetStreamTimes;
+
+    m_instanceData = instance->pvr;
     m_instanceData->toAddon->addonInstance = this;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->GetCapabilities = ADDON_GetCapabilities;
-    m_instanceData->toAddon->GetConnectionString = ADDON_GetConnectionString;
-    m_instanceData->toAddon->GetBackendName = ADDON_GetBackendName;
-    m_instanceData->toAddon->GetBackendVersion = ADDON_GetBackendVersion;
-    m_instanceData->toAddon->GetBackendHostname = ADDON_GetBackendHostname;
-    m_instanceData->toAddon->GetDriveSpace = ADDON_GetDriveSpace;
-    m_instanceData->toAddon->CallSettingsMenuHook = ADDON_CallSettingsMenuHook;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->GetChannelsAmount = ADDON_GetChannelsAmount;
-    m_instanceData->toAddon->GetChannels = ADDON_GetChannels;
-    m_instanceData->toAddon->GetChannelStreamProperties = ADDON_GetChannelStreamProperties;
-    m_instanceData->toAddon->GetSignalStatus = ADDON_GetSignalStatus;
-    m_instanceData->toAddon->GetDescrambleInfo = ADDON_GetDescrambleInfo;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->GetChannelGroupsAmount = ADDON_GetChannelGroupsAmount;
-    m_instanceData->toAddon->GetChannelGroups = ADDON_GetChannelGroups;
-    m_instanceData->toAddon->GetChannelGroupMembers = ADDON_GetChannelGroupMembers;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->DeleteChannel = ADDON_DeleteChannel;
-    m_instanceData->toAddon->RenameChannel = ADDON_RenameChannel;
-    m_instanceData->toAddon->OpenDialogChannelSettings = ADDON_OpenDialogChannelSettings;
-    m_instanceData->toAddon->OpenDialogChannelAdd = ADDON_OpenDialogChannelAdd;
-    m_instanceData->toAddon->OpenDialogChannelScan = ADDON_OpenDialogChannelScan;
-    m_instanceData->toAddon->CallChannelMenuHook = ADDON_CallChannelMenuHook;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->GetEPGForChannel = ADDON_GetEPGForChannel;
-    m_instanceData->toAddon->IsEPGTagRecordable = ADDON_IsEPGTagRecordable;
-    m_instanceData->toAddon->IsEPGTagPlayable = ADDON_IsEPGTagPlayable;
-    m_instanceData->toAddon->GetEPGTagEdl = ADDON_GetEPGTagEdl;
-    m_instanceData->toAddon->GetEPGTagStreamProperties = ADDON_GetEPGTagStreamProperties;
-    m_instanceData->toAddon->SetEPGMaxPastDays = ADDON_SetEPGMaxPastDays;
-    m_instanceData->toAddon->SetEPGMaxFutureDays = ADDON_SetEPGMaxFutureDays;
-    m_instanceData->toAddon->CallEPGMenuHook = ADDON_CallEPGMenuHook;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->GetRecordingsAmount = ADDON_GetRecordingsAmount;
-    m_instanceData->toAddon->GetRecordings = ADDON_GetRecordings;
-    m_instanceData->toAddon->DeleteRecording = ADDON_DeleteRecording;
-    m_instanceData->toAddon->UndeleteRecording = ADDON_UndeleteRecording;
-    m_instanceData->toAddon->DeleteAllRecordingsFromTrash = ADDON_DeleteAllRecordingsFromTrash;
-    m_instanceData->toAddon->RenameRecording = ADDON_RenameRecording;
-    m_instanceData->toAddon->SetRecordingLifetime = ADDON_SetRecordingLifetime;
-    m_instanceData->toAddon->SetRecordingPlayCount = ADDON_SetRecordingPlayCount;
-    m_instanceData->toAddon->SetRecordingLastPlayedPosition = ADDON_SetRecordingLastPlayedPosition;
-    m_instanceData->toAddon->GetRecordingLastPlayedPosition = ADDON_GetRecordingLastPlayedPosition;
-    m_instanceData->toAddon->GetRecordingEdl = ADDON_GetRecordingEdl;
-    m_instanceData->toAddon->GetRecordingSize = ADDON_GetRecordingSize;
-    m_instanceData->toAddon->GetRecordingStreamProperties = ADDON_GetRecordingStreamProperties;
-    m_instanceData->toAddon->CallRecordingMenuHook = ADDON_CallRecordingMenuHook;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->GetTimerTypes = ADDON_GetTimerTypes;
-    m_instanceData->toAddon->GetTimersAmount = ADDON_GetTimersAmount;
-    m_instanceData->toAddon->GetTimers = ADDON_GetTimers;
-    m_instanceData->toAddon->AddTimer = ADDON_AddTimer;
-    m_instanceData->toAddon->DeleteTimer = ADDON_DeleteTimer;
-    m_instanceData->toAddon->UpdateTimer = ADDON_UpdateTimer;
-    m_instanceData->toAddon->CallTimerMenuHook = ADDON_CallTimerMenuHook;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->OnSystemSleep = ADDON_OnSystemSleep;
-    m_instanceData->toAddon->OnSystemWake = ADDON_OnSystemWake;
-    m_instanceData->toAddon->OnPowerSavingActivated = ADDON_OnPowerSavingActivated;
-    m_instanceData->toAddon->OnPowerSavingDeactivated = ADDON_OnPowerSavingDeactivated;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->OpenLiveStream = ADDON_OpenLiveStream;
-    m_instanceData->toAddon->CloseLiveStream = ADDON_CloseLiveStream;
-    m_instanceData->toAddon->ReadLiveStream = ADDON_ReadLiveStream;
-    m_instanceData->toAddon->SeekLiveStream = ADDON_SeekLiveStream;
-    m_instanceData->toAddon->LengthLiveStream = ADDON_LengthLiveStream;
-    m_instanceData->toAddon->GetStreamProperties = ADDON_GetStreamProperties;
-    m_instanceData->toAddon->GetStreamReadChunkSize = ADDON_GetStreamReadChunkSize;
-    m_instanceData->toAddon->IsRealTimeStream = ADDON_IsRealTimeStream;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->OpenRecordedStream = ADDON_OpenRecordedStream;
-    m_instanceData->toAddon->CloseRecordedStream = ADDON_CloseRecordedStream;
-    m_instanceData->toAddon->ReadRecordedStream = ADDON_ReadRecordedStream;
-    m_instanceData->toAddon->SeekRecordedStream = ADDON_SeekRecordedStream;
-    m_instanceData->toAddon->LengthRecordedStream = ADDON_LengthRecordedStream;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->DemuxReset = ADDON_DemuxReset;
-    m_instanceData->toAddon->DemuxAbort = ADDON_DemuxAbort;
-    m_instanceData->toAddon->DemuxFlush = ADDON_DemuxFlush;
-    m_instanceData->toAddon->DemuxRead = ADDON_DemuxRead;
-    //--==----==----==----==----==----==----==----==----==----==----==----==----==
-    m_instanceData->toAddon->CanPauseStream = ADDON_CanPauseStream;
-    m_instanceData->toAddon->PauseStream = ADDON_PauseStream;
-    m_instanceData->toAddon->CanSeekStream = ADDON_CanSeekStream;
-    m_instanceData->toAddon->SeekTime = ADDON_SeekTime;
-    m_instanceData->toAddon->SetSpeed = ADDON_SetSpeed;
-    m_instanceData->toAddon->FillBuffer = ADDON_FillBuffer;
-    m_instanceData->toAddon->GetStreamTimes = ADDON_GetStreamTimes;
   }
 
   inline static PVR_ERROR ADDON_GetCapabilities(const AddonInstance_PVR* instance,
@@ -2833,7 +2910,7 @@ private:
   }
 
   inline static PVR_ERROR ADDON_GetChannels(const AddonInstance_PVR* instance,
-                                            ADDON_HANDLE handle,
+                                            PVR_HANDLE handle,
                                             bool radio)
   {
     PVRChannelsResultSet result(instance, handle);
@@ -2886,6 +2963,20 @@ private:
 
   //--==----==----==----==----==----==----==----==----==----==----==----==----==
 
+  inline static PVR_ERROR ADDON_GetProvidersAmount(const AddonInstance_PVR* instance, int* amount)
+  {
+    return static_cast<CInstancePVRClient*>(instance->toAddon->addonInstance)
+        ->GetProvidersAmount(*amount);
+  }
+
+  inline static PVR_ERROR ADDON_GetProviders(const AddonInstance_PVR* instance, PVR_HANDLE handle)
+  {
+    PVRProvidersResultSet result(instance, handle);
+    return static_cast<CInstancePVRClient*>(instance->toAddon->addonInstance)->GetProviders(result);
+  }
+
+  //--==----==----==----==----==----==----==----==----==----==----==----==----==
+
   inline static PVR_ERROR ADDON_GetChannelGroupsAmount(const AddonInstance_PVR* instance,
                                                        int* amount)
   {
@@ -2894,7 +2985,7 @@ private:
   }
 
   inline static PVR_ERROR ADDON_GetChannelGroups(const AddonInstance_PVR* instance,
-                                                 ADDON_HANDLE handle,
+                                                 PVR_HANDLE handle,
                                                  bool radio)
   {
     PVRChannelGroupsResultSet result(instance, handle);
@@ -2903,7 +2994,7 @@ private:
   }
 
   inline static PVR_ERROR ADDON_GetChannelGroupMembers(const AddonInstance_PVR* instance,
-                                                       ADDON_HANDLE handle,
+                                                       PVR_HANDLE handle,
                                                        const PVR_CHANNEL_GROUP* group)
   {
     PVRChannelGroupMembersResultSet result(instance, handle);
@@ -2958,7 +3049,7 @@ private:
   //--==----==----==----==----==----==----==----==----==----==----==----==----==
 
   inline static PVR_ERROR ADDON_GetEPGForChannel(const AddonInstance_PVR* instance,
-                                                 ADDON_HANDLE handle,
+                                                 PVR_HANDLE handle,
                                                  int channelUid,
                                                  time_t start,
                                                  time_t end)
@@ -2989,10 +3080,18 @@ private:
                                              PVR_EDL_ENTRY* edl,
                                              int* size)
   {
-    *size = 0;
     std::vector<PVREDLEntry> edlList;
     PVR_ERROR error = static_cast<CInstancePVRClient*>(instance->toAddon->addonInstance)
                           ->GetEPGTagEdl(tag, edlList);
+    if (static_cast<int>(edlList.size()) > *size)
+    {
+      kodi::Log(
+          ADDON_LOG_WARNING,
+          "CInstancePVRClient::%s: Truncating %d EDL entries from client to permitted size %d",
+          __func__, static_cast<int>(edlList.size()), *size);
+      edlList.resize(*size);
+    }
+    *size = 0;
     if (error == PVR_ERROR_NO_ERROR)
     {
       for (const auto& edlEntry : edlList)
@@ -3061,7 +3160,7 @@ private:
   }
 
   inline static PVR_ERROR ADDON_GetRecordings(const AddonInstance_PVR* instance,
-                                              ADDON_HANDLE handle,
+                                              PVR_HANDLE handle,
                                               bool deleted)
   {
     PVRRecordingsResultSet result(instance, handle);
@@ -3132,10 +3231,18 @@ private:
                                                 PVR_EDL_ENTRY* edl,
                                                 int* size)
   {
-    *size = 0;
     std::vector<PVREDLEntry> edlList;
     PVR_ERROR error = static_cast<CInstancePVRClient*>(instance->toAddon->addonInstance)
                           ->GetRecordingEdl(recording, edlList);
+    if (static_cast<int>(edlList.size()) > *size)
+    {
+      kodi::Log(
+          ADDON_LOG_WARNING,
+          "CInstancePVRClient::%s: Truncating %d EDL entries from client to permitted size %d",
+          __func__, static_cast<int>(edlList.size()), *size);
+      edlList.resize(*size);
+    }
+    *size = 0;
     if (error == PVR_ERROR_NO_ERROR)
     {
       for (const auto& edlEntry : edlList)
@@ -3190,7 +3297,6 @@ private:
 
   //--==----==----==----==----==----==----==----==----==----==----==----==----==
 
-
   inline static PVR_ERROR ADDON_GetTimerTypes(const AddonInstance_PVR* instance,
                                               PVR_TIMER_TYPE* types,
                                               int* typesCount)
@@ -3218,7 +3324,7 @@ private:
         ->GetTimersAmount(*amount);
   }
 
-  inline static PVR_ERROR ADDON_GetTimers(const AddonInstance_PVR* instance, ADDON_HANDLE handle)
+  inline static PVR_ERROR ADDON_GetTimers(const AddonInstance_PVR* instance, PVR_HANDLE handle)
   {
     PVRTimersResultSet result(instance, handle);
     return static_cast<CInstancePVRClient*>(instance->toAddon->addonInstance)->GetTimers(result);

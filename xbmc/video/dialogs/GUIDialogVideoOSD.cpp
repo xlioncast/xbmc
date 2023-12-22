@@ -8,14 +8,16 @@
 
 #include "GUIDialogVideoOSD.h"
 
-#include "Application.h"
 #include "GUIUserMessages.h"
 #include "ServiceBroker.h"
+#include "application/Application.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/WindowIDs.h"
 #include "input/InputManager.h"
 #include "input/actions/ActionIDs.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 
 using namespace PVR;
 

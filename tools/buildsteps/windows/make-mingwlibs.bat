@@ -5,6 +5,11 @@ PUSHD %~dp0\..\..\..
 SET WORKDIR=%CD%
 POPD
 
+REM recreates clean ffmpeg build dir
+SET BUILD_DIR=%WORKDIR%\project\BuildDependencies\build
+IF EXIST %BUILD_DIR% rmdir %BUILD_DIR% /S /Q
+IF NOT EXIST %BUILD_DIR% mkdir %BUILD_DIR%
+
 SET PROMPTLEVEL=prompt
 SET BUILDMODE=clean
 SET opt=mintty

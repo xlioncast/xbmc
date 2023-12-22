@@ -22,7 +22,7 @@
 #define HEADER_SEPARATOR      HEADER_NEWLINE HEADER_NEWLINE
 #define HEADER_BOUNDARY       "--"
 
-#define HEADER_CONTENT_RANGE_VALUE          "%" PRIu64
+#define HEADER_CONTENT_RANGE_VALUE "{}"
 #define HEADER_CONTENT_RANGE_VALUE_UNKNOWN  "*"
 #define HEADER_CONTENT_RANGE_FORMAT_BYTES   "bytes " HEADER_CONTENT_RANGE_VALUE "-" HEADER_CONTENT_RANGE_VALUE "/"
 #define CONTENT_RANGE_FORMAT_TOTAL          HEADER_CONTENT_RANGE_FORMAT_BYTES HEADER_CONTENT_RANGE_VALUE
@@ -306,7 +306,7 @@ bool CHttpRanges::Parse(const std::string& header, uint64_t totalLength)
     if (end < start)
       return false;
 
-    m_ranges.push_back(CHttpRange(start, end));
+    m_ranges.emplace_back(start, end);
   }
 
   if (m_ranges.empty())
