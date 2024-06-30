@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2014-2018 Team Kodi
+ *  Copyright (C) 2014-2024 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -22,7 +22,7 @@
 #include "input/joysticks/JoystickTranslator.h"
 #include "input/joysticks/RumbleGenerator.h"
 #include "input/joysticks/interfaces/IDriverHandler.h"
-#include "input/joysticks/keymaps/KeymapHandling.h"
+#include "input/keymaps/joysticks/KeymapHandling.h"
 #include "peripherals/Peripherals.h"
 #include "peripherals/addons/AddonButtonMap.h"
 #include "peripherals/bus/virtual/PeripheralBusAddon.h"
@@ -92,7 +92,8 @@ bool CPeripheralJoystick::InitialiseFeature(const PeripheralFeature feature)
 
       if (bSuccess)
       {
-        m_buttonMap = std::make_unique<CAddonButtonMap>(this, addon, DEFAULT_CONTROLLER_ID);
+        m_buttonMap =
+            std::make_unique<CAddonButtonMap>(this, addon, DEFAULT_CONTROLLER_ID, m_manager);
         if (m_buttonMap->Load())
         {
           InitializeDeadzoneFiltering(*m_buttonMap);
@@ -106,7 +107,7 @@ bool CPeripheralJoystick::InitialiseFeature(const PeripheralFeature feature)
         }
 
         // Give joystick monitor priority over default controller
-        m_appInput = std::make_unique<CKeymapHandling>(
+        m_appInput = std::make_unique<KEYMAP::CKeymapHandling>(
             this, false, m_manager.GetInputManager().KeymapEnvironment());
         m_joystickMonitor = std::make_unique<CJoystickMonitor>();
         RegisterInputHandler(m_joystickMonitor.get(), false);
@@ -155,23 +156,26 @@ void CPeripheralJoystick::InitializeControllerProfile(IButtonMap& buttonMap)
                          m_installTasks.end());
 
     // Install controller off-thread
-    std::future<void> installTask = std::async(std::launch::async, [this]() {
-      // Withdraw controller from queue
-      std::string controllerToInstall;
-      {
-        std::unique_lock<CCriticalSection> lock(m_controllerInstallMutex);
-        if (!m_controllersToInstall.empty())
-        {
-          controllerToInstall = m_controllersToInstall.front();
-          m_controllersToInstall.pop();
-        }
-      }
+    std::future<void> installTask =
+        std::async(std::launch::async,
+                   [this]()
+                   {
+                     // Withdraw controller from queue
+                     std::string controllerToInstall;
+                     {
+                       std::unique_lock<CCriticalSection> lock(m_controllerInstallMutex);
+                       if (!m_controllersToInstall.empty())
+                       {
+                         controllerToInstall = m_controllersToInstall.front();
+                         m_controllersToInstall.pop();
+                       }
+                     }
 
-      // Do the install
-      GAME::ControllerPtr controller = InstallAsync(controllerToInstall);
-      if (controller)
-        CPeripheral::SetControllerProfile(controller);
-    });
+                     // Do the install
+                     GAME::ControllerPtr controller = InstallAsync(controllerToInstall);
+                     if (controller)
+                       CPeripheral::SetControllerProfile(controller);
+                   });
 
     // Hold the task to prevent the destructor from completing during an install
     m_installTasks.emplace_back(std::move(installTask));
@@ -229,13 +233,12 @@ void CPeripheralJoystick::UnregisterJoystickDriverHandler(IDriverHandler* handle
   std::unique_lock<CCriticalSection> lock(m_handlerMutex);
 
   m_driverHandlers.erase(std::remove_if(m_driverHandlers.begin(), m_driverHandlers.end(),
-                                        [handler](const DriverHandler& driverHandler) {
-                                          return driverHandler.handler == handler;
-                                        }),
+                                        [handler](const DriverHandler& driverHandler)
+                                        { return driverHandler.handler == handler; }),
                          m_driverHandlers.end());
 }
 
-IKeymap* CPeripheralJoystick::GetKeymap(const std::string& controllerId)
+KEYMAP::IKeymap* CPeripheralJoystick::GetKeymap(const std::string& controllerId)
 {
   return m_appInput->GetKeymap(controllerId);
 }

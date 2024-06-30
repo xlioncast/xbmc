@@ -179,9 +179,9 @@ public:
   static float GetSystemVolume();
   static void SetSystemVolume(float percent);
 
-  void SetRefreshRate(float rate);
   void SetDisplayMode(int mode, float rate);
   int GetDPI() const;
+  void SetVideoLayoutBackgroundColor(const int color);
 
   CRect MapRenderToDroid(const CRect& srcRect);
 
@@ -242,9 +242,9 @@ private:
   void run();
   void stop();
   void SetupEnv();
-  static void SetRefreshRateCallback(void* rateVariant);
   static void SetDisplayModeCallback(void* modeVariant);
   static void KeepScreenOnCallback(void* onVariant);
+  static void SetViewBackgroundColorCallback(void* mapVariant);
 
   static void RegisterDisplayListenerCallback(void*);
   void UnregisterDisplayListener();
@@ -255,6 +255,10 @@ private:
   bool m_hasFocus{false};
   bool m_headsetPlugged{false};
   bool m_hdmiSource{false};
+  bool m_wakeUp{false};
+  bool m_aeReset{false};
+  bool m_hdmiPlugged{true};
+  bool m_mediaSessionUpdated{false};
   IInputDeviceCallbacks* m_inputDeviceCallbacks{nullptr};
   IInputDeviceEventHandler* m_inputDeviceEventHandler{nullptr};
   bool m_hasReqVisible{false};
@@ -276,6 +280,9 @@ private:
 
   bool XBMC_DestroyDisplay();
   bool XBMC_SetupDisplay();
+
+  void OnSleep();
+  void OnWakeup();
 
   uint32_t m_playback_state{0};
   int64_t m_frameTimeNanos{0};

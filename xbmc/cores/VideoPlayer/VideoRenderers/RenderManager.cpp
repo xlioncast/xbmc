@@ -70,6 +70,15 @@ float CRenderManager::GetAspectRatio() const
     return 1.0f;
 }
 
+unsigned int CRenderManager::GetOrientation() const
+{
+  std::unique_lock<CCriticalSection> lock(m_statelock);
+  if (m_pRenderer)
+    return m_pRenderer->GetOrientation();
+  else
+    return 0;
+}
+
 void CRenderManager::SetVideoSettings(const CVideoSettings& settings)
 {
   std::unique_lock<CCriticalSection> lock(m_statelock);
@@ -295,7 +304,7 @@ void CRenderManager::FrameMove()
       lock.unlock();
       if (!Configure())
         return;
-
+      UpdateLatencyTweak();
       firstFrame = true;
       FrameWait(50ms);
     }
@@ -651,7 +660,7 @@ void CRenderManager::ManageCaptures()
 
 void CRenderManager::RenderCapture(CRenderCapture* capture)
 {
-  if (!m_pRenderer || !m_pRenderer->RenderCapture(capture))
+  if (!m_pRenderer || !m_pRenderer->RenderCapture(m_presentsource, capture))
     capture->SetState(CAPTURESTATE_FAILED);
 }
 
@@ -881,11 +890,14 @@ void CRenderManager::PresentBlend(bool clear, DWORD flags, DWORD alpha)
 void CRenderManager::UpdateLatencyTweak()
 {
   float fps = CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS();
+  const bool isHDREnabled = CServiceBroker::GetWinSystem()->GetOSHDRStatus() == HDR_STATUS::HDR_ON;
+
   float refresh = fps;
   if (CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution() == RES_WINDOW)
     refresh = 0; // No idea about refresh rate when windowed, just get the default latency
   m_latencyTweak = static_cast<double>(
-      CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->GetLatencyTweak(refresh));
+      CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->GetLatencyTweak(refresh,
+                                                                                     isHDREnabled));
 }
 
 void CRenderManager::UpdateResolution()

@@ -23,8 +23,11 @@
 #include "utils/StringUtils.h"
 #include "utils/guilib/GUIContentUtils.h"
 #include "video/VideoUtils.h"
+#include "video/guilib/VideoGUIUtils.h"
 #include "video/guilib/VideoPlayActionProcessor.h"
 #include "video/guilib/VideoSelectActionProcessor.h"
+
+using namespace KODI;
 
 CGUIWindowFavourites::CGUIWindowFavourites()
   : CGUIMediaWindow(WINDOW_FAVOURITES, "MyFavourites.xml")
@@ -138,6 +141,9 @@ bool CGUIWindowFavourites::OnSelect(int itemIdx)
   // video select action setting is for files only, except exec func is playmedia...
   if (targetItem.HasVideoInfoTag() && (!targetItem.m_bIsFolder || isPlayMedia))
   {
+    // play the given/default video version, even if multiple versions are available
+    targetItem.SetProperty("has_resolved_video_asset", true);
+
     CVideoSelectActionProcessor proc{std::make_shared<CFileItem>(targetItem)};
     if (proc.ProcessDefaultAction())
       return true;
@@ -163,7 +169,7 @@ bool CGUIWindowFavourites::OnAction(const CAction& action)
     const auto item{std::make_shared<CFileItem>(*target)};
 
     // video play action setting is for files and folders...
-    if (item->HasVideoInfoTag() || (item->m_bIsFolder && VIDEO_UTILS::IsItemPlayable(*item)))
+    if (item->HasVideoInfoTag() || (item->m_bIsFolder && VIDEO::UTILS::IsItemPlayable(*item)))
     {
       CVideoPlayActionProcessor proc{item};
       if (proc.ProcessDefaultAction())

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2017-2018 Team Kodi
+ *  Copyright (C) 2017-2024 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -119,7 +119,8 @@ const CWindowTranslator::WindowMapByName CWindowTranslator::WindowMappingByName 
     {"musicinformation", WINDOW_DIALOG_MUSIC_INFO},
     {"okdialog", WINDOW_DIALOG_OK},
     {"movieinformation", WINDOW_DIALOG_VIDEO_INFO},
-    {"videoversion", WINDOW_DIALOG_VIDEO_VERSION},
+    {"managevideoversions", WINDOW_DIALOG_MANAGE_VIDEO_VERSIONS},
+    {"managevideoextras", WINDOW_DIALOG_MANAGE_VIDEO_EXTRAS},
     {"selectvideoversion", WINDOW_DIALOG_SELECT_VIDEO_VERSION},
     {"selectvideoextra", WINDOW_DIALOG_SELECT_VIDEO_EXTRA},
     {"textviewer", WINDOW_DIALOG_TEXT_VIEWER},
@@ -269,9 +270,9 @@ std::string CWindowTranslator::TranslateWindow(int windowId)
 
 int CWindowTranslator::GetFallbackWindow(int windowId)
 {
-  auto it = std::find_if(
-      FallbackWindows.begin(), FallbackWindows.end(),
-      [windowId](const FallbackWindowMapping& mapping) { return mapping.origin == windowId; });
+  auto it = std::find_if(FallbackWindows.begin(), FallbackWindows.end(),
+                         [windowId](const FallbackWindowMapping& mapping)
+                         { return mapping.origin == windowId; });
 
   if (it != FallbackWindows.end())
     return it->target;

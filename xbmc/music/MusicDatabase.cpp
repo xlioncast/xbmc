@@ -11,6 +11,7 @@
 #include "Album.h"
 #include "Artist.h"
 #include "FileItem.h"
+#include "FileItemList.h"
 #include "GUIInfoManager.h"
 #include "LangInfo.h"
 #include "ServiceBroker.h"
@@ -37,6 +38,7 @@
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
+#include "imagefiles/ImageFileURL.h"
 #include "interfaces/AnnouncementManager.h"
 #include "messaging/helpers/DialogHelper.h"
 #include "messaging/helpers/DialogOKHelper.h"
@@ -63,6 +65,7 @@
 
 #include <inttypes.h>
 
+using namespace KODI;
 using namespace XFILE;
 using namespace MUSICDATABASEDIRECTORY;
 using namespace KODI::MESSAGING;
@@ -2246,7 +2249,7 @@ bool CMusicDatabase::AddArtistVideoLinks(const CArtist& artist)
         const int songId = m_pDS->fv(0).get_asInt();
         std::string strSQL2 = PrepareSQL("UPDATE song SET strVideoURL='%s' WHERE idSong = %i",
                                          videoURL.videoURL.c_str(), songId);
-        CLog::Log(LOGDEBUG, "Adding videolink for song {} with id {}", dbSong.c_str(), songId);
+        CLog::Log(LOGDEBUG, "Adding videolink for song {} with id {}", dbSong, songId);
         m_pDS2->exec(strSQL2);
 
         if (!videoURL.thumbURL.empty())
@@ -2284,7 +2287,7 @@ bool CMusicDatabase::AddArtistVideoLinks(const CArtist& artist)
   }
   catch (...)
   {
-    CLog::Log(LOGERROR, "MusicDatabase: Unable to add videolink for song ({})", dbSong.c_str());
+    CLog::Log(LOGERROR, "MusicDatabase: Unable to add videolink for song ({})", dbSong);
     return false;
   }
 }
@@ -4569,8 +4572,11 @@ int CMusicDatabase::Cleanup(CGUIDialogProgress* progressDialog /*= nullptr*/)
   SetLibraryLastCleaned();
 
   // Drop triggers  song_artist and album_artist to avoid creation of entries in removed_link
-  m_pDS->exec("DROP TRIGGER tgrDeleteSongArtist");
-  m_pDS->exec("DROP TRIGGER tgrDeleteAlbumArtist");
+  // Check that triggers actually exist first as interrupting the clean causes them to not be
+  // re-created
+
+  m_pDS->exec("DROP TRIGGER IF EXISTS tgrDeleteSongArtist");
+  m_pDS->exec("DROP TRIGGER IF EXISTS tgrDeleteAlbumArtist");
 
   // first cleanup any songs with invalid paths
   if (progressDialog)
@@ -7232,19 +7238,19 @@ bool CMusicDatabase::GetArtistsByWhereJSON(
         if (joinLayout.GetOutput(joinToArtist_idArt))
         {
           artistObj["art"][record->at(joinLayout.GetRecNo(joinToArtist_artType)).get_asString()] =
-              CTextureUtils::GetWrappedImageURL(
+              IMAGE_FILES::URLFromFile(
                   record->at(joinLayout.GetRecNo(joinToArtist_artURL)).get_asString());
         }
         if (joinLayout.GetOutput(joinToArtist_thumbnail) &&
             record->at(joinLayout.GetRecNo(joinToArtist_artType)).get_asString() == "thumb")
         {
-          artistObj["thumbnail"] = CTextureUtils::GetWrappedImageURL(
+          artistObj["thumbnail"] = IMAGE_FILES::URLFromFile(
               record->at(joinLayout.GetRecNo(joinToArtist_artURL)).get_asString());
         }
         if (joinLayout.GetOutput(joinToArtist_fanart) &&
             record->at(joinLayout.GetRecNo(joinToArtist_artType)).get_asString() == "fanart")
         {
-          artistObj["fanart"] = CTextureUtils::GetWrappedImageURL(
+          artistObj["fanart"] = IMAGE_FILES::URLFromFile(
               record->at(joinLayout.GetRecNo(joinToArtist_artURL)).get_asString());
         }
       }
@@ -7617,7 +7623,7 @@ bool CMusicDatabase::GetAlbumsByWhereJSON(
             {
               std::string url = record->at(1 + i).get_asString();
               if (!url.empty())
-                url = CTextureUtils::GetWrappedImageURL(url);
+                url = IMAGE_FILES::URLFromFile(url);
               albumObj[JSONtoDBAlbum[dbfieldindex[i]].fieldJSON] = url;
             }
             else
@@ -13283,7 +13289,7 @@ bool CMusicDatabase::GetFilter(CDbUrl& musicUrl, Filter& filter, SortDescription
   auto option = options.find("xsp");
   if (option != options.end())
   {
-    CSmartPlaylist xsp;
+    PLAYLIST::CSmartPlaylist xsp;
     if (!xsp.LoadFromJson(option->second.asString()))
       return false;
 
@@ -13866,7 +13872,7 @@ bool CMusicDatabase::GetFilter(CDbUrl& musicUrl, Filter& filter, SortDescription
   option = options.find("filter");
   if (option != options.end())
   {
-    CSmartPlaylist xspFilter;
+    PLAYLIST::CSmartPlaylist xspFilter;
     if (!xspFilter.LoadFromJson(option->second.asString()))
       return false;
 

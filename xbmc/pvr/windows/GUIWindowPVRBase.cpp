@@ -9,6 +9,7 @@
 #include "GUIWindowPVRBase.h"
 
 #include "FileItem.h"
+#include "FileItemList.h"
 #include "GUIUserMessages.h"
 #include "ServiceBroker.h"
 #include "addons/AddonManager.h"
@@ -422,7 +423,7 @@ bool CGUIWindowPVRBase::OpenChannelGroupSelectionDialog()
 
       auto client = pvrMgr.GetClient(channelGroup->GetClientID());
       if (client)
-        selectedClient = client->GetFriendlyName();
+        selectedClient = client->GetFullClientName();
     }
 
     CPVRThumbLoader loader;
@@ -432,7 +433,7 @@ bool CGUIWindowPVRBase::OpenChannelGroupSelectionDialog()
       // set client name as label2
       const std::shared_ptr<const CPVRClient> client = pvrMgr.GetClient(*group);
       if (client)
-        group->SetLabel2(client->GetFriendlyName());
+        group->SetLabel2(client->GetFullClientName());
 
       // set thumbnail
       loader.LoadItem(group.get());

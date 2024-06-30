@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2024 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -9,7 +9,6 @@
 #include "Peripherals.h"
 
 #include "CompileInfo.h"
-#include "EventScanner.h"
 #include "addons/AddonButtonMap.h"
 #include "addons/AddonManager.h"
 #include "addons/addoninfo/AddonInfo.h"
@@ -46,12 +45,15 @@
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/WindowIDs.h"
-#include "input/Key.h"
+#include "input/actions/Action.h"
+#include "input/actions/ActionIDs.h"
 #include "input/joysticks/interfaces/IButtonMapper.h"
+#include "input/keyboard/Key.h"
 #include "interfaces/AnnouncementManager.h"
 #include "messaging/ApplicationMessenger.h"
 #include "messaging/ThreadMessage.h"
 #include "peripherals/dialogs/GUIDialogPeripherals.h"
+#include "peripherals/events/EventScanner.h"
 #include "settings/SettingAddon.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -240,10 +242,9 @@ PeripheralBusPtr CPeripherals::GetBusWithDevice(const std::string& strLocation) 
 {
   std::unique_lock<CCriticalSection> lock(m_critSectionBusses);
 
-  const auto& bus =
-      std::find_if(m_busses.cbegin(), m_busses.cend(), [&strLocation](const PeripheralBusPtr& bus) {
-        return bus->HasPeripheral(strLocation);
-      });
+  const auto& bus = std::find_if(m_busses.cbegin(), m_busses.cend(),
+                                 [&strLocation](const PeripheralBusPtr& bus)
+                                 { return bus->HasPeripheral(strLocation); });
   if (bus != m_busses.cend())
     return *bus;
 
@@ -916,7 +917,7 @@ void CPeripherals::ResetButtonMaps(const std::string& controllerId)
     PeripheralAddonPtr addon;
     if (addonBus->GetAddonWithButtonMap(peripheral.get(), addon))
     {
-      CAddonButtonMap buttonMap(peripheral.get(), addon, controllerId);
+      CAddonButtonMap buttonMap(peripheral.get(), addon, controllerId, *this);
       buttonMap.Reset();
     }
   }

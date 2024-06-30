@@ -48,8 +48,9 @@
 #include "utils/Variant.h"
 #include "utils/log.h"
 #include "video/dialogs/GUIDialogVideoInfo.h"
+#include "video/dialogs/GUIDialogVideoManagerExtras.h"
+#include "video/dialogs/GUIDialogVideoManagerVersions.h"
 #include "video/dialogs/GUIDialogVideoOSD.h"
-#include "video/dialogs/GUIDialogVideoVersion.h"
 #include "video/windows/GUIWindowFullScreen.h"
 #include "video/windows/GUIWindowVideoNav.h"
 #include "video/windows/GUIWindowVideoPlaylist.h"
@@ -292,7 +293,8 @@ void CGUIWindowManager::CreateWindows()
   Add(new CGUIDialogMusicInfo);
   Add(new CGUIDialogOK);
   Add(new CGUIDialogVideoInfo);
-  Add(new CGUIDialogVideoVersion);
+  Add(new CGUIDialogVideoManagerVersions);
+  Add(new CGUIDialogVideoManagerExtras);
   Add(new CGUIDialogSelect(WINDOW_DIALOG_SELECT_VIDEO_VERSION));
   Add(new CGUIDialogSelect(WINDOW_DIALOG_SELECT_VIDEO_EXTRA));
 
@@ -338,7 +340,8 @@ bool CGUIWindowManager::DestroyWindows()
     DestroyWindow(WINDOW_DIALOG_VIDEO_INFO);
     DestroyWindow(WINDOW_DIALOG_SELECT_VIDEO_EXTRA);
     DestroyWindow(WINDOW_DIALOG_SELECT_VIDEO_VERSION);
-    DestroyWindow(WINDOW_DIALOG_VIDEO_VERSION);
+    DestroyWindow(WINDOW_DIALOG_MANAGE_VIDEO_EXTRAS);
+    DestroyWindow(WINDOW_DIALOG_MANAGE_VIDEO_VERSIONS);
     DestroyWindow(WINDOW_VIDEO_PLAYLIST);
     DestroyWindow(WINDOW_VIDEO_NAV);
     DestroyWindow(WINDOW_FILES);
@@ -1221,6 +1224,19 @@ void CGUIWindowManager::Process(unsigned int currentTime)
       pWindow->DoProcess(currentTime, m_dirtyregions);
   }
 
+  // assign depth values to all active controls
+  if (pWindow)
+    pWindow->AssignDepth();
+
+  std::vector<CGUIWindow*> activeDialogs = m_activeDialogs;
+  stable_sort(activeDialogs.begin(), activeDialogs.end(), RenderOrderSortFunction);
+
+  for (const auto& window : activeDialogs)
+  {
+    if (window->IsDialogRunning())
+      window->AssignDepth();
+  }
+
   for (auto& itr : m_dirtyregions)
     m_tracker.MarkDirtyRegion(itr);
 }
@@ -1247,6 +1263,14 @@ void CGUIWindowManager::MarkDirty(const CRect& rect)
 
 void CGUIWindowManager::RenderPass() const
 {
+  if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_guiFrontToBackRendering)
+    RenderPassDual();
+  else
+    RenderPassSingle();
+}
+
+void CGUIWindowManager::RenderPassSingle() const
+{
   CGUIWindow* pWindow = GetWindow(GetActiveWindow());
   if (pWindow)
   {
@@ -1257,6 +1281,40 @@ void CGUIWindowManager::RenderPass() const
   // we render the dialogs based on their render order.
   auto renderList = m_activeDialogs;
   stable_sort(renderList.begin(), renderList.end(), RenderOrderSortFunction);
+
+  for (const auto& window : renderList)
+  {
+    if (window->IsDialogRunning())
+      window->DoRender();
+  }
+}
+
+void CGUIWindowManager::RenderPassDual() const
+{
+  CGUIWindow* pWindow = GetWindow(GetActiveWindow());
+  if (pWindow)
+    pWindow->ClearBackground();
+
+  std::vector<CGUIWindow*> renderList = m_activeDialogs;
+  stable_sort(renderList.begin(), renderList.end(), RenderOrderSortFunction);
+
+  // first the opaque pass, rendering from front to back
+  CServiceBroker::GetWinSystem()->GetGfxContext().SetRenderOrder(RENDER_ORDER_FRONT_TO_BACK);
+  for (auto it = renderList.rbegin(); it != renderList.rend(); ++it)
+  {
+    if ((*it)->IsDialogRunning())
+      (*it)->DoRender();
+  }
+
+  if (pWindow)
+    pWindow->DoRender();
+
+  // now we render all elements with transparency back to front
+  CServiceBroker::GetWinSystem()->GetGfxContext().SetRenderOrder(RENDER_ORDER_BACK_TO_FRONT);
+  if (pWindow)
+  {
+    pWindow->DoRender();
+  }
 
   for (const auto& window : renderList)
   {
@@ -1334,6 +1392,7 @@ bool CGUIWindowManager::Render()
 
 void CGUIWindowManager::AfterRender()
 {
+  CServiceBroker::GetWinSystem()->GetGfxContext().ResetDepth();
   m_tracker.CleanMarkedRegions();
 
   CGUIWindow* pWindow = GetWindow(GetActiveWindow());

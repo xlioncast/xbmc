@@ -9,6 +9,7 @@
 #include "PVRGUIActionsPlayback.h"
 
 #include "FileItem.h"
+#include "FileItemList.h"
 #include "ServiceBroker.h"
 #include "application/ApplicationEnums.h"
 #include "cores/DataCacheCore.h"
@@ -41,12 +42,14 @@
 #include "utils/Variant.h"
 #include "utils/log.h"
 #include "video/VideoUtils.h"
+#include "video/guilib/VideoGUIUtils.h"
 #include "video/guilib/VideoSelectActionProcessor.h"
 
 #include <memory>
 #include <string>
 #include <vector>
 
+using namespace KODI;
 using namespace PVR;
 using namespace KODI::MESSAGING;
 
@@ -81,7 +84,7 @@ bool CPVRGUIActionsPlayback::CheckResumeRecording(const CFileItem& item) const
 
 bool CPVRGUIActionsPlayback::ResumePlayRecording(const CFileItem& item, bool bFallbackToPlay) const
 {
-  if (VIDEO_UTILS::GetItemResumeInformation(item).isResumable)
+  if (VIDEO::UTILS::GetItemResumeInformation(item).isResumable)
   {
     const_cast<CFileItem*>(&item)->SetStartOffset(STARTOFFSET_RESUME);
   }
@@ -108,59 +111,6 @@ void CPVRGUIActionsPlayback::CheckAndSwitchToFullscreen(bool bFullscreen) const
   }
 }
 
-void CPVRGUIActionsPlayback::StartPlayback(CFileItem* item,
-                                           bool bFullscreen,
-                                           const CPVRStreamProperties* epgProps) const
-{
-  // Obtain dynamic playback url and properties from the respective pvr client
-  const std::shared_ptr<const CPVRClient> client = CServiceBroker::GetPVRManager().GetClient(*item);
-  if (client)
-  {
-    CPVRStreamProperties props;
-
-    if (item->IsPVRChannel())
-    {
-      // If this was an EPG Tag to be played as live then PlayEpgTag() will create a channel
-      // fileitem instead and pass the epg tags props so we use those and skip the client call
-      if (epgProps)
-        props = *epgProps;
-      else
-        client->GetChannelStreamProperties(item->GetPVRChannelInfoTag(), props);
-    }
-    else if (item->IsPVRRecording())
-    {
-      client->GetRecordingStreamProperties(item->GetPVRRecordingInfoTag(), props);
-    }
-    else if (item->IsEPG())
-    {
-      if (epgProps) // we already have props from PlayEpgTag()
-        props = *epgProps;
-      else
-        client->GetEpgTagStreamProperties(item->GetEPGInfoTag(), props);
-    }
-
-    if (props.size())
-    {
-      const std::string url = props.GetStreamURL();
-      if (!url.empty())
-        item->SetDynPath(url);
-
-      const std::string mime = props.GetStreamMimeType();
-      if (!mime.empty())
-      {
-        item->SetMimeType(mime);
-        item->SetContentLookup(false);
-      }
-
-      for (const auto& prop : props)
-        item->SetProperty(prop.first, prop.second);
-    }
-  }
-
-  CServiceBroker::GetAppMessenger()->PostMsg(TMSG_MEDIA_PLAY, 0, 0, static_cast<void*>(item));
-  CheckAndSwitchToFullscreen(bFullscreen);
-}
-
 bool CPVRGUIActionsPlayback::PlayRecording(const CFileItem& item, bool bCheckResume) const
 {
   const std::shared_ptr<CPVRRecording> recording(CPVRItem(item).GetRecording());
@@ -177,7 +127,7 @@ bool CPVRGUIActionsPlayback::PlayRecording(const CFileItem& item, bool bCheckRes
 
   if (!bCheckResume || CheckResumeRecording(item))
   {
-    if (!item.m_bIsFolder && VIDEO_UTILS::IsAutoPlayNextItem(item))
+    if (!item.m_bIsFolder && VIDEO::UTILS::IsAutoPlayNextItem(item))
     {
       // recursively add items located in the same folder as item to play list, starting with item
       std::string parentPath = item.GetProperty("ParentPath").asString();
@@ -195,7 +145,7 @@ bool CPVRGUIActionsPlayback::PlayRecording(const CFileItem& item, bool bCheckRes
         parentItem->SetStartOffset(STARTOFFSET_RESUME);
 
       auto queuedItems = std::make_unique<CFileItemList>();
-      VIDEO_UTILS::GetItemsForPlayList(parentItem, *queuedItems);
+      VIDEO::UTILS::GetItemsForPlayList(parentItem, *queuedItems);
 
       // figure out where to start playback
       int pos = 0;
@@ -209,14 +159,14 @@ bool CPVRGUIActionsPlayback::PlayRecording(const CFileItem& item, bool bCheckRes
 
       CServiceBroker::GetAppMessenger()->PostMsg(TMSG_MEDIA_PLAY, pos, -1,
                                                  static_cast<void*>(queuedItems.release()));
-      CheckAndSwitchToFullscreen(true);
     }
     else
     {
       CFileItem* itemToPlay = new CFileItem(recording);
       itemToPlay->SetStartOffset(item.GetStartOffset());
-      StartPlayback(itemToPlay, true);
+      CServiceBroker::GetPVRManager().PlaybackState()->StartPlayback(itemToPlay);
     }
+    CheckAndSwitchToFullscreen(true);
   }
   return true;
 }
@@ -231,7 +181,7 @@ bool CPVRGUIActionsPlayback::PlayRecordingFolder(const CFileItem& item, bool bCh
     // recursively add items to list
     const auto itemToQueue = std::make_shared<CFileItem>(item);
     auto queuedItems = std::make_unique<CFileItemList>();
-    VIDEO_UTILS::GetItemsForPlayList(itemToQueue, *queuedItems);
+    VIDEO::UTILS::GetItemsForPlayList(itemToQueue, *queuedItems);
 
     CServiceBroker::GetAppMessenger()->PostMsg(TMSG_MEDIA_PLAY, 0, -1,
                                                static_cast<void*>(queuedItems.release()));
@@ -240,7 +190,9 @@ bool CPVRGUIActionsPlayback::PlayRecordingFolder(const CFileItem& item, bool bCh
   return true;
 }
 
-bool CPVRGUIActionsPlayback::PlayEpgTag(const CFileItem& item) const
+bool CPVRGUIActionsPlayback::PlayEpgTag(
+    const CFileItem& item,
+    ContentUtils::PlayMode mode /* = ContentUtils::PlayMode::CHECK_AUTO_PLAY_NEXT_ITEM */) const
 {
   const std::shared_ptr<CPVREpgInfoTag> epgTag(CPVRItem(item).GetEpgInfoTag());
   if (!epgTag)
@@ -278,7 +230,8 @@ bool CPVRGUIActionsPlayback::PlayEpgTag(const CFileItem& item) const
     itemToPlay = new CFileItem(epgTag);
   }
 
-  StartPlayback(itemToPlay, true, &props);
+  CServiceBroker::GetPVRManager().PlaybackState()->StartPlayback(itemToPlay, mode);
+  CheckAndSwitchToFullscreen(true);
   return true;
 }
 
@@ -360,16 +313,16 @@ bool CPVRGUIActionsPlayback::SwitchToChannel(const CFileItem& item, bool bCheckR
     if (!groupMember)
       return false;
 
-    StartPlayback(new CFileItem(groupMember), bFullscreen);
+    CServiceBroker::GetPVRManager().PlaybackState()->StartPlayback(new CFileItem(groupMember));
+    CheckAndSwitchToFullscreen(bFullscreen);
     return true;
   }
   else if (result == ParentalCheckResult::FAILED)
   {
     const std::string channelName =
         channel ? channel->ChannelName() : g_localizeStrings.Get(19029); // Channel
-    const std::string msg = StringUtils::Format(
-        g_localizeStrings.Get(19035),
-        channelName); // CHANNELNAME could not be played. Check the log for details.
+    const std::string msg = StringUtils::Format(g_localizeStrings.Get(19035),
+                                                channelName); // CHANNELNAME could not be played.
 
     CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Error, g_localizeStrings.Get(19166),
                                           msg); // PVR information
@@ -453,9 +406,7 @@ bool CPVRGUIActionsPlayback::SwitchToChannel(PlaybackType type) const
       g_localizeStrings.Get(19166), // PVR information
       StringUtils::Format(
           g_localizeStrings.Get(19035),
-          g_localizeStrings.Get(
-              bIsRadio ? 19021
-                       : 19020))); // Radio/TV could not be played. Check the log for details.
+          g_localizeStrings.Get(bIsRadio ? 19021 : 19020))); // Radio/TV could not be played.
   return false;
 }
 

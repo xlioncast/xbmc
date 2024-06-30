@@ -30,8 +30,8 @@
 #include "games/ports/input/PortManager.h"
 #include "games/ports/types/PortNode.h"
 #include "input/joysticks/JoystickTypes.h"
-#include "peripherals/EventLockHandle.h"
 #include "peripherals/Peripherals.h"
+#include "peripherals/events/EventLockHandle.h"
 #include "utils/log.h"
 
 #include <algorithm>
@@ -186,6 +186,11 @@ float CGameClientInput::GetPortActivation(const std::string& portAddress)
     auto it = m_joysticks.find(portAddress);
     if (it != m_joysticks.end())
       activation = it->second->GetActivation();
+
+    if (portAddress == KEYBOARD_PORT_ADDRESS && m_keyboard)
+      activation = std::max(m_keyboard->GetActivation(), activation);
+    else if (portAddress == MOUSE_PORT_ADDRESS && m_mouse)
+      activation = std::max(m_mouse->GetActivation(), activation);
   }
 
   return activation;

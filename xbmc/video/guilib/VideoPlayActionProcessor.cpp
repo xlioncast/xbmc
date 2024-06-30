@@ -11,14 +11,13 @@
 #include "FileItem.h"
 #include "ServiceBroker.h"
 #include "dialogs/GUIDialogContextMenu.h"
-#include "guilib/LocalizeStrings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "utils/Variant.h"
-#include "video/VideoUtils.h"
+#include "video/guilib/VideoGUIUtils.h"
 #include "video/guilib/VideoVersionHelper.h"
 
-using namespace VIDEO::GUILIB;
+namespace KODI::VIDEO::GUILIB
+{
 
 Action CVideoPlayActionProcessorBase::GetDefaultAction()
 {
@@ -35,7 +34,7 @@ bool CVideoPlayActionProcessorBase::ProcessAction(Action action)
 {
   m_userCancelled = false;
 
-  const auto movie{CVideoVersionHelper::ChooseMovieFromVideoVersions(m_item)};
+  const auto movie{CVideoVersionHelper::ChooseVideoFromAssets(m_item)};
   if (movie)
     m_item = movie;
   else
@@ -79,7 +78,7 @@ Action CVideoPlayActionProcessorBase::ChoosePlayOrResume(const CFileItem& item)
 {
   Action action = ACTION_PLAY_FROM_BEGINNING;
 
-  const std::string resumeString = VIDEO_UTILS::GetResumeString(item);
+  const std::string resumeString = VIDEO::UTILS::GetResumeString(item);
   if (!resumeString.empty())
   {
     CContextButtons choices;
@@ -92,3 +91,5 @@ Action CVideoPlayActionProcessorBase::ChoosePlayOrResume(const CFileItem& item)
 
   return action;
 }
+
+} // namespace KODI::VIDEO::GUILIB

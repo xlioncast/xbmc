@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2024 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -21,7 +21,6 @@
 
 class CDateTime;
 class CSetting;
-class IKeymap;
 
 namespace KODI
 {
@@ -36,12 +35,17 @@ class IInputHandler;
 namespace KEYBOARD
 {
 class IKeyboardDriverHandler;
-}
+} // namespace KEYBOARD
+
+namespace KEYMAP
+{
+class IKeymap;
+} // namespace KEYMAP
 
 namespace MOUSE
 {
 class IMouseDriverHandler;
-}
+} // namespace MOUSE
 } // namespace KODI
 
 namespace PERIPHERALS
@@ -51,6 +55,9 @@ class CGUIDialogPeripheralSettings;
 class CPeripheralBus;
 class CPeripherals;
 
+/*!
+ * \ingroup peripherals
+ */
 typedef enum
 {
   STATE_SWITCH_TOGGLE,
@@ -58,6 +65,9 @@ typedef enum
   STATE_STANDBY
 } CecStateChange;
 
+/*!
+ * \ingroup peripherals
+ */
 class CPeripheral : public KODI::JOYSTICK::IInputProvider,
                     public KODI::KEYBOARD::IKeyboardInputProvider,
                     public KODI::MOUSE::IMouseInputProvider
@@ -230,11 +240,14 @@ public:
 
   // implementation of IKeyboardInputProvider
   void RegisterKeyboardHandler(KODI::KEYBOARD::IKeyboardInputHandler* handler,
-                               bool bPromiscuous) override;
+                               bool bPromiscuous,
+                               bool forceDefaultMap) override;
   void UnregisterKeyboardHandler(KODI::KEYBOARD::IKeyboardInputHandler* handler) override;
 
   // implementation of IMouseInputProvider
-  void RegisterMouseHandler(KODI::MOUSE::IMouseInputHandler* handler, bool bPromiscuous) override;
+  void RegisterMouseHandler(KODI::MOUSE::IMouseInputHandler* handler,
+                            bool bPromiscuous,
+                            bool forceDefaultMap) override;
   void UnregisterMouseHandler(KODI::MOUSE::IMouseInputHandler* handler) override;
 
   virtual void RegisterJoystickButtonMapper(KODI::JOYSTICK::IButtonMapper* mapper);
@@ -242,14 +255,14 @@ public:
 
   virtual KODI::JOYSTICK::IDriverReceiver* GetDriverReceiver() { return nullptr; }
 
-  virtual IKeymap* GetKeymap(const std::string& controllerId) { return nullptr; }
+  virtual KODI::KEYMAP::IKeymap* GetKeymap(const std::string& controllerId) { return nullptr; }
 
   /*!
    * \brief Return the last time this peripheral was active
    *
    * \return The time of last activation, or invalid if unknown/never active
    */
-  virtual CDateTime LastActive();
+  virtual CDateTime LastActive() const;
 
   /*!
    * \brief Get the controller profile that best represents this peripheral

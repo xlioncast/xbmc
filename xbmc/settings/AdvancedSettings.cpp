@@ -170,6 +170,7 @@ void CAdvancedSettings::Initialize()
   m_videoPreferStereoStream = false;
 
   m_videoDefaultLatency = 0.0;
+  m_videoDefaultHdrExtraLatency = 0.0;
 
   m_musicUseTimeSeeking = true;
   m_musicTimeSeekForward = 10;
@@ -315,6 +316,7 @@ void CAdvancedSettings::Initialize()
   m_videoItemSeparator = " / ";
   m_iMusicLibraryDateAdded = 1; // prefer mtime over ctime and current time
   m_bMusicLibraryUseISODates = false;
+  m_bMusicLibraryArtistNavigatesToSongs = false;
 
   m_bVideoLibraryAllItemsOnBottom = false;
   m_iVideoLibraryRecentlyAddedItems = 25;
@@ -421,7 +423,8 @@ void CAdvancedSettings::Initialize()
 
   m_useLocaleCollation = true;
 
-  m_pictureExtensions = ".png|.jpg|.jpeg|.bmp|.gif|.ico|.tif|.tiff|.tga|.pcx|.cbz|.zip|.rss|.webp|.jp2|.apng";
+  m_pictureExtensions =
+      ".png|.jpg|.jpeg|.bmp|.gif|.ico|.tif|.tiff|.tga|.pcx|.cbz|.zip|.rss|.webp|.jp2|.apng|.avif";
   m_musicExtensions = ".b4s|.nsv|.m4a|.flac|.aac|.strm|.pls|.rm|.rma|.mpa|.wav|.wma|.ogg|.mp3|.mp2|.m3u|.gdm|.imf|.m15|.sfx|.uni|.ac3|.dts|.cue|.aif|.aiff|.wpl|.xspf|.ape|.mac|.mpc|.mp+|.mpp|.shn|.zip|.wv|.dsp|.xsp|.xwav|.waa|.wvs|.wam|.gcm|.idsp|.mpdsp|.mss|.spt|.rsd|.sap|.cmc|.cmr|.dmc|.mpt|.mpd|.rmt|.tmc|.tm8|.tm2|.oga|.url|.pxml|.tta|.rss|.wtv|.mka|.tak|.opus|.dff|.dsf|.m4b|.dtshd";
   m_videoExtensions = ".m4v|.3g2|.3gp|.nsv|.tp|.ts|.ty|.strm|.pls|.rm|.rmvb|.mpd|.m3u|.m3u8|.ifo|.mov|.qt|.divx|.xvid|.bivx|.vob|.nrg|.img|.iso|.udf|.pva|.wmv|.asf|.asx|.ogm|.m2v|.avi|.bin|.dat|.mpg|.mpeg|.mp4|.mkv|.mk3d|.avc|.vp3|.svq3|.nuv|.viv|.dv|.fli|.flv|.001|.wpl|.xspf|.zip|.vdr|.dvr-ms|.xsp|.mts|.m2t|.m2ts|.evo|.ogv|.sdp|.avs|.rec|.url|.pxml|.vc1|.h264|.rcv|.rss|.mpls|.mpl|.webm|.bdmv|.bdm|.wtv|.trp|.f4v";
   m_subtitlesExtensions = ".utf|.utf8|.utf-8|.sub|.srt|.smi|.rt|.txt|.ssa|.text|.ssa|.aqt|.jss|"
@@ -582,7 +585,9 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
     XMLUtils::GetFloat(pElement, "limiterhold", m_limiterHold, 0.0f, 100.0f);
     XMLUtils::GetFloat(pElement, "limiterrelease", m_limiterRelease, 0.001f, 100.0f);
     XMLUtils::GetUInt(pElement, "maxpassthroughoffsyncduration", m_maxPassthroughOffSyncDuration,
-                      10, 100);
+                      20, 80);
+    XMLUtils::GetBoolean(pElement, "allowmultichannelfloat", m_AllowMultiChannelFloat);
+    XMLUtils::GetBoolean(pElement, "superviseaudiodelay", m_superviseAudioDelay);
   }
 
   pElement = pRootElement->FirstChildElement("x11");
@@ -739,7 +744,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
     TiXmlElement* pVideoLatency = pElement->FirstChildElement("latency");
     if (pVideoLatency)
     {
-      float refresh, refreshmin, refreshmax, delay;
+      float refresh, refreshmin, refreshmax;
       TiXmlElement* pRefreshVideoLatency = pVideoLatency->FirstChildElement("refresh");
 
       while (pRefreshVideoLatency)
@@ -757,8 +762,9 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
           videolatency.refreshmin = refreshmin;
           videolatency.refreshmax = refreshmax;
         }
-        if (XMLUtils::GetFloat(pRefreshVideoLatency, "delay", delay, -600.0f, 600.0f))
-          videolatency.delay = delay;
+        XMLUtils::GetFloat(pRefreshVideoLatency, "delay", videolatency.delay, -600.0f, 600.0f);
+        XMLUtils::GetFloat(pRefreshVideoLatency, "hdrextradelay", videolatency.hdrextradelay,
+                           -600.0f, 600.0f);
 
         if (videolatency.refreshmin > 0.0f && videolatency.refreshmax >= videolatency.refreshmin)
           m_videoRefreshLatency.push_back(videolatency);
@@ -770,8 +776,10 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
         pRefreshVideoLatency = pRefreshVideoLatency->NextSiblingElement("refresh");
       }
 
-      // Get default global display latency
+      // Get default global display latency values
       XMLUtils::GetFloat(pVideoLatency, "delay", m_videoDefaultLatency, -600.0f, 600.0f);
+      XMLUtils::GetFloat(pVideoLatency, "hdrextradelay", m_videoDefaultHdrExtraLatency, -600.0f,
+                         600.0f);
     }
   }
 
@@ -787,6 +795,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
     XMLUtils::GetString(pElement, "itemseparator", m_musicItemSeparator);
     XMLUtils::GetInt(pElement, "dateadded", m_iMusicLibraryDateAdded);
     XMLUtils::GetBoolean(pElement, "useisodates", m_bMusicLibraryUseISODates);
+    XMLUtils::GetBoolean(pElement, "artistnavigatestosongs", m_bMusicLibraryArtistNavigatesToSongs);
     //Music artist name separators
     TiXmlElement* separators = pElement->FirstChildElement("artistseparators");
     if (separators)
@@ -1214,6 +1223,11 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
     XMLUtils::GetBoolean(pElement, "visualizedirtyregions", m_guiVisualizeDirtyRegions);
     XMLUtils::GetInt(pElement, "algorithmdirtyregions",     m_guiAlgorithmDirtyRegions);
     XMLUtils::GetBoolean(pElement, "smartredraw", m_guiSmartRedraw);
+    XMLUtils::GetInt(pElement, "anisotropicfiltering", m_guiAnisotropicFiltering);
+    XMLUtils::GetBoolean(pElement, "fronttobackrendering", m_guiFrontToBackRendering);
+    XMLUtils::GetBoolean(pElement, "geometryclear", m_guiGeometryClear);
+    XMLUtils::GetBoolean(pElement, "asynctextureupload", m_guiAsyncTextureUpload);
+    XMLUtils::GetBoolean(pElement, "transparentvideolayout", m_guiVideoLayoutTransparent);
   }
 
   std::string seekSteps;
@@ -1380,16 +1394,26 @@ void CAdvancedSettings::AddSettingsFile(const std::string &filename)
   m_settingsFiles.push_back(filename);
 }
 
-float CAdvancedSettings::GetLatencyTweak(float refreshrate)
+float CAdvancedSettings::GetLatencyTweak(float refreshrate, bool isHDREnabled)
 {
-  float delay = m_videoDefaultLatency;
-  for (int i = 0; i < (int) m_videoRefreshLatency.size(); i++)
-  {
-    RefreshVideoLatency& videolatency = m_videoRefreshLatency[i];
-    if (refreshrate >= videolatency.refreshmin && refreshrate <= videolatency.refreshmax)
-      delay = videolatency.delay;
-  }
+  float delay{};
+  const auto& latency =
+      std::find_if(m_videoRefreshLatency.cbegin(), m_videoRefreshLatency.cend(),
+                   [refreshrate](const auto& param)
+                   { return refreshrate >= param.refreshmin && refreshrate <= param.refreshmax; });
 
+  if (latency != m_videoRefreshLatency.cend()) //refresh rate specific setting is found
+  {
+    delay = latency->delay == 0.0f ? m_videoDefaultLatency : latency->delay;
+    if (isHDREnabled)
+      delay +=
+          latency->hdrextradelay == 0.0f ? m_videoDefaultHdrExtraLatency : latency->hdrextradelay;
+  }
+  else //apply default delay settings
+  {
+    delay = isHDREnabled ? m_videoDefaultLatency + m_videoDefaultHdrExtraLatency
+                         : m_videoDefaultLatency;
+  }
   return delay; // in milliseconds
 }
 

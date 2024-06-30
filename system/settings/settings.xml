@@ -123,6 +123,19 @@
             <formatlabel>14047</formatlabel>
           </control>
         </setting>
+        <setting id="videoplayer.hqscalerprecision" type="integer" label="13472" help="13473">
+          <requirement>HAS_GL</requirement>
+          <level>2</level>
+          <default>10</default>
+          <constraints>
+            <options>
+              <option label="13474">8</option>
+              <option label="13475">10</option>
+              <option label="13476">16</option>
+            </options>
+          </constraints>
+          <control type="spinner" format="string" />
+        </setting>
         <setting id="videoplayer.usesuperresolution" type="boolean" label="13417" help="39194">
           <requirement>HAS_DX</requirement>
           <dependencies>
@@ -180,15 +193,44 @@
           <control type="toggle" />
         </setting>
         <setting id="videoplayer.convertdovi" type="boolean" label="39196" help="39197">
-          <requirement>HAS_MEDIACODEC</requirement>
+          <requirement><!-- Android and webOS use CBitstreamConverter -->
+            <or>
+              <condition>HAS_MEDIACODEC</condition>
+              <condition>HAVE_WEBOS</condition>
+            </or>
+          </requirement>
           <dependencies>
             <dependency type="visible">
-              <condition on="property" name="supportsdolbyvision" />
+              <or>
+                <condition on="property" name="supportsdolbyvision" />
+                <condition>HAVE_WEBOS</condition>
+              </or>
             </dependency>
           </dependencies>
           <level>2</level>
           <default>false</default>
           <control type="toggle" />
+        </setting>
+        <setting id="videoplayer.allowedhdrformats" type="list[integer]" label="39198" help="39199">
+          <requirement><!-- Android and webOS use CBitstreamConverter -->
+            <or>
+              <condition>HAS_MEDIACODEC</condition>
+              <condition>HAVE_WEBOS</condition>
+            </or>
+          </requirement>
+          <level>2</level>
+          <default>0,1</default> <!-- Allow all HDR formats -->
+          <constraints>
+            <options>
+              <option label="39200">0</option> <!-- Dolby Vision -->
+              <option label="39201">1</option> <!-- HDR10+ -->
+            </options>
+            <delimiter>,</delimiter>
+          </constraints>
+          <control type="list" format="string">
+            <multiselect>true</multiselect>
+            <hidevalue>false</hidevalue>
+          </control>
         </setting>
       </group>
       <group id="4" label="14232">
@@ -598,7 +640,7 @@
           <default>100</default>
           <control type="slider" format="percentage" range="0,100" />
         </setting>
-        <setting id="subtitles.bordersize" type="integer" label="39159">
+        <setting id="subtitles.bordersize" type="integer" label="39159" help="688">
           <level>3</level>
           <default>25</default>
           <dependencies>
@@ -606,7 +648,7 @@
           </dependencies>
           <control type="slider" format="percentage" range="0,100" />
         </setting>
-        <setting id="subtitles.bordercolorpick" type="string" label="39160">
+        <setting id="subtitles.bordercolorpick" type="string" label="39160" help="689">
           <level>3</level>
           <default>FF000000</default> <!-- Black -->
           <dependencies>
@@ -614,7 +656,7 @@
           </dependencies>
           <control type="colorbutton" />
         </setting>
-        <setting id="subtitles.blur" type="integer" label="39173">
+        <setting id="subtitles.blur" type="integer" label="39173" help="690">
           <level>3</level>
           <default>0</default>
           <control type="slider" format="percentage" range="0,100" />
@@ -658,7 +700,7 @@
           </dependencies>
           <control type="slider" format="percentage" range="0,100" />
         </setting>
-        <setting id="subtitles.shadowcolor" type="string" parent="subtitles.backgroundtype" label="39171">
+        <setting id="subtitles.shadowcolor" type="string" parent="subtitles.backgroundtype" label="39171" help="691">
           <level>3</level>
           <default>FF000000</default> <!-- Black -->
           <dependencies>
@@ -671,7 +713,7 @@
           </dependencies>
           <control type="colorbutton" />
         </setting>
-        <setting id="subtitles.shadowopacity" type="integer" parent="subtitles.backgroundtype" label="39172">
+        <setting id="subtitles.shadowopacity" type="integer" parent="subtitles.backgroundtype" label="39172" help="692">
           <level>3</level>
           <default>100</default>
           <dependencies>
@@ -684,7 +726,7 @@
           </dependencies>
           <control type="slider" format="percentage" range="0,100" />
         </setting>
-        <setting id="subtitles.shadowsize" type="integer" parent="subtitles.backgroundtype" label="39170">
+        <setting id="subtitles.shadowsize" type="integer" parent="subtitles.backgroundtype" label="39170" help="693">
           <level>3</level>
           <default>15</default>
           <dependencies>
@@ -846,6 +888,26 @@
           <control type="button" format="addon">
             <show more="true" details="true">installed</show>
           </control>
+        </setting>
+      </group>
+    </category>
+    <category id="advanced" label="14187" help="38113">
+      <group id="1" label="14188">
+        <setting id="videoplayer.queuetimesize" type="integer" label="37130" help="37131">
+          <level>2</level>
+          <default>40</default> <!-- 4.0 s -->
+          <constraints>
+            <options>playerqueuetimesizes</options>
+          </constraints>
+          <control type="list" format="string" />
+        </setting>
+        <setting id="videoplayer.queuedatasize" type="integer" label="37132" help="37133">
+          <level>2</level>
+          <default>256</default> <!-- 256 MB -->
+          <constraints>
+            <options>playerqueuedatasizes</options>
+          </constraints>
+          <control type="list" format="string" />
         </setting>
       </group>
     </category>
@@ -1861,7 +1923,14 @@
           <control type="list" format="string" />
         </setting>
       </group>
-      <group id="2" label="14304">
+      <group id="2" label="19351">
+        <setting id="pvrplayback.autoplaynextprogramme" type="boolean" label="19352" help="36439">
+          <level>2</level>
+          <default>true</default>
+          <control type="toggle" />
+        </setting>
+      </group>
+      <group id="3" label="14304">
         <setting id="pvrplayback.enableradiords" type="boolean" label="29980" help="29981">
           <level>1</level>
           <default>true</default>
@@ -2489,7 +2558,7 @@
       <group id="1" label="16000">
         <setting id="filecache.buffermode" type="integer" label="37103" help="37104">
           <level>2</level>
-          <default>4</default>
+          <default>4</default> <!-- All network filesystems -->
           <constraints>
             <options>filecachebuffermodes</options>
           </constraints>
@@ -2497,7 +2566,7 @@
         </setting>
         <setting id="filecache.memorysize" type="integer" label="37105" help="37106">
           <level>2</level>
-          <default>20</default>
+          <default>64</default> <!-- 64 MB -->
           <dependencies>
             <dependency type="enable">
               <condition setting="filecache.buffermode" operator="!is">3</condition>
@@ -2510,7 +2579,7 @@
         </setting>
         <setting id="filecache.readfactor" type="integer" label="37107" help="37108">
           <level>2</level>
-          <default>400</default>
+          <default>0</default> <!-- Adaptive -->
           <dependencies>
             <dependency type="enable">
               <condition setting="filecache.buffermode" operator="!is">3</condition>
@@ -2525,7 +2594,7 @@
       <group id="2" label="37053">
         <setting id="filecache.chunksize" type="integer" label="37053" help="37109">
           <level>2</level>
-          <default>131072</default>
+          <default>131072</default> <!-- 128 KB -->
           <dependencies>
             <dependency type="enable">
               <condition setting="filecache.buffermode" operator="!is">3</condition>
@@ -2970,7 +3039,12 @@
         <control type="toggle" />
       </setting>
       <setting id="videoscreen.guipeakluminance" type="integer" label="36097" help="36547">
-        <requirement>HAS_DX</requirement>
+        <requirement>
+          <or>
+            <condition>HAS_DX</condition>
+            <condition>HAS_MEDIACODEC</condition>
+          </or>
+        </requirement>
         <dependencies>
           <dependency type="visible" on="property" name="ishdrdisplay"/>
           <dependency type="enable">
@@ -3986,25 +4060,6 @@
           </constraints>
           <dependencies>
             <dependency type="update" setting="locale.language" />
-          </dependencies>
-          <control type="list" format="string" />
-        </setting>
-        <setting id="locale.timezonecountry" type="string" label="14079" help="36117">
-          <level>1</level>
-          <default>default</default> <!-- will be properly set on startup -->
-          <constraints>
-            <options>timezonecountries</options>
-          </constraints>
-          <control type="list" format="string" />
-        </setting>
-        <setting id="locale.timezone" type="string" label="14080" help="36118">
-          <level>1</level>
-          <default>default</default> <!-- will be properly set on startup -->
-          <constraints>
-            <options>timezones</options>
-          </constraints>
-          <dependencies>
-            <dependency type="update" setting="locale.timezonecountry" />
           </dependencies>
           <control type="list" format="string" />
         </setting>

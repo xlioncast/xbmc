@@ -9,8 +9,8 @@
 #include "GUIDialogVideoBookmarks.h"
 
 #include "FileItem.h"
+#include "FileItemList.h"
 #include "ServiceBroker.h"
-#include "TextureCache.h"
 #include "Util.h"
 #include "application/Application.h"
 #include "application/ApplicationComponents.h"
@@ -20,6 +20,7 @@
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
+#include "imagefiles/ImageFileURL.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
 #include "messaging/ApplicationMessenger.h"
@@ -35,19 +36,21 @@
 #include "utils/Variant.h"
 #include "utils/log.h"
 #include "video/VideoDatabase.h"
+#include "video/VideoFileItemClassify.h"
 #include "view/ViewState.h"
 
+#include <algorithm>
 #include <mutex>
 #include <string>
 #include <vector>
-
-#define BOOKMARK_THUMB_WIDTH CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_imageRes
 
 #define CONTROL_ADD_BOOKMARK           2
 #define CONTROL_CLEAR_BOOKMARKS        3
 #define CONTROL_ADD_EPISODE_BOOKMARK   4
 
 #define CONTROL_THUMBS                11
+
+using namespace KODI::VIDEO;
 
 CGUIDialogVideoBookmarks::CGUIDialogVideoBookmarks()
   : CGUIDialog(WINDOW_DIALOG_VIDEO_BOOKMARKS, "VideoOSDBookmarks.xml")
@@ -185,10 +188,7 @@ void CGUIDialogVideoBookmarks::Delete(int item)
   {
     CVideoDatabase videoDatabase;
     videoDatabase.Open();
-    std::string path(g_application.CurrentFile());
-    if (g_application.CurrentFileItem().HasProperty("original_listitem_url") &&
-       !URIUtils::IsVideoDb(g_application.CurrentFileItem().GetProperty("original_listitem_url").asString()))
-      path = g_application.CurrentFileItem().GetProperty("original_listitem_url").asString();
+    const std::string path{g_application.CurrentFileItem().GetDynPath()};
     videoDatabase.ClearBookMarkOfFile(path, m_bookmarks[item], m_bookmarks[item].type);
     videoDatabase.Close();
     CUtil::DeleteVideoDatabaseDirectoryCache();
@@ -202,10 +202,7 @@ void CGUIDialogVideoBookmarks::OnRefreshList()
   std::vector<CFileItemPtr> items;
 
   // open the d/b and retrieve the bookmarks for the current movie
-  m_filePath = g_application.CurrentFile();
-  if (g_application.CurrentFileItem().HasProperty("original_listitem_url") &&
-     !URIUtils::IsVideoDb(g_application.CurrentFileItem().GetProperty("original_listitem_url").asString()))
-     m_filePath = g_application.CurrentFileItem().GetProperty("original_listitem_url").asString();
+  m_filePath = g_application.CurrentFileItem().GetDynPath();
 
   CVideoDatabase videoDatabase;
   videoDatabase.Open();
@@ -258,8 +255,9 @@ void CGUIDialogVideoBookmarks::OnRefreshList()
     if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
             CSettings::SETTING_MYVIDEOS_EXTRACTCHAPTERTHUMBS))
     {
-      std::string chapterPath = StringUtils::Format("chapter://{}/{}", m_filePath, i);
-      item->SetArt("thumb", chapterPath);
+      auto chapterPath = IMAGE_FILES::CImageFileURL::FromFile(m_filePath, "video");
+      chapterPath.AddOption("chapter", std::to_string(i));
+      item->SetArt("thumb", chapterPath.ToCacheKey());
     }
 
     item->SetProperty("chapter", i);
@@ -351,10 +349,7 @@ void CGUIDialogVideoBookmarks::ClearBookmarks()
 {
   CVideoDatabase videoDatabase;
   videoDatabase.Open();
-  std::string path = g_application.CurrentFile();
-  if (g_application.CurrentFileItem().HasProperty("original_listitem_url") &&
-     !URIUtils::IsVideoDb(g_application.CurrentFileItem().GetProperty("original_listitem_url").asString()))
-    path = g_application.CurrentFileItem().GetProperty("original_listitem_url").asString();
+  const std::string path{g_application.CurrentFileItem().GetDynPath()};
   videoDatabase.ClearBookMarksOfFile(path, CBookmark::STANDARD);
   videoDatabase.ClearBookMarksOfFile(path, CBookmark::RESUME);
   videoDatabase.ClearBookMarksOfFile(path, CBookmark::EPISODE);
@@ -380,15 +375,57 @@ bool CGUIDialogVideoBookmarks::AddBookmark(CVideoInfoTag* tag)
   bookmark.player = g_application.GetCurrentPlayer();
 
   // create the thumbnail image
-  float aspectRatio = appPlayer->GetRenderAspectRatio();
-  int width = BOOKMARK_THUMB_WIDTH;
-  int height = (int)(BOOKMARK_THUMB_WIDTH / aspectRatio);
-  if (height > (int)BOOKMARK_THUMB_WIDTH)
-  {
-    height = BOOKMARK_THUMB_WIDTH;
-    width = (int)(BOOKMARK_THUMB_WIDTH * aspectRatio);
-  }
+  const float aspectRatio{appPlayer->GetRenderAspectRatio()};
+  CRect srcRect{}, renderRect{}, viewRect{};
+  appPlayer->GetRects(srcRect, renderRect, viewRect);
+  const unsigned int srcWidth{static_cast<unsigned int>(srcRect.Width())};
+  const unsigned int srcHeight{static_cast<unsigned int>(srcRect.Height())};
+  const unsigned int renderWidth{static_cast<unsigned int>(renderRect.Width())};
+  const unsigned int renderHeight{static_cast<unsigned int>(renderRect.Height())};
+  const unsigned int viewWidth{static_cast<unsigned int>(viewRect.Width())};
+  const unsigned int viewHeight{static_cast<unsigned int>(viewRect.Height())};
 
+  if (!srcWidth || !srcHeight || !renderWidth || !renderHeight || !viewWidth || !viewHeight)
+    return false;
+
+  const unsigned int orientation{appPlayer->GetOrientation()};
+  const bool rotated{orientation == 90 || orientation == 270};
+
+  // FIXME: the renderer sets the scissors to the size of the screen (provided by graphiccontext),
+  // limiting the max size of thumbs (for example 4k video played on 1024x768 screen)
+
+  // The advanced setting defines the max size of the largest dimension (depends on orientation)
+  const unsigned int maxThumbDim{
+      CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_imageRes};
+  unsigned int width{}, height{};
+
+  if (!rotated)
+  {
+    if (aspectRatio >= 1.0f)
+    {
+      width = std::min({maxThumbDim, viewWidth, renderWidth, srcWidth});
+      height = static_cast<unsigned int>(width / aspectRatio);
+    }
+    else
+    {
+      height = std::min({maxThumbDim, viewHeight, renderHeight, srcHeight});
+      width = static_cast<unsigned int>(height * aspectRatio);
+    }
+  }
+  else
+  {
+    // rotation is applied during rendering, switching source width and height
+    if (aspectRatio >= 1.0f)
+    {
+      height = std::min({maxThumbDim, viewHeight, renderHeight, srcWidth});
+      width = static_cast<unsigned int>(height / aspectRatio);
+    }
+    else
+    {
+      width = std::min({maxThumbDim, viewWidth, renderWidth, srcHeight});
+      height = static_cast<unsigned int>(width * aspectRatio);
+    }
+  }
 
   uint8_t *pixels = (uint8_t*)malloc(height * width * 4);
   unsigned int captureId = appPlayer->RenderCaptureAlloc();
@@ -425,10 +462,7 @@ bool CGUIDialogVideoBookmarks::AddBookmark(CVideoInfoTag* tag)
     videoDatabase.AddBookMarkForEpisode(*tag, bookmark);
   else
   {
-    std::string path = g_application.CurrentFile();
-    if (g_application.CurrentFileItem().HasProperty("original_listitem_url") &&
-       !URIUtils::IsVideoDb(g_application.CurrentFileItem().GetProperty("original_listitem_url").asString()))
-      path = g_application.CurrentFileItem().GetProperty("original_listitem_url").asString();
+    const std::string path{g_application.CurrentFileItem().GetDynPath()};
     videoDatabase.AddBookMarkToFile(path, bookmark, CBookmark::STANDARD);
   }
   videoDatabase.Close();
@@ -490,7 +524,7 @@ bool CGUIDialogVideoBookmarks::AddEpisodeBookmark()
 
 bool CGUIDialogVideoBookmarks::OnAddBookmark()
 {
-  if (!g_application.CurrentFileItem().IsVideo())
+  if (!IsVideo(g_application.CurrentFileItem()))
     return false;
 
   if (CGUIDialogVideoBookmarks::AddBookmark())

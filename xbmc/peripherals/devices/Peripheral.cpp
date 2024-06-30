@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2024 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -14,6 +14,8 @@
 #include "games/controllers/ControllerLayout.h"
 #include "guilib/LocalizeStrings.h"
 #include "input/joysticks/interfaces/IInputHandler.h"
+#include "input/keyboard/generic/DefaultKeyboardHandling.h"
+#include "input/mouse/generic/DefaultMouseHandling.h"
 #include "peripherals/Peripherals.h"
 #include "peripherals/addons/AddonButtonMapping.h"
 #include "peripherals/addons/AddonInputHandling.h"
@@ -591,10 +593,21 @@ void CPeripheral::RegisterInputHandler(IInputHandler* handler, bool bPromiscuous
   auto it = m_inputHandlers.find(handler);
   if (it == m_inputHandlers.end())
   {
-    CAddonInputHandling* addonInput =
-        new CAddonInputHandling(m_manager, this, handler, GetDriverReceiver());
-    RegisterJoystickDriverHandler(addonInput, bPromiscuous);
-    m_inputHandlers[handler].reset(addonInput);
+    PeripheralAddonPtr addon = m_manager.GetAddonWithButtonMap(this);
+    if (addon)
+    {
+      std::unique_ptr<CAddonInputHandling> addonInput = std::make_unique<CAddonInputHandling>(
+          m_manager, this, std::move(addon), handler, GetDriverReceiver());
+      if (addonInput->Load())
+      {
+        RegisterJoystickDriverHandler(addonInput.get(), bPromiscuous);
+        m_inputHandlers[handler] = std::move(addonInput);
+      }
+    }
+    else
+    {
+      CLog::Log(LOGDEBUG, "Failed to locate add-on for \"{}\"", m_strLocation);
+    }
   }
 }
 
@@ -611,15 +624,43 @@ void CPeripheral::UnregisterInputHandler(IInputHandler* handler)
 }
 
 void CPeripheral::RegisterKeyboardHandler(KEYBOARD::IKeyboardInputHandler* handler,
-                                          bool bPromiscuous)
+                                          bool bPromiscuous,
+                                          bool forceDefaultMap)
 {
   auto it = m_keyboardHandlers.find(handler);
   if (it == m_keyboardHandlers.end())
   {
-    std::unique_ptr<CAddonInputHandling> addonInput(
-        new CAddonInputHandling(m_manager, this, handler));
-    RegisterKeyboardDriverHandler(addonInput.get(), bPromiscuous);
-    m_keyboardHandlers[handler] = std::move(addonInput);
+    std::unique_ptr<KODI::KEYBOARD::IKeyboardDriverHandler> keyboardDriverHandler;
+
+    if (!forceDefaultMap)
+    {
+      PeripheralAddonPtr addon = m_manager.GetAddonWithButtonMap(this);
+      if (addon)
+      {
+        std::unique_ptr<CAddonInputHandling> addonInput =
+            std::make_unique<CAddonInputHandling>(m_manager, this, std::move(addon), handler);
+        if (addonInput->Load())
+          keyboardDriverHandler = std::move(addonInput);
+      }
+      else
+      {
+        CLog::Log(LOGDEBUG, "Failed to locate add-on for \"{}\"", m_strLocation);
+      }
+    }
+
+    if (!keyboardDriverHandler)
+    {
+      std::unique_ptr<KODI::KEYBOARD::CDefaultKeyboardHandling> defaultInput =
+          std::make_unique<KODI::KEYBOARD::CDefaultKeyboardHandling>(this, handler);
+      if (defaultInput->Load())
+        keyboardDriverHandler = std::move(defaultInput);
+    }
+
+    if (keyboardDriverHandler)
+    {
+      RegisterKeyboardDriverHandler(keyboardDriverHandler.get(), bPromiscuous);
+      m_keyboardHandlers[handler] = std::move(keyboardDriverHandler);
+    }
   }
 }
 
@@ -633,15 +674,44 @@ void CPeripheral::UnregisterKeyboardHandler(KEYBOARD::IKeyboardInputHandler* han
   }
 }
 
-void CPeripheral::RegisterMouseHandler(MOUSE::IMouseInputHandler* handler, bool bPromiscuous)
+void CPeripheral::RegisterMouseHandler(MOUSE::IMouseInputHandler* handler,
+                                       bool bPromiscuous,
+                                       bool forceDefaultMap)
 {
   auto it = m_mouseHandlers.find(handler);
   if (it == m_mouseHandlers.end())
   {
-    std::unique_ptr<CAddonInputHandling> addonInput(
-        new CAddonInputHandling(m_manager, this, handler));
-    RegisterMouseDriverHandler(addonInput.get(), bPromiscuous);
-    m_mouseHandlers[handler] = std::move(addonInput);
+    std::unique_ptr<KODI::MOUSE::IMouseDriverHandler> mouseDriverHandler;
+
+    if (!forceDefaultMap)
+    {
+      PeripheralAddonPtr addon = m_manager.GetAddonWithButtonMap(this);
+      if (addon)
+      {
+        std::unique_ptr<CAddonInputHandling> addonInput =
+            std::make_unique<CAddonInputHandling>(m_manager, this, std::move(addon), handler);
+        if (addonInput->Load())
+          mouseDriverHandler = std::move(addonInput);
+      }
+      else
+      {
+        CLog::Log(LOGDEBUG, "Failed to locate add-on for \"{}\"", m_strLocation);
+      }
+    }
+
+    if (!mouseDriverHandler)
+    {
+      std::unique_ptr<KODI::MOUSE::CDefaultMouseHandling> defaultInput =
+          std::make_unique<KODI::MOUSE::CDefaultMouseHandling>(this, handler);
+      if (defaultInput->Load())
+        mouseDriverHandler = std::move(defaultInput);
+    }
+
+    if (mouseDriverHandler)
+    {
+      RegisterMouseDriverHandler(mouseDriverHandler.get(), bPromiscuous);
+      m_mouseHandlers[handler] = std::move(mouseDriverHandler);
+    }
   }
 }
 
@@ -725,7 +795,7 @@ bool CPeripheral::operator!=(const PeripheralScanResult& right) const
   return !(*this == right);
 }
 
-CDateTime CPeripheral::LastActive()
+CDateTime CPeripheral::LastActive() const
 {
   return CDateTime();
 }

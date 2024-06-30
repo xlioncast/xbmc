@@ -15,7 +15,10 @@
 #include "threads/Thread.h"
 
 #include <atomic>
+#include <chrono>
 #include <memory>
+
+using namespace std::chrono_literals;
 
 namespace XFILE
 {
@@ -70,10 +73,12 @@ namespace XFILE
     uint32_t m_writeRateActual = 0;
     uint32_t m_writeRateLowSpeed = 0;
     int64_t m_forwardCacheSize = 0;
+    int64_t m_maxForward = 0;
     bool m_bFilling = false;
     std::atomic<int64_t> m_fileSize;
     unsigned int m_flags;
     CCriticalSection m_sync;
+    std::chrono::milliseconds m_processWait{100ms};
   };
 
 }

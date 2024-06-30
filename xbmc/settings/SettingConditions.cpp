@@ -159,7 +159,7 @@ bool HasSubtitlesFontExtensions(const std::string& condition,
   if (!settingStr)
     return false;
 
-  return UTILS::FONT::IsSupportedFontExtension(settingStr->GetValue());
+  return KODI::UTILS::FONT::IsSupportedFontExtension(settingStr->GetValue());
 }
 
 bool ProfileCanWriteDatabase(const std::string& condition,
@@ -433,6 +433,10 @@ void CSettingConditions::Initialize()
   m_simpleConditions.emplace("has_dx");
   m_simpleConditions.emplace("hasdxva2");
 #endif
+#if defined(TARGET_WEBOS)
+  m_simpleConditions.emplace("have_webos");
+#endif
+
 #ifdef HAVE_LCMS2
   m_simpleConditions.emplace("have_lcms2");
 #endif

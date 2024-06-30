@@ -6,9 +6,10 @@ endif
 
 # Keep in alphabetical order
 DEPENDS = \
+  brotli \
   bzip2 \
-  curl \
   dav1d \
+  exiv2 \
   expat \
   ffmpeg \
   fontconfig \
@@ -126,8 +127,8 @@ ifeq ($(OS),linux)
   endif
 
   ifeq ($(TARGET_PLATFORM),webos)
-    DEPENDS += wayland waylandpp wayland-protocols webos-wayland-extensions webos-userland
-    EXCLUDED_DEPENDS += dbus libcec linux-system-x11-libs pipewire mesa
+    DEPENDS += libdovi wayland waylandpp wayland-protocols webos-wayland-extensions webos-userland
+    EXCLUDED_DEPENDS += dbus linux-system-x11-libs pipewire mesa
   endif
 
   ifneq (,$(findstring gbm,$(TARGET_PLATFORM)))
@@ -150,8 +151,9 @@ $(DOWNLOAD_TARGETS):
 download: $(DOWNLOAD_TARGETS)
 
 crossguid: $(LIBUUID)
-curl: openssl nghttp2 $(ZLIB)
+curl: brotli openssl nghttp2 $(ZLIB)
 dbus: expat
+exiv2: $(ICONV) $(ZLIB) expat
 ffmpeg: $(ICONV) $(ZLIB) bzip2 gnutls dav1d $(LIBVA)
 fontconfig: freetype2 expat $(ICONV) $(LIBUUID)
 freetype2: bzip2 harfbuzz $(ZLIB)

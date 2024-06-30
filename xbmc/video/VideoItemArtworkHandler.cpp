@@ -9,11 +9,12 @@
 #include "VideoItemArtworkHandler.h"
 
 #include "FileItem.h"
+#include "FileItemList.h"
 #include "MediaSource.h"
 #include "ServiceBroker.h"
-#include "TextureDatabase.h"
 #include "filesystem/Directory.h"
 #include "guilib/LocalizeStrings.h"
+#include "imagefiles/ImageFileURL.h"
 #include "music/MusicDatabase.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -23,13 +24,16 @@
 #include "utils/Variant.h"
 #include "utils/log.h"
 #include "video/VideoDatabase.h"
+#include "video/VideoFileItemClassify.h"
 #include "video/VideoInfoScanner.h"
 #include "video/VideoInfoTag.h"
 #include "video/VideoThumbLoader.h"
 #include "video/tags/VideoTagExtractionHelper.h"
 
-using namespace VIDEO;
 using namespace XFILE;
+
+namespace KODI::VIDEO
+{
 
 namespace
 {
@@ -118,7 +122,7 @@ void CVideoItemArtworkHandler::AddItemPathToFileBrowserSources(std::vector<CMedi
     itemDir = m_item->GetVideoInfoTag()->GetPath();
 
   const CFileItem itemTmp(itemDir, false);
-  if (itemTmp.IsVideo())
+  if (IsVideo(itemTmp))
     itemDir = URIUtils::GetParentPath(itemDir);
 
   AddItemPathStringToFileBrowserSources(sources, itemDir,
@@ -467,7 +471,7 @@ std::vector<std::string> CVideoItemArtworkFanartHandler::GetRemoteArt() const
     if (URIUtils::IsProtocol(thumb, "image"))
       continue;
 
-    remoteArt.emplace_back(CTextureUtils::GetWrappedThumbURL(thumb));
+    remoteArt.emplace_back(IMAGE_FILES::URLFromFile(thumb));
   }
   return remoteArt;
 }
@@ -552,3 +556,5 @@ std::unique_ptr<IVideoItemArtworkHandler> IVideoItemArtworkHandlerFactory::Creat
 
   return artHandler;
 }
+
+} // namespace KODI::VIDEO

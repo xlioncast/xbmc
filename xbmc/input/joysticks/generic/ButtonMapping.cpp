@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2014-2018 Team Kodi
+ *  Copyright (C) 2014-2024 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
@@ -12,14 +12,15 @@
 #include "games/controllers/Controller.h"
 #include "games/controllers/ControllerManager.h"
 #include "games/controllers/input/PhysicalFeature.h"
-#include "input/IKeymap.h"
 #include "input/InputTranslator.h"
-#include "input/Key.h"
+#include "input/actions/ActionIDs.h"
 #include "input/joysticks/DriverPrimitive.h"
 #include "input/joysticks/JoystickTranslator.h"
 #include "input/joysticks/JoystickUtils.h"
 #include "input/joysticks/interfaces/IButtonMap.h"
 #include "input/joysticks/interfaces/IButtonMapper.h"
+#include "input/keyboard/Key.h"
+#include "input/keymaps/interfaces/IKeymap.h"
 #include "utils/log.h"
 
 #include <algorithm>
@@ -312,7 +313,9 @@ KODI::INPUT::INTERCARDINAL_DIRECTION CPointerDetector::GetPointerDirection(int x
 
 // --- CButtonMapping ----------------------------------------------------------
 
-CButtonMapping::CButtonMapping(IButtonMapper* buttonMapper, IButtonMap* buttonMap, IKeymap* keymap)
+CButtonMapping::CButtonMapping(IButtonMapper* buttonMapper,
+                               IButtonMap* buttonMap,
+                               KEYMAP::IKeymap* keymap)
   : m_buttonMapper(buttonMapper), m_buttonMap(buttonMap), m_keymap(keymap)
 {
   assert(m_buttonMapper != nullptr);
@@ -448,31 +451,34 @@ bool CButtonMapping::MapPrimitive(const CDriverPrimitive& primitive)
 {
   bool bHandled = false;
 
-  auto now = std::chrono::steady_clock::now();
-
-  bool bTimeoutElapsed = true;
-
-  if (m_buttonMapper->NeedsCooldown())
-    bTimeoutElapsed = (now >= m_lastAction + std::chrono::milliseconds(MAPPING_COOLDOWN_MS));
-
-  if (bTimeoutElapsed)
-  {
-    bHandled = m_buttonMapper->MapPrimitive(m_buttonMap, m_keymap, primitive);
-
-    if (bHandled)
-      m_lastAction = std::chrono::steady_clock::now();
-  }
-  else if (m_buttonMap->IsIgnored(primitive))
+  if (m_buttonMap->IsIgnored(primitive))
   {
     bHandled = true;
   }
   else
   {
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastAction);
+    auto now = std::chrono::steady_clock::now();
 
-    CLog::Log(LOGDEBUG, "Button mapping: rapid input after {}ms dropped for profile \"{}\"",
-              duration.count(), m_buttonMapper->ControllerID());
-    bHandled = true;
+    bool bTimeoutElapsed = true;
+
+    if (m_buttonMapper->NeedsCooldown())
+      bTimeoutElapsed = (now >= m_lastAction + std::chrono::milliseconds(MAPPING_COOLDOWN_MS));
+
+    if (bTimeoutElapsed)
+    {
+      bHandled = m_buttonMapper->MapPrimitive(m_buttonMap, m_keymap, primitive);
+
+      if (bHandled)
+        m_lastAction = std::chrono::steady_clock::now();
+    }
+    else
+    {
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastAction);
+
+      CLog::Log(LOGDEBUG, "Button mapping: rapid input after {}ms dropped for profile \"{}\"",
+                duration.count(), m_buttonMapper->ControllerID());
+      bHandled = true;
+    }
   }
 
   return bHandled;
